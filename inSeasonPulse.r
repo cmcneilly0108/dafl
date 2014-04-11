@@ -2,7 +2,7 @@
 # Find top 10 hitters, pitchers available
 # Determine if I should replace any
 
-library("xlsx")
+#library("xlsx")
 library("stringr")
 library("dplyr")
 
@@ -28,8 +28,10 @@ swapName2 <- function(n){
 }
 
 pullPos <- function(n){
+  n <- str_trim(n)
   p <- str_match(n,".+, .+ (.+) .+")
   p <- p[,2]
+  p <- ifelse((p =='P'),'RP',p)
   ifelse((p %in% c('CF','RF','LF')),'OF',p)
 }
 
@@ -92,6 +94,9 @@ FApitchers$Player <- unlist(lapply(FApitchers$Player,swapName2))
 FAH <- inner_join(FAhitters,hitters,by=c('Player'),copy=FALSE)
 FAP <- inner_join(FApitchers,pitchers,by=c('Player'),copy=FALSE)
 
+# Rough projection of holds - maintain the rate you're at
+FAP$HLD <- with(FAP,(HD/Week)*(30-Week))
+
 #Load Current Roster
 myhitters <- read.csv("JustNames.csv",skip=2,nrows=12)
 myhitters$Player <- as.character(myhitters$Player)
@@ -124,6 +129,8 @@ myPros$wVAL <- with(myPros,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV))
 
 arrange(FAP,-W.y)[1:10,c('Player','W.y')]
 arrange(FAP,-SO)[1:10,c('Player','SO')]
+arrange(FAP,-SV)[1:10,c('Player','SV')]
+arrange(FAP,-HLD)[1:10,c('Player','HLD')]
 arrange(FAP,-WAR)[1:10,c('Player','WAR')]
 arrange(FAP,Rank)[1:10,c('Player','Rank','WAR')]
 
@@ -149,10 +156,11 @@ FAH$wVAL <- with(FAH,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
 FAP$gW <- with(FAP,W.y/sTots$W)
 FAP$gK <- with(FAP,SO/sTots$K)
 FAP$gSV <- with(FAP,SV/sTots$SV)
+FAP$gHLD <- with(FAP,HLD/sTots$HLD)
 FAP$gERA <- with(FAP,(sTots$ERA - ERA.y)*(30 - Week)/350)
-FAP$gVAL <- with(FAP,gW+gK+gERA+gSV)
+FAP$gVAL <- with(FAP,gW+gK+gERA+gSV+gHLD)
 
-FAP$wVAL <- with(FAP,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV))
+FAP$wVAL <- with(FAP,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV)+(gHLD*pTots$HLD))
 
 
 arrange(FAP,-W.y)[1:10,c('Player','W.y','gVAL')]
@@ -160,8 +168,8 @@ arrange(FAP,-SO)[1:10,c('Player','SO','gVAL')]
 arrange(FAP,-SV)[1:10,c('Player','SV','gVAL')]
 arrange(FAP,ERA.y)[1:10,c('Player','ERA.y','gVAL')]
 arrange(FAP,Rank)[1:10,c('Player','Rank','WAR','gVAL')]
-arrange(FAP, -gVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','ERA.y')]
-arrange(FAP, -wVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','ERA.y')]
+arrange(FAP, -gVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','HLD','ERA.y')]
+arrange(FAP, -wVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','HLD','ERA.y')]
 
 arrange(FAH,-HR.y)[1:10,c('Player','HR.y','gVAL')]
 arrange(FAH,-RBI.y)[1:10,c('Player','RBI.y','gVAL')]
@@ -177,13 +185,12 @@ TopFAH <- FAH %.% arrange(Pos,-gVAL) %.%
   group_by(Pos) %.% filter(rank(-gVAL) <= 5)
 
 TopFAP <- FAP %.% arrange(Pos,-gVAL) %.% 
-  select(Player,Pos,gVAL,Rank,wVAL,W.y,SO,SV,ERA.y) %.% 
+  select(Player,Pos,gVAL,Rank,wVAL,W.y,SO,SV,HLD,ERA.y) %.% 
   group_by(Pos) %.% filter(rank(-gVAL) <= 5)
 
 arrange(myPros, gVAL)[,c('Player','gVAL','wVAL','Rank','W','SO','SV','ERA')]
 arrange(myHros,gVAL)[,c('Player','gVAL','Rank','wVAL','HR','RBI','R','SB','AVG')]
 
 #TBD
-# Add position information back in
 # Do something for Holds
 # Output a spreadsheet of all the tables
