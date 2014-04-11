@@ -13,9 +13,9 @@ swapName <- function(n){
 }
 
 #Load Rotoworld data, convert name to chars, and remove some columns
-hitters <- read.xlsx("projections_ALLHIT_rotoworld140322.xlsx",1)
+hitters <- read.xlsx("projections_ALLHIT_rotoworld140328.xlsx",1)
 hitters$Player <- as.character(hitters$Player)
-pitchers <- read.xlsx("projections_ALLPIT_rotoworld140322.xlsx",1)
+pitchers <- read.xlsx("projections_ALLPIT_rotoworld140328.xlsx",1)
 pitchers$Player <- as.character(pitchers$Player)
 hitters <- hitters[,c(1,2,3,4,5,9,10,11,12,13,14,15,19,20)]
 pitchers <- pitchers[,c(1,2,3,4,5,9,10,11,12,13,15,16,17)]

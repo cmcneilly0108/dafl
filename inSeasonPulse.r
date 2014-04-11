@@ -1,122 +1,189 @@
-#Not started - simply a place holder
-#If I want a multi-line comment, I
-#	will write and then
-#	see if I can wrap it somehow
+# Download roster, free agents, projections
+# Find top 10 hitters, pitchers available
+# Determine if I should replace any
 
 library("xlsx")
 library("stringr")
 library("dplyr")
 
-swapName <- function(n){
+# Data that needs to be update manually
+Week <- 2
+
+ttLabels <- c('AVG','HR','R','RBI','SB','ERA','HLD','K','SV','W')
+ttW1 <- c(.229,3,25,21,3,2.01,1,58,1,4)
+
+tt <- as.list(ttW1)
+names(tt) <- ttLabels
+# End manual update data
+
+
+swapName2 <- function(n){
   comma <- str_locate(n,',')
   ln <- str_sub(n,1,comma-1)
-  fn <- str_sub(n,comma+2,-1)
+  rest <- str_sub(n,comma+2,-1)
+  space <- str_locate(rest,' ')
+  fn <- str_sub(rest,1,space-1)
   nn <- str_join(fn,ln,sep=" ",collapse=NULL)
   nn[1] 
 }
 
-#Load Rotoworld data, convert name to chars, and remove some columns
-hitters <- read.xlsx("projections_ALLHIT_rotoworld140322.xlsx",1)
-hitters$Player <- as.character(hitters$Player)
-pitchers <- read.xlsx("projections_ALLPIT_rotoworld140322.xlsx",1)
-pitchers$Player <- as.character(pitchers$Player)
-hitters <- hitters[,c(1,2,3,4,5,9,10,11,12,13,14,15,19,20)]
-pitchers <- pitchers[,c(1,2,3,4,5,9,10,11,12,13,15,16,17)]
+pullPos <- function(n){
+  p <- str_match(n,".+, .+ (.+) .+")
+  p <- p[,2]
+  ifelse((p %in% c('CF','RF','LF')),'OF',p)
+}
 
-#Load protection spreadsheet from Craig, re-arrange Name so I can match
-protects <- read.xlsx("2014+All+Protection+Lists.xls",1)
-protects$Name <- as.character(protects$Name)
-protects$Player <- unlist(lapply(protects$Name,swapName))
+# Year End Totals
+# c(209,735,739,159,42,90,1191,96)
+# c('HR','RBI','R','SB','HLD','SV','K','W')
+sTots <- list()
+sTots$HR <- 209
+sTots$RBI <- 735
+sTots$R <- 739
+sTots$SB <- 159
+sTots$HLD <- 42
+sTots$SV <- 90
+sTots$K <- 1191
+sTots$W <- 96
+sTots$AVG <- .291
+sTots$ERA <- 3.277
 
-#remove protected players from available lists
-aHitters <- hitters[!(hitters$Player %in% protects$Player),]
-aPitchers <- pitchers[!(pitchers$Player %in% protects$Player),]
+pTots <- list()
+pTots$HR <- 1-tt$HR/sTots$HR
+pTots$RBI <-  1-tt$RBI/sTots$RBI
+pTots$R <-  1-tt$R/sTots$R
+pTots$SB <-  1-tt$SB/sTots$SB
+pTots$HLD <-  1-tt$HLD/sTots$HLD
+pTots$SV <-  1-tt$SV/sTots$SV
+pTots$K <-  1-tt$K/sTots$K
+pTots$W <-  1-tt$W/sTots$W
+#pTots$AVG <- .291
+#pTots$ERA <- 3.277
 
-#Create separate tabs by position
-a1B <- subset(aHitters, grepl("1B",Pos))
-aC <- subset(aHitters, grepl("C",Pos))
-a2B <- subset(aHitters, grepl("2B",Pos))
-aSS <- subset(aHitters, grepl("SS",Pos))
-a3B <- subset(aHitters, grepl("3B",Pos))
-aOF <- subset(aHitters, grepl("OF",Pos))
-aDH <- subset(aHitters, Pos == 'DH')
-aSP <- subset(aPitchers, grepl("S",Pos))
-aRP <- subset(aPitchers, grepl("R",Pos))
+#t <- as.data.frame(pTots)
+#t <- as.data.frame(t(t))
+#colnames(t) <- c('category','score')
 
-# Forecast each teams totals - run a standings analysis plus additional category of $$
-proTH <- inner_join(protects,hitters,by=c('Player'),copy=FALSE)
-proTP <- inner_join(protects,pitchers,by=c('Player'),copy=FALSE)
-ltothits <- proTH %.% group_by(Team) %.% summarize(HR = sum(HR), RBI = sum(RBI), 
-                                                   R = sum(R), SB = sum(SB),  AVG = sum(H)/sum(AB))
-ltotpits <- proTP %.% group_by(Team) %.% summarize(W = sum(W), K = sum(K), 
-                                                   SV = sum(SV), H = sum(HLD),  ERA = sum(IP * ERA)/sum(IP))
+#Load Steamer rest of season projections
+# TASK - need to keep position data
+# TASK - no holds data
+# TASK - get data dynamically
+hitters <- read.csv("steamerHROS.csv")
+hitters$Player <- as.character(hitters$Name)
+pitchers <- read.csv("steamerPROS.csv")
+pitchers$Player <- as.character(pitchers$Name)
+#hitters <- hitters[,c(1,2,3,4,5,9,10,11,12,13,14,15,19,20)]
+#pitchers <- pitchers[,c(1,2,3,4,5,9,10,11,12,13,15,16,17)]
 
-ltotpits$pW <- rank(ltotpits$W)
-ltotpits$pK <- rank(ltotpits$K)
-ltotpits$pSV <- rank(ltotpits$SV)
-ltotpits$pH <- rank(ltotpits$H)
-ltotpits$pERA <- rank(ltotpits$ERA)
-
-ltothits$pHR <- rank(ltothits$HR)
-ltothits$pRBI <- rank(ltothits$RBI)
-ltothits$pR <- rank(ltothits$R)
-ltothits$pSB <- rank(ltothits$SB)
-ltothits$pAVG <- rank(ltothits$AVG)
-
-lStandings <- inner_join(ltothits,ltotpits,by=c('Team'),copy=FALSE)
-
-tSal <- protects %.% group_by(Team) %.% summarize(dLeft = 260 - sum(Salary))
-# use filter and arrange too!
-lStandings$dLeft <- tSal$dLeft
-lStandings$pLeft <- rank(lStandings$dLeft)
-
-lStandings$tPoints <- with(lStandings, pHR + pRBI + pR + pSB + pAVG + pW + pK + pH + pSV + pERA + pLeft)
-#lStandings$tStandings <- rank(lStandings$tPoints)
-leagueProjection <- lStandings[with(lStandings,order(-tPoints)),]
-leagueProjection <- subset(leagueProjection,select=-c(pHR,pRBI,pR,pSB,pAVG,pW,pSV,pH,pK,pERA,pLeft))
-
-# Analyze my needs based on winning numbers from last year
-# Load goals, compare my totals to goals, bar chart
-goals2013 <- read.csv(file="2013goals.csv")
-goals2013$Category <- as.character(goals2013$Category)
-
-currentLC <- subset(leagueProjection,Team == 'Liquor Crickets',select=-c(Team,dLeft,tPoints))
-currentLC <- as.data.frame(t(currentLC))
-currentLC$Category <- rownames(currentLC)
-colnames(currentLC) <- c('Current','Category')
-myGoals <- inner_join(goals2013,currentLC)
-myGoals$PctCmp <- with(myGoals,Current/Goal)
-myGoals$StillNeed <- with(myGoals,Goal-Current)
+#Load Free Agents
+FAhitters <- read.csv("FABatters.csv")
+FAhitters$Player <- as.character(FAhitters$Player)
+FAhitters <- mutate(FAhitters, Pos = pullPos(Player))
 
 
+FApitchers <- read.csv("FApitchers.csv",skip=1)
+FApitchers$Player <- as.character(FApitchers$Player)
+FApitchers <- mutate(FApitchers, Pos = pullPos(Player))
 
-#Create xlsx with tabbed data
-available <- createWorkbook()
-wslp <- createSheet(wb=available,sheetName='Projected Standings')
-wsmg <- createSheet(wb=available,sheetName='My Needs')
-wsc <- createSheet(wb=available,sheetName='C')
-ws1B <- createSheet(wb=available,sheetName='1B')
-ws2B <- createSheet(wb=available,sheetName='2B')
-wsSS <- createSheet(wb=available,sheetName='SS')
-ws3B <- createSheet(wb=available,sheetName='3B')
-wsOF <- createSheet(wb=available,sheetName='OF')
-wsDH <- createSheet(wb=available,sheetName='DH')
-wsSP <- createSheet(wb=available,sheetName='SP')
-wsRP <- createSheet(wb=available,sheetName='RP')
+FAhitters$Player <- unlist(lapply(FAhitters$Player,swapName2))
+FApitchers$Player <- unlist(lapply(FApitchers$Player,swapName2))
 
-addDataFrame(x=leagueProjection,sheet=wslp)
-addDataFrame(x=myGoals,sheet=wsmg)
-addDataFrame(x=aC,sheet=wsc)
-addDataFrame(x=a1B,sheet=ws1B)
-addDataFrame(x=a2B,sheet=ws2B)
-addDataFrame(x=aSS,sheet=wsSS)
-addDataFrame(x=a3B,sheet=ws3B)
-addDataFrame(x=aOF,sheet=wsOF)
-addDataFrame(x=aDH,sheet=wsDH)
-addDataFrame(x=aSP,sheet=wsSP)
-addDataFrame(x=aRP,sheet=wsRP)
 
-saveWorkbook(available,"2004DAFLDraft.xlsx")
+FAH <- inner_join(FAhitters,hitters,by=c('Player'),copy=FALSE)
+FAP <- inner_join(FApitchers,pitchers,by=c('Player'),copy=FALSE)
 
-# Ideas
-# Sheets for my team and projected results
+#Load Current Roster
+myhitters <- read.csv("JustNames.csv",skip=2,nrows=12)
+myhitters$Player <- as.character(myhitters$Player)
+mypitchers <- read.csv("JustNames.csv",skip=17,nrows=13)
+mypitchers$Player <- as.character(mypitchers$Player)
+myhitters$Player <- unlist(lapply(myhitters$Player,swapName2))
+mypitchers$Player <- unlist(lapply(mypitchers$Player,swapName2))
+
+myHros <- inner_join(myhitters,hitters,by=c('Player'),copy=FALSE)
+myPros <- inner_join(mypitchers,pitchers,by=c('Player'),copy=FALSE)
+
+myHros$gHR <- with(myHros,HR/sTots$HR)
+myHros$gRBI <- with(myHros,RBI/sTots$RBI)
+myHros$gR <- with(myHros,R/sTots$R)
+myHros$gSB <- with(myHros,SB/sTots$SB)
+myHros$gAVG <- with(myHros,(AVG - sTots$AVG)*(30 - Week)/270)
+myHros$gVAL <- with(myHros,gHR+gRBI+gR+gSB+gAVG)
+
+myHros$wVAL <- with(myHros,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
+                 +(gSB*pTots$SB))
+
+myPros$gW <- with(myPros,W/sTots$W)
+myPros$gK <- with(myPros,SO/sTots$K)
+myPros$gSV <- with(myPros,SV/sTots$SV)
+myPros$gERA <- with(myPros,(sTots$ERA - ERA)*(30 - Week)/350)
+myPros$gVAL <- with(myPros,gW+gK+gERA+gSV)
+
+myPros$wVAL <- with(myPros,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV))
+
+
+arrange(FAP,-W.y)[1:10,c('Player','W.y')]
+arrange(FAP,-SO)[1:10,c('Player','SO')]
+arrange(FAP,-WAR)[1:10,c('Player','WAR')]
+arrange(FAP,Rank)[1:10,c('Player','Rank','WAR')]
+
+arrange(FAH,-HR.y)[1:10,c('Player','HR.y')]
+arrange(FAH,-RBI.y)[1:10,c('Player','RBI.y')]
+arrange(FAH,-R.y)[1:10,c('Player','R.y')]
+arrange(FAH,-SB.y)[1:10,c('Player','SB.y')]
+arrange(FAH,-WAR)[1:10,c('Player','WAR')]
+arrange(FAH,Rank)[1:10,c('Player','Rank','WAR')]
+
+
+FAH$gHR <- with(FAH,HR.y/sTots$HR)
+FAH$gRBI <- with(FAH,RBI.y/sTots$RBI)
+FAH$gR <- with(FAH,R.y/sTots$R)
+FAH$gSB <- with(FAH,SB.y/sTots$SB)
+FAH$gAVG <- with(FAH,(AVG - sTots$AVG)*(30 - Week)/270)
+FAH$gVAL <- with(FAH,gHR+gRBI+gR+gSB+gAVG)
+
+FAH$wVAL <- with(FAH,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
+                 +(gSB*pTots$SB))
+
+
+FAP$gW <- with(FAP,W.y/sTots$W)
+FAP$gK <- with(FAP,SO/sTots$K)
+FAP$gSV <- with(FAP,SV/sTots$SV)
+FAP$gERA <- with(FAP,(sTots$ERA - ERA.y)*(30 - Week)/350)
+FAP$gVAL <- with(FAP,gW+gK+gERA+gSV)
+
+FAP$wVAL <- with(FAP,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV))
+
+
+arrange(FAP,-W.y)[1:10,c('Player','W.y','gVAL')]
+arrange(FAP,-SO)[1:10,c('Player','SO','gVAL')]
+arrange(FAP,-SV)[1:10,c('Player','SV','gVAL')]
+arrange(FAP,ERA.y)[1:10,c('Player','ERA.y','gVAL')]
+arrange(FAP,Rank)[1:10,c('Player','Rank','WAR','gVAL')]
+arrange(FAP, -gVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','ERA.y')]
+arrange(FAP, -wVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','ERA.y')]
+
+arrange(FAH,-HR.y)[1:10,c('Player','HR.y','gVAL')]
+arrange(FAH,-RBI.y)[1:10,c('Player','RBI.y','gVAL')]
+arrange(FAH,-R.y)[1:10,c('Player','R.y','gVAL')]
+arrange(FAH,-SB.y)[1:10,c('Player','SB.y','gVAL')]
+arrange(FAH,-AVG)[1:10,c('Player','AVG','gVAL')]
+arrange(FAH,Rank)[1:10,c('Player','Rank','WAR','gVAL')]
+arrange(FAH,-gVAL)[1:10,c('Player','Pos','gVAL','Rank','wVAL','HR.y','RBI.y','R.y','SB.y','AVG')]
+arrange(FAH,-wVAL)[1:10,c('Player','Pos','gVAL','Rank','wVAL','HR.y','RBI.y','R.y','SB.y','AVG')]
+
+TopFAH <- FAH %.% arrange(Pos,-gVAL) %.% 
+  select(Player,Pos,gVAL,Rank,wVAL,HR.y,RBI.y,R.y,SB.y,AVG) %.% 
+  group_by(Pos) %.% filter(rank(-gVAL) <= 5)
+
+TopFAP <- FAP %.% arrange(Pos,-gVAL) %.% 
+  select(Player,Pos,gVAL,Rank,wVAL,W.y,SO,SV,ERA.y) %.% 
+  group_by(Pos) %.% filter(rank(-gVAL) <= 5)
+
+arrange(myPros, gVAL)[,c('Player','gVAL','wVAL','Rank','W','SO','SV','ERA')]
+arrange(myHros,gVAL)[,c('Player','gVAL','Rank','wVAL','HR','RBI','R','SB','AVG')]
+
+#TBD
+# Add position information back in
+# Do something for Holds
+# Output a spreadsheet of all the tables
