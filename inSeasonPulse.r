@@ -1,8 +1,10 @@
-# Download roster, free agents, projections
-# Find top 10 hitters, pitchers available
-# Determine if I should replace any
+# 2 projection files
+# 2 FA files
+# 1 roster file
+# update Week
+# update ttWx
 
-#library("xlsx")
+library("xlsx")
 library("stringr")
 library("dplyr")
 
@@ -70,12 +72,11 @@ pTots$W <-  1-tt$W/sTots$W
 # TASK - need to keep position data
 # TASK - no holds data
 # TASK - get data dynamically
-hitters <- read.csv("steamerHROS.csv")
+#hitters <- read.csv("steamerHROS.csv")
+hitters <- read.csv("zipsHROS.csv")
 hitters$Player <- as.character(hitters$Name)
 pitchers <- read.csv("steamerPROS.csv")
 pitchers$Player <- as.character(pitchers$Name)
-#hitters <- hitters[,c(1,2,3,4,5,9,10,11,12,13,14,15,19,20)]
-#pitchers <- pitchers[,c(1,2,3,4,5,9,10,11,12,13,15,16,17)]
 
 #Load Free Agents
 FAhitters <- read.csv("FABatters.csv")
@@ -168,8 +169,17 @@ arrange(FAP,-SO)[1:10,c('Player','SO','gVAL')]
 arrange(FAP,-SV)[1:10,c('Player','SV','gVAL')]
 arrange(FAP,ERA.y)[1:10,c('Player','ERA.y','gVAL')]
 arrange(FAP,Rank)[1:10,c('Player','Rank','WAR','gVAL')]
-arrange(FAP, -gVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','HLD','ERA.y')]
 arrange(FAP, -wVAL)[1:10,c('Player','Pos','gVAL','wVAL','Rank','W.y','SO','SV','HLD','ERA.y')]
+
+allsp <- FAP %.% arrange(-gVAL) %.% 
+  select(Player,Pos,gVAL,wVAL,Rank,W.y,SO,SV,HLD,ERA.y) %.%
+  filter(HLD==0,SV==0)
+
+allClosers <- FAP %.% arrange(-SV,-gVAL) %.% 
+  select(Player,Pos,gVAL,wVAL,Rank,W.y,SO,SV,HLD,ERA.y) %.%
+  filter(SV>0)
+
+
 
 arrange(FAH,-HR.y)[1:10,c('Player','HR.y','gVAL')]
 arrange(FAH,-RBI.y)[1:10,c('Player','RBI.y','gVAL')]
@@ -188,9 +198,29 @@ TopFAP <- FAP %.% arrange(Pos,-gVAL) %.%
   select(Player,Pos,gVAL,Rank,wVAL,W.y,SO,SV,HLD,ERA.y) %.% 
   group_by(Pos) %.% filter(rank(-gVAL) <= 5)
 
-arrange(myPros, gVAL)[,c('Player','gVAL','wVAL','Rank','W','SO','SV','ERA')]
-arrange(myHros,gVAL)[,c('Player','gVAL','Rank','wVAL','HR','RBI','R','SB','AVG')]
+mp <- arrange(myPros, gVAL)[,c('Player','gVAL','wVAL','Rank','W','SO','SV','ERA')]
+mh <- arrange(myHros,gVAL)[,c('Player','gVAL','Rank','wVAL','HR','RBI','R','SB','AVG')]
+
+#Create xlsx with tabbed data
+wkly <- createWorkbook()
+wmh <- createSheet(wb=wkly,sheetName='My Hitters')
+wmp <- createSheet(wb=wkly,sheetName='My Pitchers')
+wfah <- createSheet(wb=wkly,sheetName='Top Hitters')
+wfap <- createSheet(wb=wkly,sheetName='Top Pitchers')
+wfasp <- createSheet(wb=wkly,sheetName='SP')
+wfacl <- createSheet(wb=wkly,sheetName='Cl')
+
+addDataFrame(x=mh,sheet=wmh)
+addDataFrame(x=mp,sheet=wmp)
+addDataFrame(x=TopFAH,sheet=wfah)
+addDataFrame(x=TopFAP,sheet=wfap)
+addDataFrame(x=allsp,sheet=wfasp)
+addDataFrame(x=allClosers,sheet=wfacl)
+
+saveWorkbook(wkly,"weeklyUpdate.xlsx")
+
 
 #TBD
-# Do something for Holds
 # Output a spreadsheet of all the tables
+# Is zips much different than steamer?  Which is better?
+# Automatically download projection files
