@@ -1,4 +1,6 @@
-# Working
+# TBD
+# Fangraphs - average all projection systems - Marcel, Fans, ZIPS, Steamer, Oliver (MORPS - sep sit)
+# Create valuation system - assign $ values to each player
 
 library("xlsx")
 library("stringr")
