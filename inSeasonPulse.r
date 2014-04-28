@@ -1,11 +1,12 @@
 # 2 projection files - fangraphs
 # 2 FA files - cbssports
-# 1 roster file - cbssports - make sure to use scoring option
 # 1 prospects file - rotoworld
 # update Week
 # update ttWx
 
 #TBD
+# Revisit gVAL for AVG and ERA - is it reasonable?
+# Take team record into consideration when forcasting holds
 # Get year end totals from csv file - currently hardcoded
 # Automatically download projection files
 # convert gVAL to dollar values
@@ -15,14 +16,15 @@ library("stringr")
 library("dplyr")
 
 # Data that needs to be update manually
-Week <- 3
+Week <- 4
 
 ttLabels <- c('AVG','HR','R','RBI','SB','ERA','HLD','K','SV','W')
 ttW1 <- c(.229,3,25,21,3,2.01,1,58,1,4)
 ttW2 <- c(.239,7,55,37,3,2.73,1,102,1,7)
-ttW3 <- c(.239,11,68,50,5,2.44,2,134,2,8)
+ttW3 <- c(.247,14,79,62,6,2.80,4,154,2,8)
+ttW4 <- c(.250,16,103,78,11,3.04,4,192,7,9)
 
-tt <- as.list(ttW3)
+tt <- as.list(ttW4)
 names(tt) <- ttLabels
 # End manual update data
 
@@ -43,6 +45,23 @@ pullPos <- function(n){
   p <- p[,2]
   p <- ifelse((p =='P'),'RP',p)
   ifelse((p %in% c('CF','RF','LF')),'OF',p)
+}
+
+pullTeam <- function(tn){
+  tH <- filter(AllH,Team == tn)
+  tH <- select(tH,-Team)
+  tP <- filter(AllP,Team == tn)
+  tP <- select(tP,-Team)
+  tP <- tP %.% arrange(-gVAL) %.% 
+    select(Player,Pos,gVAL,Rank,wVAL,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
+  tH <- tH %.% arrange(-gVAL) %.%
+    select(Player,Pos,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+  list(tH,tP)
+}
+
+addSheet <- function(l){
+  sht <- createSheet(wb=wkly,sheetName=l[[1]])
+  addDataFrame(x=l[[2]],sheet=sht)
 }
 
 # Year End Totals
@@ -75,107 +94,73 @@ pTots$W <-  1-tt$W/sTots$W
 #Load Steamer rest of season projections
 # TASK - get data dynamically
 hitters <- read.csv("steamerHROS.csv")
-#hitters <- read.csv("zipsHROS.csv")
 colnames(hitters) <- str_join('p',colnames(hitters))
 hitters$Player <- as.character(hitters$pName)
 pitchers <- read.csv("steamerPROS.csv")
 colnames(pitchers) <- str_join('p',colnames(pitchers))
-#pitchers <- read.csv("zipsPROS.csv")
 pitchers$Player <- as.character(pitchers$pName)
 
-#Load Free Agents
-FAhitters <- read.csv("FAHitters.csv",skip=1)
-FAhitters$Player <- as.character(FAhitters$Player)
-FAhitters <- mutate(FAhitters, Pos = pullPos(Player))
+#Load All Players - Extract Free Agents
+Allhitters <- read.csv("AllHitters.csv",skip=1)
+Allhitters$Player <- as.character(Allhitters$Player)
+Allhitters <- mutate(Allhitters, Pos = pullPos(Player))
+Allhitters$Player <- unlist(lapply(Allhitters$Player,swapName2))
 
+AllH <- inner_join(Allhitters,hitters,by=c('Player'),copy=FALSE)
 
-FApitchers <- read.csv("FAPitchers.csv",skip=1)
-FApitchers$Player <- as.character(FApitchers$Player)
-FApitchers <- mutate(FApitchers, Pos = pullPos(Player))
+Allpitchers <- read.csv("AllPitchers.csv",skip=1)
+Allpitchers$Player <- as.character(Allpitchers$Player)
+Allpitchers <- mutate(Allpitchers, Pos = pullPos(Player))
+Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
 
-FAhitters$Player <- unlist(lapply(FAhitters$Player,swapName2))
-FApitchers$Player <- unlist(lapply(FApitchers$Player,swapName2))
+AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
+AllP$pHLD <- with(AllP,(HD/2)*(30-Week))
 
+# Generate expected values
+AllH$gHR <- with(AllH,pHR/sTots$HR)
+AllH$gRBI <- with(AllH,pRBI/sTots$RBI)
+AllH$gR <- with(AllH,pR/sTots$R)
+AllH$gSB <- with(AllH,pSB/sTots$SB)
+#Assumes all hitters are playing full time - 
+AllH$gAVG <- with(AllH,(pAVG - sTots$AVG)*(30 - Week)/270)
+AllH$gVAL <- with(AllH,gHR+gRBI+gR+gSB+gAVG)
+AllH$wVAL <- with(AllH,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
+                 +(gSB*pTots$SB))
 
-FAH <- inner_join(FAhitters,hitters,by=c('Player'),copy=FALSE)
-FAP <- inner_join(FApitchers,pitchers,by=c('Player'),copy=FALSE)
+AllP$gW <- with(AllP,pW/sTots$W)
+AllP$gK <- with(AllP,pSO/sTots$K)
+AllP$gSV <- with(AllP,pSV/sTots$SV)
+AllP$gHLD <- with(AllP,pHLD/sTots$HLD)
+AllP$gERA <- with(AllP,(sTots$ERA - pERA)*(30 - Week)/350)
+AllP$gVAL <- with(AllP,gW+gK+gERA+gSV+gHLD)
+AllP$wVAL <- with(AllP,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV)+(gHLD*pTots$HLD))
 
-# Rough projection of holds - maintain the rate you're at
-FAP$pHLD <- with(FAP,(HD/2)*(30-Week))
-#FAP$SV <- with(FAP,(S/2)*(30-Week))
+# Create Free Agents
+FAH <- filter(AllH,Team == 'Free Agent')
+FAH <- select(FAH,-Team)
+FAP <- filter(AllP,Team == 'Free Agent')
+FAP <- select(FAP,-Team)
 
 #Load Current Roster
-myhitters <- read.csv("LCRoster.csv",skip=2,nrows=13)
-myhitters$Player <- as.character(myhitters$Player)
-mypitchers <- read.csv("LCRoster.csv",skip=18,nrows=14)
-mypitchers$Player <- as.character(mypitchers$Player)
-myhitters$Player <- unlist(lapply(myhitters$Player,swapName2))
-mypitchers$Player <- unlist(lapply(mypitchers$Player,swapName2))
-
-myHros <- inner_join(myhitters,hitters,by=c('Player'),copy=FALSE)
-myPros <- inner_join(mypitchers,pitchers,by=c('Player'),copy=FALSE)
-
-myPros$pHLD <- with(myPros,(HD/Week)*(30-Week))
-
-myHros$gHR <- with(myHros,pHR/sTots$HR)
-myHros$gRBI <- with(myHros,pRBI/sTots$RBI)
-myHros$gR <- with(myHros,pR/sTots$R)
-myHros$gSB <- with(myHros,pSB/sTots$SB)
-myHros$gAVG <- with(myHros,(pAVG - sTots$AVG)*(30 - Week)/270)
-myHros$gVAL <- with(myHros,gHR+gRBI+gR+gSB+gAVG)
-
-myHros$wVAL <- with(myHros,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
-                 +(gSB*pTots$SB))
-
-myPros$gW <- with(myPros,pW/sTots$W)
-myPros$gK <- with(myPros,pSO/sTots$K)
-myPros$gSV <- with(myPros,pSV/sTots$SV)
-myPros$gHLD <- with(myPros,pHLD/sTots$HLD)
-myPros$gERA <- with(myPros,(sTots$ERA - pERA)*(30 - Week)/350)
-
-myPros$gVAL <- with(myPros,gW+gK+gERA+gSV+gHLD)
-myPros$wVAL <- with(myPros,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV)+(gHLD*pTots$HLD))
-
+myteam <- pullTeam('Liquor Crickets')
+mh <- myteam[[1]]
+mp <- myteam[[2]]
+  
 #dollar values?
-myHros$dVAL <- myHros$gVAL * 260
-myPros$dVAL <- myPros$gVAL * 260
-
-FAH$gHR <- with(FAH,pHR/sTots$HR)
-FAH$gRBI <- with(FAH,pRBI/sTots$RBI)
-FAH$gR <- with(FAH,pR/sTots$R)
-FAH$gSB <- with(FAH,pSB/sTots$SB)
-FAH$gAVG <- with(FAH,(pAVG - sTots$AVG)*(30 - Week)/270)
-FAH$gVAL <- with(FAH,gHR+gRBI+gR+gSB+gAVG)
-
-FAH$wVAL <- with(FAH,(gHR*pTots$HR)+(gRBI*pTots$RBI)+(gR*pTots$R)
-                 +(gSB*pTots$SB))
-
-
-FAP$gW <- with(FAP,pW/sTots$W)
-FAP$gK <- with(FAP,pSO/sTots$K)
-FAP$gSV <- with(FAP,pSV/sTots$SV)
-FAP$gHLD <- with(FAP,pHLD/sTots$HLD)
-FAP$gERA <- with(FAP,(sTots$ERA - pERA)*(30 - Week)/350)
-FAP$gVAL <- with(FAP,gW+gK+gERA+gSV+gHLD)
-
-FAP$wVAL <- with(FAP,(gW*pTots$W)+(gK*pTots$K)+(gSV*pTots$SV)+(gHLD*pTots$HLD))
+#myHros$dVAL <- myHros$gVAL * 260
+#myPros$dVAL <- myPros$gVAL * 260
 
 allsp <- FAP %.% arrange(-gVAL) %.% filter(pHLD==0,pSV==0) %.%
   select(Player,Pos,gVAL,wVAL,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA)
-#  filter(GS.y>0)
 
 allClosers <- FAP %.% arrange(-S,-pSV,-gVAL) %.% filter(pSV>0) %.%
   select(Player,Pos,gVAL,wVAL,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA)
-  
 
 allHolds <- FAP %.% arrange(-pHLD,-gVAL) %.% filter(pHLD>0) %.%
   select(Player,Pos,gVAL,wVAL,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA)
   
 
-TopFAH <- FAH %.% arrange(Pos,-gVAL) %.% 
-  group_by(Pos) %.% filter(rank(-gVAL) <= 5)
-
-fix(TopFAH)
+TopFAH <- FAH %.% group_by(Pos)  %.% arrange(Pos,-gVAL) %.% filter(rank(-gVAL) <= 5)
  
 TopFAH <- select(TopFAH,Player,Pos,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   
@@ -183,15 +168,12 @@ TopFAP <- FAP %.% arrange(Pos,-gVAL) %.%
   group_by(Pos) %.% filter(rank(-gVAL) <= 5)
 
 TopFAP <- select(TopFAP,Player,Pos,gVAL,Rank,wVAL,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA)
-  
-mp <- myPros %.% arrange(gVAL) %.% 
-  select(Player,gVAL,Rank,wVAL,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
-mh <- myHros %.% arrange(gVAL) %.%
-  select(Player,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
-
+    
 # Create available prospect lists
-prospect <- read.csv("prospects0417.csv",sep='\t',header=FALSE)
-prospect <- prospect[,c('V1','V3','V5','V7','V8','V9')]
+#prospect <- read.csv("prospects0424.csv",sep='\t',header=FALSE)
+#prospect <- prospect[,c('V1','V3','V5','V7','V8','V9')]
+prospect <- read.csv("prospects0424.csv")
+prospect <- select(prospect,Rank,Player,Team,Position,ETA,Notes)
 colnames(prospect) <- c('Rank','Player','Team','Pos','Arrival','Notes')
 prospect$Player <- str_trim(as.character(prospect$Player))
 FAHp <- inner_join(prospect,FAH,by=c('Player'),copy=FALSE) %.% arrange(Rank.x) %.% 
@@ -200,29 +182,36 @@ FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %.% arrange(Rank.x) %
   select(Rank.x,Player,Team,Pos.x,Arrival,Notes,gVAL)
 
 
-
 #Create xlsx with tabbed data
 wkly <- createWorkbook()
-wmh <- createSheet(wb=wkly,sheetName='My Hitters')
-wmp <- createSheet(wb=wkly,sheetName='My Pitchers')
-wfah <- createSheet(wb=wkly,sheetName='Top Hitters')
-wfap <- createSheet(wb=wkly,sheetName='Top Pitchers')
-wfasp <- createSheet(wb=wkly,sheetName='SP')
-wfacl <- createSheet(wb=wkly,sheetName='Cl')
-wfahld <- createSheet(wb=wkly,sheetName='Hld')
-wfpp <- createSheet(wb=wkly,sheetName='Prospect - P')
-wfph <- createSheet(wb=wkly,sheetName='Prospect - H')
+tabs <- list()
+tabs[[length(tabs)+1]] <- list('My Hitters',mh)
+tabs[[length(tabs)+1]] <- list('My Pitchers',mp)
+tabs[[length(tabs)+1]] <- list('Top Hitters',TopFAH)
+tabs[[length(tabs)+1]] <- list('Top Pitchers',TopFAP)
+tabs[[length(tabs)+1]] <- list('SP',allsp)
+tabs[[length(tabs)+1]] <- list('Cl',allClosers)
+tabs[[length(tabs)+1]] <- list('Hld',allHolds)
+tabs[[length(tabs)+1]] <- list('Prospect - P',FAPp)
+tabs[[length(tabs)+1]] <- list('Prospect - H',FAHp)
 
-addDataFrame(x=mh,sheet=wmh)
-addDataFrame(x=mp,sheet=wmp)
-addDataFrame(x=TopFAH,sheet=wfah)
-addDataFrame(x=TopFAP,sheet=wfap)
-addDataFrame(x=allsp,sheet=wfasp)
-addDataFrame(x=allClosers,sheet=wfacl)
-addDataFrame(x=allHolds,sheet=wfahld)
-addDataFrame(x=FAPp,sheet=wfpp)
-addDataFrame(x=FAHp,sheet=wfph)
-
+lapply(tabs,addSheet)
 saveWorkbook(wkly,"weeklyUpdate.xlsx")
 
+#ad hoc queries
+
+# For a position, who has surplus?
+f <- AllH %.% filter(Pos == 'SS',gVAL > 0.32) %.% group_by(Team) %.% summarize(nGood = length(Team))
+f2 <- AllH %.% filter(Pos == 'SS') %.% group_by(Team) %.% summarize(nTotal = length(Team))
+ff <- inner_join(f,f2,by=c('Team')) %.% arrange(-nGood,-nTotal)
+
+#Find out what a team has that I can use
+pullTeam('clowndog & banjo')[[1]]
+
+#Find players by position who can help immediately
+FAH %.% filter(Pos == 'OF',gVAL > 0.15, BA > 0.25) %.% arrange(-gVAL) %.% 
+  select(Player,Pos,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+
+FAH %.% filter(gVAL > 0.19, BA > 0.26) %.% arrange(-gVAL) %.% 
+  select(Player,Pos,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
 
