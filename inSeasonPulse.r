@@ -14,12 +14,14 @@
 library("xlsx")
 library("stringr")
 library("dplyr")
+library("XML")
+
 
 source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 5
+Week <- 8
 
 ttLabels <- c('AVG','HR','R','RBI','SB','ERA','HLD','K','SV','W')
 ttW1 <- c(.229,3,25,21,3,2.01,1,58,1,4)
@@ -27,8 +29,11 @@ ttW2 <- c(.239,7,55,37,3,2.73,1,102,1,7)
 ttW3 <- c(.247,14,79,62,6,2.80,4,154,2,8)
 ttW4 <- c(.248,16,105,78,11,2.88,4,212,7,10)
 ttW5 <- c(.248,23,138,105,20,3.337,5,270,10,13)
+ttW6 <- c(.244,26,160,121,29,3.307,6,312,13,14)
+ttW7 <- c(.244,30,184,150,32,3.381,8,378,13,19)
+ttW8 <- c(.244,30,184,150,32,3.381,8,378,13,19)
 
-tt <- as.list(ttW5)
+tt <- as.list(ttW8)
 names(tt) <- ttLabels
 # End manual update data
 
@@ -86,7 +91,7 @@ Allpitchers <- mutate(Allpitchers, Pos = pullPos(Player))
 Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
-AllP$pHLD <- with(AllP,(HD/2)*(30-Week))
+AllP$pHLD <- with(AllP,(HD/3)*(30-Week))
 
 # Generate expected values
 AllH$gHR <- with(AllH,pHR/getd('HR'))
@@ -146,15 +151,32 @@ TopFAP <- select(TopFAP,Player,Pos,pSGP,gVAL,Rank,wVAL,pW,pSO,pSV,pHLD,pERA,pK.9
 # Create available prospect lists
 #prospect <- read.csv("prospects0424.csv",sep='\t',header=FALSE)
 #prospect <- prospect[,c('V1','V3','V5','V7','V8','V9')]
-prospect <- read.csv("prospects0505.csv")
+prospect <- read.csv("prospects0523.csv")
 prospect <- select(prospect,Rank,Player,Team,Position,ETA,Notes)
 colnames(prospect) <- c('Rank','Player','Team','Pos','Arrival','Notes')
 prospect$Player <- str_trim(as.character(prospect$Player))
-FAHp <- inner_join(prospect,FAH,by=c('Player'),copy=FALSE) %.% arrange(Rank.x) %.% 
+FAHp <- inner_join(prospect,FAH,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.% 
   select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pSGP,gVAL)
-FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %.% arrange(Rank.x) %.% 
+FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.% 
   select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pSGP,gVAL)
 
+# Closer report
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-22-2014/"
+c <- readHTMLTable(bp, header=T,stringASFactors=F)
+ncol(c[[15]]) == 5
+f <- lapply(c,function(x) {ncol(x) == 5})
+c2 <- c[unlist(f)]
+crep <- c2[[1]]
+#crep <- readHTMLTable(bp, header=T, which=15,stringsAsFactors=F)
+t <- data.frame(crep$Closer,10)
+t2 <- data.frame(crep$First,5)
+t3 <- data.frame(crep$Second,2)
+colnames(t) <- c('Player','Score')
+colnames(t2) <- c('Player','Score')
+colnames(t3) <- c('Player','Score')
+crep <- rbind_list(t,t2,t3)
+availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.% 
+  select(Player,pSGP,gVAL,Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
 #Create xlsx with tabbed data
 wkly <- createWorkbook()
@@ -165,6 +187,7 @@ tabs[[length(tabs)+1]] <- list('Top Hitters',TopFAH)
 tabs[[length(tabs)+1]] <- list('Top Pitchers',TopFAP)
 tabs[[length(tabs)+1]] <- list('SP',allsp)
 tabs[[length(tabs)+1]] <- list('Cl',allClosers)
+tabs[[length(tabs)+1]] <- list('FanCl',availCL)
 tabs[[length(tabs)+1]] <- list('Hld',allHolds)
 tabs[[length(tabs)+1]] <- list('Prospect - P',FAPp)
 tabs[[length(tabs)+1]] <- list('Prospect - H',FAHp)
@@ -175,9 +198,9 @@ saveWorkbook(wkly,"weeklyUpdate.xlsx")
 #ad hoc queries
 
 # For a position, who has surplus?
-f <- AllH %.% filter(Pos == '3B',pSGP > 13) %.% group_by(Team) %.% summarize(nGood = length(Team))
-f2 <- AllH %.% filter(Pos == '3B') %.% group_by(Team) %.% summarize(nTotal = length(Team))
-ff <- inner_join(f,f2,by=c('Team')) %.% arrange(-nGood,-nTotal)
+f <- AllH %.% filter(Pos == '1B',pSGP > 13) %.% group_by(Team) %.% summarize(nGood = length(Team))
+f2 <- AllH %.% filter(Pos == '1B') %.% group_by(Team) %.% summarize(nTotal = length(Team))
+ff <- left_join(f2,f,by=c('Team')) %.% arrange(-nGood,-nTotal)
 
 #Find out what a team has that I can use
 pullTeam('clowndog & banjo')[[1]]
@@ -192,3 +215,11 @@ FAH %.% filter(pSGP > 8, BA > 0.26) %.% arrange(-pSGP) %.%
 # Filters by strong K's and low BB's
 newHolds <- FAP %.% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %.% arrange(-pHLD,-pSGP) %.%
   select(Player,Pos,pSGP,gVAL,wVAL,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA)
+
+# Top FA in a stat
+FAH %.% arrange(-pHR,-pSGP) %.% filter(pHR > 10, pSGP > 8) %.%
+  select(Player,Pos,pSGP,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+
+FAP %.% arrange(-pSGP) %.% filter(QS>1,pBB.9 < 3.5) %.%
+select(Player,Pos,pSGP,gVAL,wVAL,Rank,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
+

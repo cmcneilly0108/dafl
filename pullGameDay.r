@@ -39,5 +39,6 @@ rTots <- runner %.% group_by(id) %.% summarize(RBI=sum(RBI),R=sum(R),SB=sum(SB),
 
 dailyH <- inner_join(hTots,rTots,by=c('id'))
 
-# pitching stats - GS, IP, W, S, K, BB, ER, QS?, HLD?
-hitter$out <- 
+# pitching stats - GS, IP, W, S, ER, QS?, HLD
+# done - K, BB
+# at home, grab a day's worth of data and write to csv file
