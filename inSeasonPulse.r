@@ -3,13 +3,12 @@
 # 1 prospects file - rotoworld
 # update Week
 # update ttWx
+# update fangraphs bullpen URL
 
 #TBD
-# Revisit gVAL for AVG and ERA - is it reasonable? - use denom from genPrices to calc gVAL?
-# Use SGPs instead of gVAL
-# Take team record into consideration when forcasting holds
+# Remove gVAL, wVAL
+# Incorporate holds into SGP calculation
 # Automatically download projection files
-# convert gVAL to dollar values
 
 library("xlsx")
 library("stringr")
@@ -21,7 +20,9 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 8
+Week <- 9
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-25-2014/"
+
 
 ttLabels <- c('AVG','HR','R','RBI','SB','ERA','HLD','K','SV','W')
 ttW1 <- c(.229,3,25,21,3,2.01,1,58,1,4)
@@ -31,7 +32,7 @@ ttW4 <- c(.248,16,105,78,11,2.88,4,212,7,10)
 ttW5 <- c(.248,23,138,105,20,3.337,5,270,10,13)
 ttW6 <- c(.244,26,160,121,29,3.307,6,312,13,14)
 ttW7 <- c(.244,30,184,150,32,3.381,8,378,13,19)
-ttW8 <- c(.244,30,184,150,32,3.381,8,378,13,19)
+ttW8 <- c(.251,40,212,181,36,3.426,8,404,14,20)
 
 tt <- as.list(ttW8)
 names(tt) <- ttLabels
@@ -143,10 +144,9 @@ TopFAH <- FAH %.% group_by(Pos)  %.% arrange(Pos,-pSGP) %.% filter(rank(-gVAL) <
  
 TopFAH <- select(TopFAH,Player,Pos,pSGP,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   
-TopFAP <- FAP %.% arrange(Pos,-pSGP) %.% 
-  group_by(Pos) %.% filter(rank(-gVAL) <= 5)
-
-TopFAP <- select(TopFAP,Player,Pos,pSGP,gVAL,Rank,wVAL,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA)
+#TopFAP <- FAP %.% arrange(Pos,-pSGP) %.% 
+#  group_by(Pos) %.% filter(rank(-gVAL) <= 5)
+#TopFAP <- select(TopFAP,Player,Pos,pSGP,gVAL,Rank,wVAL,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA)
     
 # Create available prospect lists
 #prospect <- read.csv("prospects0424.csv",sep='\t',header=FALSE)
@@ -161,7 +161,6 @@ FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.
   select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pSGP,gVAL)
 
 # Closer report
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-22-2014/"
 c <- readHTMLTable(bp, header=T,stringASFactors=F)
 ncol(c[[15]]) == 5
 f <- lapply(c,function(x) {ncol(x) == 5})
@@ -178,13 +177,19 @@ crep <- rbind_list(t,t2,t3)
 availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.% 
   select(Player,pSGP,gVAL,Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
+# Calculate total SGPs per team, rank
+RH <- filter(AllH,Team != 'Free Agent') %>% group_by(Team) %>% summarize(hSGP = sum(pSGP))
+RP <- filter(AllP,Team != 'Free Agent') %>% group_by(Team) %>% summarize(piSGP = sum(pSGP))
+RTot <- inner_join(RH,RP,by=c('Team')) %>% mutate(tSGP = hSGP + piSGP,hRank = rank(-hSGP),pRank = rank(-piSGP)) %>% 
+  select(Team,hSGP,hRank,piSGP,pRank,tSGP) %>% arrange(-tSGP)
+
 #Create xlsx with tabbed data
 wkly <- createWorkbook()
 tabs <- list()
+tabs[[length(tabs)+1]] <- list('Talent',RTot)
 tabs[[length(tabs)+1]] <- list('My Hitters',mh)
 tabs[[length(tabs)+1]] <- list('My Pitchers',mp)
 tabs[[length(tabs)+1]] <- list('Top Hitters',TopFAH)
-tabs[[length(tabs)+1]] <- list('Top Pitchers',TopFAP)
 tabs[[length(tabs)+1]] <- list('SP',allsp)
 tabs[[length(tabs)+1]] <- list('Cl',allClosers)
 tabs[[length(tabs)+1]] <- list('FanCl',availCL)
@@ -201,6 +206,8 @@ saveWorkbook(wkly,"weeklyUpdate.xlsx")
 f <- AllH %.% filter(Pos == '1B',pSGP > 13) %.% group_by(Team) %.% summarize(nGood = length(Team))
 f2 <- AllH %.% filter(Pos == '1B') %.% group_by(Team) %.% summarize(nTotal = length(Team))
 ff <- left_join(f2,f,by=c('Team')) %.% arrange(-nGood,-nTotal)
+
+f <- AllP %>% filter(pSV > 10) %>% group_by(Team) %>% summarize(nGood = length(Team)) %>% arrange(-nGood)
 
 #Find out what a team has that I can use
 pullTeam('clowndog & banjo')[[1]]
@@ -223,3 +230,5 @@ FAH %.% arrange(-pHR,-pSGP) %.% filter(pHR > 10, pSGP > 8) %.%
 FAP %.% arrange(-pSGP) %.% filter(QS>1,pBB.9 < 3.5) %.%
 select(Player,Pos,pSGP,gVAL,wVAL,Rank,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
+#game <- "http://www.baseball-reference.com/boxes/TBA/TBA201405220.shtml"
+#c <- readHTMLTable(game,stringASFactors=F)

@@ -22,6 +22,7 @@ pitchers$SGP <- pitSGP(pitchers)
 # Dollar Calculations
 nteams <- 15
 tdollars <- nteams * 260
+# 67/33 split
 pdollars <- round(tdollars/3)
 hdollars <- tdollars - pdollars
 nhitters <- 12
