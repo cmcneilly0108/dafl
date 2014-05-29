@@ -1,12 +1,18 @@
+# Calculate H/P split (dollars AND players) from 2014 draft - do we have others?
+# Make sure Holds are included in SGP calculations/data
+
+# Check for pitching accuracy
+# Combine scores back in to full list, put $0 for the rest
+# Take protections lists into account - Keeper League Inflation
 
 library("xlsx")
 library("dplyr")
 
 source("./daflFunctions.r")
-# ((3.98-((ER +469)*(9/(IP+1060))))/.08)
 
 # Start processing - load Past totals
-l1 <- loadPast()
+#l1 <- loadPast()
+l1 <- loadPast2()
 r2 <- l1[[1]]
 r3 <- l1[[2]]
 
@@ -46,7 +52,9 @@ bpitchers <- arrange(bpitchers,-DFL)
 # find min $, subtract from everyone, then multiply everyone by %diff
 hmin <- min(bhitters$DFL) - 1
 hlost <- hmin * thitters
-#bhitters$DFL <- bhitters$DFL - hmin
+bhitters$DFL <- (bhitters$DFL - hmin) * (hdollars/(hdollars - hlost))
+hmin <- min(bhitters$DFL) - 1
+hlost <- hmin * thitters
 bhitters$DFL <- (bhitters$DFL - hmin) * (hdollars/(hdollars - hlost))
 hmin <- min(bhitters$DFL) - 1
 hlost <- hmin * thitters
@@ -58,10 +66,7 @@ bpitchers$DFL <- (bpitchers$DFL - pmin) * (pdollars/(pdollars - plost))
 pmin <- min(bpitchers$DFL) - 1
 plost <- pmin * tpitchers
 bpitchers$DFL <- (bpitchers$DFL - pmin) * (pdollars/(pdollars - plost))
+pmin <- min(bpitchers$DFL) - 1
+plost <- pmin * tpitchers
+bpitchers$DFL <- (bpitchers$DFL - pmin) * (pdollars/(pdollars - plost))
 
-#Check for pitching accuracy
-#Combine scores back in to full list, put $0 for the rest
-
-# Take protections lists into account
-# Add Holds - to projections, to SGP calculations
-#Convert SGP to $$$

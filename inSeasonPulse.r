@@ -42,7 +42,7 @@ names(tt) <- ttLabels
 # Year End Totals
 sTots <- list()
 
-l1 <- loadPast()
+l1 <- loadPast2()
 r2 <- l1[[1]]
 r3 <- l1[[2]]
 
@@ -140,7 +140,7 @@ allHolds <- FAP %.% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %.%
 
   
 
-TopFAH <- FAH %.% group_by(Pos)  %.% arrange(Pos,-pSGP) %.% filter(rank(-gVAL) <= 5)
+TopFAH <- FAH %.% group_by(Pos) %.% arrange(Pos,-pSGP) %.% filter(rank(-gVAL) <= 5)
  
 TopFAH <- select(TopFAH,Player,Pos,pSGP,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   
@@ -161,7 +161,7 @@ FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %.% arrange(-pSGP) %.
   select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pSGP,gVAL)
 
 # Closer report
-c <- readHTMLTable(bp, header=T,stringASFactors=F)
+c <- readHTMLTable(bp,header=T,stringASFactors=F)
 ncol(c[[15]]) == 5
 f <- lapply(c,function(x) {ncol(x) == 5})
 c2 <- c[unlist(f)]
