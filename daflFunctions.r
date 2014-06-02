@@ -36,6 +36,13 @@ pitSGP <- function(p) {
          ((avgera - ((eruns+ER) * (9/(innpit+IP))))/getd('ERA'))
   )  
 }
+swapName <- function(n){
+  comma <- str_locate(n,',')
+  ln <- str_sub(n,1,comma-1)
+  fn <- str_sub(n,comma+2,-1)
+  nn <- str_join(fn,ln,sep=" ",collapse=NULL)
+  nn[1] 
+}
 
 swapName2 <- function(n){
   comma <- str_locate(n,',')
@@ -60,10 +67,10 @@ pullTeam <- function(tn){
   tH <- select(tH,-Team)
   tP <- filter(AllP,Team == tn)
   tP <- select(tP,-Team)
-  tP <- tP %.% arrange(-pSGP) %.% 
-    select(Player,Pos,pSGP,gVAL,Rank,wVAL,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
-  tH <- tH %.% arrange(-pSGP) %.%
-    select(Player,Pos,pSGP,gVAL,Rank,wVAL,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+  tP <- tP %.% arrange(-pDFL) %.% 
+    select(Player,Pos,pDFL,pSGP,gVAL,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
+  tH <- tH %.% arrange(-pDFL) %.%
+    select(Player,Pos,pDFL,pSGP,gVAL,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   list(tH,tP)
 }
 
