@@ -36,6 +36,22 @@ pitSGP <- function(p) {
          ((avgera - ((eruns+ER) * (9/(innpit+IP))))/getd('ERA'))
   )  
 }
+
+pitSGPh <- function(p) {
+  innpit <- (6 * 200) + (2 * 75)
+  #  avgera <- mean((r2[r2$Category=='ERA','Top']+r2[r2$Category=='ERA','Bottom'])/2)
+  avgera <- mean((r2[r2$Category=='ERA','denom']))
+  eruns <-  (avgera/9) * innpit
+  innpit <- innpit * 7/8
+  eruns <- eruns * 7/8
+  
+  with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + pHLD/getd('HLD') +
+         #         ((((eruns+ER)/(innpit+IP)*9) - avgera)/getd('ERA')))  
+         ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
+  )  
+}
+
+
 swapName <- function(n){
   comma <- str_locate(n,',')
   ln <- str_sub(n,1,comma-1)

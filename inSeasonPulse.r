@@ -21,7 +21,7 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 9
+Week <- 10
 bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-29-2014/"
 
 
@@ -42,7 +42,6 @@ colnames(hitters) <- str_join('p',colnames(hitters))
 hitters$Player <- as.character(hitters$pName)
 
 pitchers <- read.csv("steamerPROS.csv")
-pitchers$SGP <- pitSGP(pitchers)
 colnames(pitchers) <- str_join('p',colnames(pitchers))
 pitchers$Player <- as.character(pitchers$pName)
 
@@ -61,6 +60,7 @@ Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
 AllP$pHLD <- with(AllP,(HD/3)*(30-Week))
+AllP$pSGP <- pitSGPh(AllP)
 
 # Generate expected values
 AllH$gHR <- with(AllH,pHR/getd('HR'))
@@ -86,8 +86,8 @@ tdollars <- (nteams * (260+50)) * (1-(Week/30))
 pdollars <- round(tdollars*0.37)
 hdollars <- tdollars - pdollars
 # 13/12 hitters/pitchers based on rosters on 5/29/14
-nhitters <- 13
-npitchers <- 12
+nhitters <- 12
+npitchers <- 13
 thitters <- (nhitters * nteams) + 40
 tpitchers <- (npitchers * nteams) + 40
 # Only value a certain number of players
