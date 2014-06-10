@@ -93,6 +93,12 @@ pullPos <- function(n){
   ifelse((p %in% c('CF','RF','LF')),'OF',p)
 }
 
+pullMLB <- function(n){
+  n <- str_trim(n)
+  p <- str_match(n,".+, .+ .+ (.+)")
+  p <- p[,2]
+}
+
 pullTeam <- function(tn){
   tH <- filter(AllH,Team == tn)
   tH <- select(tH,-Team)

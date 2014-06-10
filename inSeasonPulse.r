@@ -22,7 +22,7 @@ source("./daflFunctions.r")
 
 # Data that needs to be update manually
 Week <- 11
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-june-08-2014/"
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-june-9-2014/"
 
 
 # End manual update data
@@ -49,6 +49,7 @@ pitchers$Player <- as.character(pitchers$pName)
 #Load All Players - Extract Free Agents
 Allhitters <- read.csv("AllHitters.csv",skip=1)
 Allhitters$Player <- as.character(Allhitters$Player)
+Allhitters <- mutate(Allhitters, MLB = pullMLB(Player))
 Allhitters <- mutate(Allhitters, Pos = pullPos(Player))
 Allhitters$Player <- unlist(lapply(Allhitters$Player,swapName2))
 
@@ -58,6 +59,7 @@ Allpitchers <- read.csv("AllPitchers.csv",skip=1)
 Allpitchers$Player <- as.character(Allpitchers$Player)
 Allpitchers$Team <- as.character(Allpitchers$Team)
 Allpitchers <- mutate(Allpitchers, Pos = pullPos(Player))
+Allpitchers <- mutate(Allpitchers, MLB = pullMLB(Player))
 Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
@@ -65,14 +67,15 @@ ytdp <- read.csv("AllP20140608.csv",skip=1)
 ytdp$Player <- as.character(ytdp$Player)
 ytdp$Team <- as.character(ytdp$Team)
 ytdp <- mutate(ytdp, Pos = pullPos(Player))
+ytdp <- mutate(ytdp, MLB = pullMLB(Player))
 ytdp$Player <- unlist(lapply(ytdp$Player,swapName2))
-ytdp <- select(ytdp,Player,Team,HD)
-colnames(ytdp) <- c('Player','Team','yHLD')
+ytdp <- select(ytdp,Player,MLB,HD)
+colnames(ytdp) <- c('Player','MLB','yHLD')
 
 
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
-AllP <- left_join(AllP,ytdp,by=c('Player','Team'),copy=FALSE)
+AllP <- left_join(AllP,ytdp,by=c('Player','MLB'),copy=FALSE)
 # give 60/40 weight to YTD/3WKS
 AllP$pHLD <- with(AllP,round(((HD/4)*(30-Week)*.4)+((yHLD/Week)*(30-Week)*.6)),0)
 AllP$pSGP <- pitSGPh(AllP)
@@ -116,8 +119,8 @@ psgpd <- pdollars/pitSGP
 # Create dollar amounts
 bhitters$pDFL <- bhitters$pSGP * hsgpd
 bpitchers$pDFL <- bpitchers$pSGP * psgpd
-bhitters <- select(bhitters,Player,pDFL)
-bpitchers <- select(bpitchers,Player,pDFL)
+bhitters <- select(bhitters,Player,MLB,pDFL)
+bpitchers <- select(bpitchers,Player,MLB,pDFL)
 # find min $, subtract from everyone, then multiply everyone by %diff
 # Normalize for auction - three iterations
 hmin <- min(bhitters$pDFL) - 1
@@ -144,8 +147,8 @@ bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
 
 
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,bhitters,by=c('Player'))
-AllP <- left_join(AllP,bpitchers,by=c('Player'))
+AllH <- left_join(AllH,bhitters,by=c('Player','MLB'))
+AllP <- left_join(AllP,bpitchers,by=c('Player','MLB'))
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
