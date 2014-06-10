@@ -6,10 +6,10 @@
 # update fangraphs bullpen URL
 
 #TBD
-# Use current year AND last 3 weeks for projecting holds
+# Fix join bug which introduces duplicate rows 'Miguel Gonzalez'
 # Remove gVAL
-# Incorporate holds into SGP calculation
 # Automatically download projection files
+# Address position scarcity in $$ - too many holds guys
 
 library("xlsx")
 library("stringr")
@@ -21,8 +21,8 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 10
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-29-2014/"
+Week <- 11
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-june-08-2014/"
 
 
 # End manual update data
@@ -32,8 +32,9 @@ bp <- "http://www.fangraphs.com/fantasy/bullpen-report-may-29-2014/"
 sTots <- list()
 
 l1 <- loadPast2()
-r2 <- l1[[1]]
-r3 <- l1[[2]]
+eras <- l1[[1]]
+avgs <- l1[[2]]
+r3 <- l1[[3]]
 
 #Load Steamer rest of season projections
 hitters <- read.csv("steamerHROS.csv")
@@ -55,13 +56,28 @@ AllH <- inner_join(Allhitters,hitters,by=c('Player'),copy=FALSE)
 
 Allpitchers <- read.csv("AllPitchers.csv",skip=1)
 Allpitchers$Player <- as.character(Allpitchers$Player)
+Allpitchers$Team <- as.character(Allpitchers$Team)
 Allpitchers <- mutate(Allpitchers, Pos = pullPos(Player))
 Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
+Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
+
+ytdp <- read.csv("AllP20140608.csv",skip=1)
+ytdp$Player <- as.character(ytdp$Player)
+ytdp$Team <- as.character(ytdp$Team)
+ytdp <- mutate(ytdp, Pos = pullPos(Player))
+ytdp$Player <- unlist(lapply(ytdp$Player,swapName2))
+ytdp <- select(ytdp,Player,Team,HD)
+colnames(ytdp) <- c('Player','Team','yHLD')
+
+
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
-AllP$pHLD <- with(AllP,(HD/3)*(30-Week))
+AllP <- left_join(AllP,ytdp,by=c('Player','Team'),copy=FALSE)
+# give 60/40 weight to YTD/3WKS
+AllP$pHLD <- with(AllP,round(((HD/4)*(30-Week)*.4)+((yHLD/Week)*(30-Week)*.6)),0)
 AllP$pSGP <- pitSGPh(AllP)
-
+#AllP2 <- pitSGPhALL(AllP)
+  
 # Generate expected values
 AllH$gHR <- with(AllH,pHR/getd('HR'))
 AllH$gRBI <- with(AllH,pRBI/getd('RBI'))
@@ -150,7 +166,7 @@ mh <- myteam[[1]]
 mp <- myteam[[2]]
   
 # Create worksheets
-allsp <- FAP %.% arrange(-pDFL) %.% filter(pHLD==0,pSV==0, pGS > 0) %.%
+allsp <- FAP %.% arrange(-pDFL,-pSGP) %.% filter(pHLD==0,pSV==0, pGS > 0) %.%
   select(Player,Pos,pDFL,pSGP,gVAL,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA)
 
 allClosers <- FAP %.% arrange(-S,-pSV,-pDFL) %.% filter(pSV>0) %.%
@@ -160,7 +176,7 @@ allHolds <- FAP %.% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %.%
   arrange(-pHLD,-pDFL) %.%
   select(Player,Pos,pDFL,pSGP,gVAL,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA)
 
-TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pDFL) <= 5) %>%
+TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pDFL,-pSGP) <= 5) %>%
   select(Player,Pos,pDFL,pSGP,gVAL,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
       
 # Create available prospect lists
@@ -256,3 +272,6 @@ select(Player,Pos,pSGP,gVAL,Rank,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
 #game <- "http://www.baseball-reference.com/boxes/TBA/TBA201405220.shtml"
 #c <- readHTMLTable(game,stringASFactors=F)
+
+#li <- AllP %>% filter(Team != 'Free Agent') %>% group_by(Team,Pos) %>% 
+#  summarize(Count = length(Pos))

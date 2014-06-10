@@ -14,7 +14,7 @@ loadPast <- function() {
 
 hitSGP <- function(h) {
   atBats <- 510 * 9
-  avgavg <- mean((r2[r2$Category=='AVG','denom']))
+  avgavg <- mean(avgs)
   hits <- round(atBats * avgavg)
   atBats <- atBats *8 / 9
   hits <- round(hits  *8 / 9)
@@ -25,30 +25,45 @@ hitSGP <- function(h) {
 
 pitSGP <- function(p) {
   innpit <- (6 * 200) + (2 * 75)
-#  avgera <- mean((r2[r2$Category=='ERA','Top']+r2[r2$Category=='ERA','Bottom'])/2)
-  avgera <- mean((r2[r2$Category=='ERA','denom']))
+  avgera <- mean(eras)
   eruns <-  (avgera/9) * innpit
   innpit <- innpit * 7/8
   eruns <- eruns * 7/8
   
-  with(p,W/getd('W') + SO/getd('K') + SV/getd('SV') +
-         #         ((((eruns+ER)/(innpit+IP)*9) - avgera)/getd('ERA')))  
+  with(p,W/getd('W') + SO/getd('K') + (SV/getd('SV')) + 0.3*(HLD/getd('HLD')) +
          ((avgera - ((eruns+ER) * (9/(innpit+IP))))/getd('ERA'))
   )  
 }
 
 pitSGPh <- function(p) {
   innpit <- (6 * 200) + (2 * 75)
-  #  avgera <- mean((r2[r2$Category=='ERA','Top']+r2[r2$Category=='ERA','Bottom'])/2)
-  avgera <- mean((r2[r2$Category=='ERA','denom']))
+  avgera <- mean(eras)
   eruns <-  (avgera/9) * innpit
   innpit <- innpit * 7/8
   eruns <- eruns * 7/8
   
-  with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + pHLD/getd('HLD') +
-         #         ((((eruns+ER)/(innpit+IP)*9) - avgera)/getd('ERA')))  
+  with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + 0.3*(pHLD/getd('HLD')) +
          ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
   )  
+}
+
+pitSGPhALL <- function(p) {
+  innpit <- (6 * 200) + (2 * 75)
+  avgera <- mean(eras)
+  # avgera is not correct - is the avg of the denoms
+  eruns <-  (avgera/9) * innpit
+  innpit <- innpit * 7/8
+  eruns <- eruns * 7/8
+  
+  p$pSGP <- with(p,pW/getd('W') + pSO/getd('K') + 0.7*(pSV/getd('SV')) + 0.35*(pHLD/getd('HLD')) +
+         ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA')))
+  p$sW <- with(p,pW/getd('W'))
+  p$sK <- with(p,pSO/getd('K'))
+  p$sSV <- with(p,pSV/getd('SV'))
+  p$sHLD <- with(p,pHLD/getd('HLD'))
+  p$sERA <- with(p,((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA')))
+  print(avgera)
+  return(p)
 }
 
 
@@ -103,7 +118,7 @@ addSheet <- function(l){
 
 getMult <- function(pts) {
   pR <- rank(pts)
-  l <- lm(pR ~ pts)
+  l <- lm(pR ~ pts, na.action=na.exclude)
   1/coefficients(l)[2]
 }
 
@@ -119,16 +134,18 @@ genDenoms <- function(df) {
 loadPast2 <- function() {
   f1 <- read.csv("fs2013.csv")
   res <- genDenoms(f1)
+  eras <- f1$ERA
+  avgs <- f1$AVG
   f1 <- read.csv("fs2012.csv")
   res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("fs2011.csv")
   res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   
   final <- group_by(res,Category) %>% summarize(ad = mean(denom))
-  list(res,final)
+  list(eras,avgs,final)
 }
-
-
-# pass all columns, all years through
-# average all scores
 
