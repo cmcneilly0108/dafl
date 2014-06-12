@@ -6,15 +6,16 @@
 # update fangraphs bullpen URL
 
 #TBD
-# Fix join bug which introduces duplicate rows 'Miguel Gonzalez'
 # Remove gVAL
 # Automatically download projection files
 # Address position scarcity in $$ - too many holds guys
+# Better tracking of prospects
 
 library("xlsx")
 library("stringr")
 library("dplyr")
 library("XML")
+library(ggplot2)
 
 
 source("./daflFunctions.r")
@@ -22,8 +23,8 @@ source("./daflFunctions.r")
 
 # Data that needs to be update manually
 Week <- 11
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-june-9-2014/"
-
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-june-11-2014/"
+ytdf <- "AllP20140612.csv"
 
 # End manual update data
 
@@ -63,7 +64,7 @@ Allpitchers <- mutate(Allpitchers, MLB = pullMLB(Player))
 Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
-ytdp <- read.csv("AllP20140608.csv",skip=1)
+ytdp <- read.csv(ytdf,skip=1)
 ytdp$Player <- as.character(ytdp$Player)
 ytdp$Team <- as.character(ytdp$Team)
 ytdp <- mutate(ytdp, Pos = pullPos(Player))
@@ -185,7 +186,7 @@ TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pDFL,-
 # Create available prospect lists
 #prospect <- read.csv("prospects0424.csv",sep='\t',header=FALSE)
 #prospect <- prospect[,c('V1','V3','V5','V7','V8','V9')]
-prospect <- read.csv("prospects0523.csv")
+prospect <- read.csv("prospects0610.csv")
 prospect <- select(prospect,Rank,Player,Team,Position,ETA,Notes)
 colnames(prospect) <- c('Rank','Player','Team','Pos','Arrival','Notes')
 prospect$Player <- str_trim(as.character(prospect$Player))
@@ -243,6 +244,32 @@ tabs[[length(tabs)+1]] <- list('Prospect - H',FAHp)
 lapply(tabs,addSheet)
 saveWorkbook(wkly,"weeklyUpdate.xlsx")
 
+#Create Charts
+standings <- read.csv("DAFLWeeklyStandings.csv")
+standings$Rank <- as.numeric(str_extract(standings$Rank,'[0-9]+'))
+# add category rank columns
+s2 <- standings %>% group_by(Week) %>% mutate(rHR = rank(HR),rR = rank(R),rSB = rank(SB),
+                                              rRBI = rank(RBI),rBA = rank(BA),rW = rank(W)
+                                              ,rS = rank(S),rHD = rank(HD),rK = rank(K)
+                                              ,rERA = rank(-ERA))
+s2 <- mutate(s2,TP=rHR+rR+rSB+rRBI+rBA+rW+rS+rHD+rK+rERA)
+# create line graph
+g1 <- ggplot(data=filter(s2,Team %in% c('Cricket','Justice','Fluffy','Tetras')), 
+             aes(x=Week, y=TP, group=Team, shape=Team, color=Team)) + geom_line(size=1.2) + 
+  geom_point(size=4) + labs(title='Top 4 plus Crickets',y='Total Points')
+s3 <- melt(s2,c('Team','Week'))
+g2 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rHR','rR','rRBI','rBA','rSB')), 
+             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) + 
+  geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Hitting by Week',y='Points')
+g3 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rW','rK','rS','rHD','rERA')), 
+             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) + 
+  geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Pitching by Week',y='Points')
+pdf("DAFLcharts.pdf")
+print(g1)
+print(g2)
+print(g3)
+dev.off()
+
 #ad hoc queries
 
 # For a position, who has surplus?
@@ -278,3 +305,4 @@ select(Player,Pos,pSGP,gVAL,Rank,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
 #li <- AllP %>% filter(Team != 'Free Agent') %>% group_by(Team,Pos) %>% 
 #  summarize(Count = length(Pos))
+

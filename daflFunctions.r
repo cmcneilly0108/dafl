@@ -1,3 +1,7 @@
+# TBD - Function that maps input files to Lahman IDs
+# CBS, Fangraphs
+
+
 getd <- function(c) {
   r3[r3$Category==c,'ad']
 }
