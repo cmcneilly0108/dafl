@@ -1,5 +1,6 @@
 # Combine scores back in to full list, put $0 for the rest - how sort the $0 players?
 # Better prospect analysis
+# Improve preseason holds projections based on fangraphs bullpen role chart (saves too?)
 
 library("xlsx")
 library("dplyr")

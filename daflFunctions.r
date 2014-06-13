@@ -109,9 +109,9 @@ pullTeam <- function(tn){
   tP <- filter(AllP,Team == tn)
   tP <- select(tP,-Team)
   tP <- tP %.% arrange(-pDFL) %.% 
-    select(Player,Pos,pDFL,pSGP,gVAL,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
+    select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
   tH <- tH %.% arrange(-pDFL) %.%
-    select(Player,Pos,pDFL,pSGP,gVAL,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+    select(Player,Pos,pDFL,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   list(tH,tP)
 }
 
