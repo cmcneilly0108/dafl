@@ -91,7 +91,7 @@ swapName2 <- function(n){
 
 pullPos <- function(n){
   n <- str_trim(n)
-  p <- str_match(n,".+, .+ (.+) .+")
+  p <- str_match(n,".+, .+ ([^|]+) .+")
   p <- p[,2]
   p <- ifelse((p =='P'),'RP',p)
   ifelse((p %in% c('CF','RF','LF')),'OF',p)

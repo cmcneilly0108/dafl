@@ -22,10 +22,9 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 23
-tWeeks <-28
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-11-2014/"
-ytdf <- "AllP20140912.csv"
+Week <- 16
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-august-7-2014/"
+ytdf <- "AllP20140810.csv"
 prospectf <- "prospects0801.csv"
 # End manual update data
 
@@ -108,13 +107,13 @@ colnames(ytdp) <- c('Player','MLB','yHLD')
 AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
 AllP <- left_join(AllP,ytdp,by=c('Player','MLB'),copy=FALSE)
 # give 60/40 weight to YTD/3WKS
-AllP$pHLD <- with(AllP,round(((HD/4)*(tWeeks-Week)*.4)+((yHLD/Week)*(tWeeks-Week)*.6)),0)
+AllP$pHLD <- with(AllP,round(((HD/4)*(30-Week)*.4)+((yHLD/Week)*(30-Week)*.6)),0)
 AllP$pSGP <- pitSGPh(AllP)
   
 # GENERATE DFL dollar values for all players
 #Set parameters
 nteams <- 15
-tdollars <- (nteams * (260+50)) * (1-(Week/tWeeks))
+tdollars <- (nteams * (260+50)) * (1-(Week/30))
 # 63/37 split - just guessing
 pdollars <- round(tdollars*0.37)
 hdollars <- tdollars - pdollars
@@ -240,18 +239,14 @@ RTot <- inner_join(RH,RP,by=c('Team')) %>%
   inner_join(st,by=c('Team')) %>%
   select(Team,hDFL,hRank,piDFL,pRank,tDFL,Actual) %>% arrange(-tDFL)
 
-
 #Load minor league stats
 mhitters <- read.csv("minHitters.csv")
 mhitters$Player <- as.character(mhitters$Name)
-FAPHp <- inner_join(mhitters,FAH,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,Team,Age,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR.x,RBI.x,R.x,SB.x,AVG)
+AminH <- inner_join(mhitters,hitters,by=c('Player'),copy=FALSE)
 
 mpitchers <- read.csv("minPitchers.csv")
 mpitchers$Player <- as.character(mpitchers$Name)
-FAPPp <- inner_join(mpitchers,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,Team,Age,Pos,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W.x,SO,SV,ERA.x)
-
+AminP <- inner_join(mpitchers,pitchers,by=c('Player'),copy=FALSE)
 
 
 
@@ -267,8 +262,8 @@ tabs[[length(tabs)+1]] <- list('SP',allsp)
 tabs[[length(tabs)+1]] <- list('Cl',allClosers)
 tabs[[length(tabs)+1]] <- list('FanCl',availCL)
 tabs[[length(tabs)+1]] <- list('Hld',allHolds)
-tabs[[length(tabs)+1]] <- list('PP - P',FAPPp)
-tabs[[length(tabs)+1]] <- list('PP - H',FAPHp)
+tabs[[length(tabs)+1]] <- list('Prospect - P',FAPp)
+tabs[[length(tabs)+1]] <- list('Prospect - H',FAHp)
 
 lapply(tabs,addSheet)
 saveWorkbook(wkly,"weeklyUpdate.xlsx")
