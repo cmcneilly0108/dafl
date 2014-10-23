@@ -1,8 +1,8 @@
 # 2 projection files - fangraphs
 # 2 FA files - cbssports
-# 1 prospects file - rotoworld
+# 1 prospects file - fangraphs
 # update Week
-# update ttWx
+# update Pitchers YTD totals (for holds)
 # update fangraphs bullpen URL
 
 #TBD
@@ -22,11 +22,11 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 23
-tWeeks <-28
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-11-2014/"
-ytdf <- "AllP20140912.csv"
-prospectf <- "prospects0801.csv"
+Week <- 25
+tWeeks <-27
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-17-2014/"
+ytdf <- "AllP20140918.csv"
+#prospectf <- "prospects0801.csv"
 # End manual update data
 
 
@@ -66,47 +66,34 @@ l1 <- loadPast2()
 eras <- l1[[1]]
 avgs <- l1[[2]]
 r3 <- l1[[3]]
+# Load Master file
+master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
+master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
+
 
 #Load Steamer rest of season projections
-hitters <- read.csv("steamerHROS.csv")
-hitters$SGP <- hitSGP(hitters)
-colnames(hitters) <- str_join('p',colnames(hitters))
-hitters$Player <- as.character(hitters$pName)
+hitters <- read.fg("steamerHROS.csv")
+hitters$pSGP <- hitSGP(hitters)
+hitters <- select(hitters,-Player,-MLB,-Pos)
 
-pitchers <- read.csv("steamerPROS.csv")
-colnames(pitchers) <- str_join('p',colnames(pitchers))
-pitchers$Player <- as.character(pitchers$pName)
+
+pitchers <- read.fg("steamerPROS.csv")
+pitchers <- select(pitchers,-Player,-MLB,-Pos)
 
 #Load All Players - Extract Free Agents
-Allhitters <- read.csv("AllHitters.csv",skip=1)
-Allhitters$Player <- as.character(Allhitters$Player)
-Allhitters <- mutate(Allhitters, MLB = pullMLB(Player))
-Allhitters <- mutate(Allhitters, Pos = pullPos(Player))
-Allhitters$Player <- unlist(lapply(Allhitters$Player,swapName2))
+Allhitters <- read.cbs("AllHitters.csv")
 
-AllH <- inner_join(Allhitters,hitters,by=c('Player'),copy=FALSE)
+AllH <- inner_join(Allhitters,hitters,by=c('playerid'),copy=FALSE)
 
-Allpitchers <- read.csv("AllPitchers.csv",skip=1)
-Allpitchers$Player <- as.character(Allpitchers$Player)
-Allpitchers$Team <- as.character(Allpitchers$Team)
-Allpitchers <- mutate(Allpitchers, Pos = pullPos(Player))
-Allpitchers <- mutate(Allpitchers, MLB = pullMLB(Player))
-Allpitchers$Player <- unlist(lapply(Allpitchers$Player,swapName2))
+Allpitchers <- read.cbs("AllPitchers.csv")
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
-ytdp <- read.csv(ytdf,skip=1)
-ytdp$Player <- as.character(ytdp$Player)
-ytdp$Team <- as.character(ytdp$Team)
-ytdp <- mutate(ytdp, Pos = pullPos(Player))
-ytdp <- mutate(ytdp, MLB = pullMLB(Player))
-ytdp$Player <- unlist(lapply(ytdp$Player,swapName2))
-ytdp <- select(ytdp,Player,MLB,HD)
-colnames(ytdp) <- c('Player','MLB','yHLD')
+ytdp <- read.cbs(ytdf)
+ytdp <- select(ytdp,playerid,HD) %>% rename(yHLD = HD)
 
 
-
-AllP <- inner_join(Allpitchers,pitchers,by=c('Player'),copy=FALSE)
-AllP <- left_join(AllP,ytdp,by=c('Player','MLB'),copy=FALSE)
+AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
+AllP <- left_join(AllP,ytdp,by=c('playerid'),copy=FALSE)
 # give 60/40 weight to YTD/3WKS
 AllP$pHLD <- with(AllP,round(((HD/4)*(tWeeks-Week)*.4)+((yHLD/Week)*(tWeeks-Week)*.6)),0)
 AllP$pSGP <- pitSGPh(AllP)
@@ -133,8 +120,8 @@ psgpd <- pdollars/pitSGP
 # Create dollar amounts
 bhitters$pDFL <- bhitters$pSGP * hsgpd
 bpitchers$pDFL <- bpitchers$pSGP * psgpd
-bhitters <- select(bhitters,Player,MLB,pDFL)
-bpitchers <- select(bpitchers,Player,MLB,pDFL)
+bhitters <- select(bhitters,playerid,pDFL)
+bpitchers <- select(bpitchers,playerid,pDFL)
 # find min $, subtract from everyone, then multiply everyone by %diff
 # Normalize for auction - three iterations
 hmin <- min(bhitters$pDFL) - 1
@@ -159,8 +146,8 @@ bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
 
 
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,bhitters,by=c('Player','MLB'))
-AllP <- left_join(AllP,bpitchers,by=c('Player','MLB'))
+AllH <- left_join(AllH,bhitters,by=c('playerid'))
+AllP <- left_join(AllP,bpitchers,by=c('playerid'))
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
@@ -190,29 +177,13 @@ allHolds <- FAP %>% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %>%
 TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 5) %>%
   select(Player,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
       
-# Create available prospect lists
-#prospect <- read.csv("prospects0424.csv",sep='\t',header=FALSE)
-#prospect <- prospect[,c('V1','V3','V5','V7','V8','V9')]
-prospect <- read.csv(prospectf)
-prospect <- select(prospect,Rank,Player,Team,Position,ETA,Notes)
-colnames(prospect) <- c('Rank','Player','Team','Pos','Arrival','Notes')
-prospect$Player <- str_trim(as.character(prospect$Player))
-FAHp <- inner_join(prospect,FAH,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pDFL,pSGP)
-FAPp <- inner_join(prospect,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Rank.x,Player,Team,Pos.x,Arrival,Notes,pDFL,pSGP)
-
 # Closer report
-# For MacOS
-c <- readHTMLTable(bp,stringASFactors=F)
-# For Linux
-#c <- readHTMLTable(bp,header=T,stringASFactors=F)
+c <- readHTMLTable(bp,stringsAsFactors=F)
 
-f <- lapply(c,function(x) {ncol(x) == 5})
+f <- lapply(c,function(x) {is.data.frame(x) && ncol(x) == 5})
 c2 <- c[unlist(f)]
 crep <- c2[[1]]
 
-# for MacOS
 colnames(crep) <- c(' ','Closer','First','Second','DL/Minors')
 crep <- crep[-1,]
 
@@ -224,6 +195,7 @@ colnames(t) <- c('Player','Score')
 colnames(t2) <- c('Player','Score')
 colnames(t3) <- c('Player','Score')
 crep <- rbind_list(t,t2,t3)
+crep$Player <- as.character(crep$Player)
 availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>% 
   select(Player,pDFL,pSGP, Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
@@ -251,9 +223,6 @@ mpitchers <- read.csv("minPitchers.csv")
 mpitchers$Player <- as.character(mpitchers$Name)
 FAPPp <- inner_join(mpitchers,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
   select(Player,Team,Age,Pos,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W.x,SO,SV,ERA.x)
-
-
-
 
 
 #Create xlsx with tabbed data

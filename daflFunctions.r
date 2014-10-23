@@ -3,7 +3,7 @@
 
 
 getd <- function(c) {
-  r3[r3$Category==c,'ad']
+  as.numeric(unlist(r3[r3$Category==c,'ad']))
 }
 
 loadPast <- function() {
@@ -12,7 +12,7 @@ loadPast <- function() {
   r2 <- inner_join(results,teams,by=c('Year'),copy=FALSE)
   # figure out ERA, AVG
   r2$denom <- with(r2,(Top - Bottom)/Teams)
-  r3 <- r2 %.% group_by(Category) %.% summarize(ad = mean(denom))
+  r3 <- r2 %>% group_by(Category) %>% summarize(ad = mean(denom))
   list(r2,r3)
 }
 
@@ -23,8 +23,8 @@ hitSGP <- function(h) {
   atBats <- atBats *8 / 9
   hits <- round(hits  *8 / 9)
   
-  with(h,R/getd('R') + HR/getd('HR') + RBI/getd('RBI') + SB/getd('SB') +
-         (((hits + H)/(atBats + AB)) - avgavg)/getd('AVG'))
+  with(h,{pR/getd('R') + pHR/getd('HR') + pRBI/getd('RBI') + pSB/getd('SB') +
+         (((hits + pH)/(atBats + pAB)) - avgavg)/getd('AVG')})
 }
 
 pitSGP <- function(p) {
@@ -48,7 +48,7 @@ pitSGPh <- function(p) {
   
   with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + 0.3*(pHLD/getd('HLD')) +
          ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
-  )  
+  )
 }
 
 pitSGPhALL <- function(p) {
@@ -108,15 +108,15 @@ pullTeam <- function(tn){
   tH <- select(tH,-Team)
   tP <- filter(AllP,Team == tn)
   tP <- select(tP,-Team)
-  tP <- tP %.% arrange(-pDFL) %.% 
+  tP <- tP %>% arrange(-pDFL) %>% 
     select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
-  tH <- tH %.% arrange(-pDFL) %.%
+  tH <- tH %>% arrange(-pDFL) %>%
     select(Player,Pos,pDFL,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
   list(tH,tP)
 }
 
-addSheet <- function(l){
-  sht <- createSheet(wb=wkly,sheetName=l[[1]])
+addSheet <- function(l,w){
+  sht <- createSheet(wb=w,sheetName=l[[1]])
   addDataFrame(x=l[[2]],sheet=sht)
 }
 
@@ -159,3 +159,137 @@ loadPast2 <- function() {
   list(eras,avgs,final)
 }
 
+preDollars2 <- function(ihitters,ipitchers) {
+  # GENERATE DFL dollar values for all players
+  #Set parameters
+  nteams <- 15
+  tdollars <- nteams * 260
+  # 63/37 split - just guessing
+  pdollars <- round(tdollars*0.37)
+  hdollars <- tdollars - pdollars
+  # 13/12 hitters/pitchers based on rosters on 5/29/14
+  nhitters <- 12
+  npitchers <- 13
+  thitters <- (nhitters * nteams)
+  tpitchers <- (npitchers * nteams)
+  # Only value a certain number of players
+  bhitters <- filter(ihitters,rank(-pSGP) <= thitters)
+  hitSGP <- round(sum(bhitters$pSGP))
+  bpitchers <- filter(ipitchers,rank(-pSGP) <= tpitchers)
+  pitSGP <- round(sum(bpitchers$pSGP))
+  hsgpd <- hdollars/hitSGP
+  psgpd <- pdollars/pitSGP
+  # Create dollar amounts
+  bhitters$pDFL <- bhitters$pSGP * hsgpd
+  bpitchers$pDFL <- bpitchers$pSGP * psgpd
+  bhitters <- select(bhitters,playerid,pDFL)
+  bpitchers <- select(bpitchers,playerid,pDFL)
+  # find min $, subtract from everyone, then multiply everyone by %diff
+  # Normalize for auction - three iterations
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  
+  list(bhitters,bpitchers)
+}
+
+preDollars <- function(ihitters,ipitchers,prot) {
+  # GENERATE DFL dollar values for all players
+  #Set parameters
+  nteams <- 15
+  tdollars <- nteams * 260
+  tdollars <- tdollars - sum(prot$Salary)
+  # 63/37 split - just guessing
+  pdollars <- round(tdollars*0.37)
+  hdollars <- tdollars - pdollars
+  # 13/12 hitters/pitchers based on rosters on 5/29/14
+  nhitters <- 12
+  npitchers <- 13
+  thitters <- (nhitters * nteams)
+  tpitchers <- (npitchers * nteams)
+  
+  # Remove protected players and change counts and dollars
+  ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
+  ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
+  tpitchers <- tpitchers - nrow(prot[prot$Pos == 'P',])
+  thitters <- thitters - nrow(prot[prot$Pos != 'P',])
+  
+  # Only value a certain number of players
+  bhitters <- filter(ih2,rank(-pSGP) <= thitters)
+  hitSGP <- round(sum(bhitters$pSGP))
+  bpitchers <- filter(ip2,rank(-pSGP) <= tpitchers)
+  pitSGP <- round(sum(bpitchers$pSGP))
+  hsgpd <- hdollars/hitSGP
+  psgpd <- pdollars/pitSGP
+  # Create dollar amounts
+  bhitters$pDFL <- bhitters$pSGP * hsgpd
+  bpitchers$pDFL <- bpitchers$pSGP * psgpd
+  bhitters <- select(bhitters,playerid,pDFL)
+  bpitchers <- select(bpitchers,playerid,pDFL)
+  # find min $, subtract from everyone, then multiply everyone by %diff
+  # Normalize for auction - three iterations
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  hmin <- min(bhitters$pDFL) - 1
+  hlost <- hmin * thitters
+  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  pmin <- min(bpitchers$pDFL) - 1
+  plost <- pmin * tpitchers
+  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+  
+  list(bhitters,bpitchers)
+}
+
+read.fg <- function(fn) {
+  m2 <- select(master,playerid,Pos,MLB)
+  df <- read.csv(fn,stringsAsFactors=FALSE)
+  colnames(df) <- str_join('p',colnames(df))
+  df <- rename(df,playerid=pplayerid,Player=pName)
+  df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
+}
+
+read.cbs <- function(fn) {
+  m2 <- select(master,-Pos)
+  df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
+  df <- mutate(df, Pos = pullPos(Player))
+  df <- mutate(df, MLB = pullMLB(Player))
+  df$Player <- unlist(lapply(df$Player,swapName2))
+  # Team abbreviations are not the same - find all discrepancies WAS->WSH
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
+  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
+  # Merge with team
+  gfull <- inner_join(df, m2,by=c('Player','MLB'))
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
+  # Merge rest with only name
+  gname <- inner_join(dfleft, m2,by=c('Player'))
+  gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
+#  gname <- select(gname,-Pos.y) %>% rename(Pos=Pos.x) 
+  rbind(gfull,gname)
+}
