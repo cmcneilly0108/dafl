@@ -195,7 +195,7 @@ colnames(t) <- c('Player','Score')
 colnames(t2) <- c('Player','Score')
 colnames(t3) <- c('Player','Score')
 crep <- rbind_list(t,t2,t3)
-crep$Player <- as.character(crep$Player)
+crep$Player <- enc2native(crep$Player)
 availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>% 
   select(Player,pDFL,pSGP, Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
@@ -239,7 +239,7 @@ tabs[[length(tabs)+1]] <- list('Hld',allHolds)
 tabs[[length(tabs)+1]] <- list('PP - P',FAPPp)
 tabs[[length(tabs)+1]] <- list('PP - H',FAPHp)
 
-lapply(tabs,addSheet)
+lapply(tabs,addSheet,wkly)
 saveWorkbook(wkly,"weeklyUpdate.xlsx")
 
 
