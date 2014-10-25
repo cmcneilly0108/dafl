@@ -159,64 +159,15 @@ loadPast2 <- function() {
   list(eras,avgs,final)
 }
 
-preDollars2 <- function(ihitters,ipitchers) {
-  # GENERATE DFL dollar values for all players
-  #Set parameters
-  nteams <- 15
-  tdollars <- nteams * 260
-  # 63/37 split - just guessing
-  pdollars <- round(tdollars*0.32)
-  hdollars <- tdollars - pdollars
-  # 13/12 hitters/pitchers based on rosters on 5/29/14
-  nhitters <- 12
-  npitchers <- 13
-  thitters <- (nhitters * nteams)
-  tpitchers <- (npitchers * nteams)
-  # Only value a certain number of players
-  bhitters <- filter(ihitters,rank(-pSGP) <= thitters)
-  hitSGP <- round(sum(bhitters$pSGP))
-  bpitchers <- filter(ipitchers,rank(-pSGP) <= tpitchers)
-  pitSGP <- round(sum(bpitchers$pSGP))
-  hsgpd <- hdollars/hitSGP
-  psgpd <- pdollars/pitSGP
-  # Create dollar amounts
-  bhitters$pDFL <- bhitters$pSGP * hsgpd
-  bpitchers$pDFL <- bpitchers$pSGP * psgpd
-  bhitters <- select(bhitters,playerid,pDFL)
-  bpitchers <- select(bpitchers,playerid,pDFL)
-  # find min $, subtract from everyone, then multiply everyone by %diff
-  # Normalize for auction - three iterations
-  hmin <- min(bhitters$pDFL) - 1
-  hlost <- hmin * thitters
-  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-  hmin <- min(bhitters$pDFL) - 1
-  hlost <- hmin * thitters
-  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-  hmin <- min(bhitters$pDFL) - 1
-  hlost <- hmin * thitters
-  bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-  
-  pmin <- min(bpitchers$pDFL) - 1
-  plost <- pmin * tpitchers
-  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
-  pmin <- min(bpitchers$pDFL) - 1
-  plost <- pmin * tpitchers
-  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
-  pmin <- min(bpitchers$pDFL) - 1
-  plost <- pmin * tpitchers
-  bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
-  
-  list(bhitters,bpitchers)
-}
-
-preDollars <- function(ihitters,ipitchers,prot) {
+preDollars <- function(ihitters,ipitchers,prot=data.frame()) {
   # GENERATE DFL dollar values for all players
   #Set parameters
   nteams <- 15
   tdollars <- nteams * 260
   tdollars <- tdollars - sum(prot$Salary)
-  # 63/37 split - just guessing
-  pdollars <- round(tdollars*0.32)
+  # 66/34 split - just guessing
+  # books say 69/31, but that seems high for DAFL
+  pdollars <- round(tdollars*0.34)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
@@ -225,11 +176,18 @@ preDollars <- function(ihitters,ipitchers,prot) {
   tpitchers <- (npitchers * nteams)
   
   # Remove protected players and change counts and dollars
-  ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
-  ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
-  tpitchers <- tpitchers - nrow(prot[prot$Pos == 'P',])
-  thitters <- thitters - nrow(prot[prot$Pos != 'P',])
-  
+  if (nrow(prot)>0) {
+    ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
+    ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
+    tpitchers <- tpitchers - nrow(prot[prot$Pos == 'P',])
+    thitters <- thitters - nrow(prot[prot$Pos != 'P',])
+    pdollars <- pdollars - sum(protected[protected$Pos=='P','Salary'])
+    hdollars <- hdollars - sum(protected[protected$Pos!='P','Salary'])
+  } else {
+    ih2 <- ihitters
+    ip2 <- ipitchers
+  }
+
   # Only value a certain number of players
   bhitters <- filter(ih2,rank(-pSGP) <= thitters)
   hitSGP <- round(sum(bhitters$pSGP))

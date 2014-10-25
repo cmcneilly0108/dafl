@@ -47,7 +47,7 @@ rHitters <- filter(rosters,Pos != 'P')
 rPitchers <- filter(rosters,Pos == 'P')
 
 #Generate dollars
-nlist <- preDollars2(hitters,pitchers)
+nlist <- preDollars(hitters,pitchers)
 thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
 
