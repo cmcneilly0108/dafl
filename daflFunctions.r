@@ -165,7 +165,7 @@ preDollars2 <- function(ihitters,ipitchers) {
   nteams <- 15
   tdollars <- nteams * 260
   # 63/37 split - just guessing
-  pdollars <- round(tdollars*0.37)
+  pdollars <- round(tdollars*0.32)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
@@ -216,7 +216,7 @@ preDollars <- function(ihitters,ipitchers,prot) {
   tdollars <- nteams * 260
   tdollars <- tdollars - sum(prot$Salary)
   # 63/37 split - just guessing
-  pdollars <- round(tdollars*0.37)
+  pdollars <- round(tdollars*0.32)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12

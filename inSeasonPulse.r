@@ -103,7 +103,7 @@ AllP$pSGP <- pitSGPh(AllP)
 nteams <- 15
 tdollars <- (nteams * (260+50)) * (1-(Week/tWeeks))
 # 63/37 split - just guessing
-pdollars <- round(tdollars*0.37)
+pdollars <- round(tdollars*0.32)
 hdollars <- tdollars - pdollars
 # 13/12 hitters/pitchers based on rosters on 5/29/14
 nhitters <- 12
@@ -195,7 +195,7 @@ colnames(t) <- c('Player','Score')
 colnames(t2) <- c('Player','Score')
 colnames(t3) <- c('Player','Score')
 crep <- rbind_list(t,t2,t3)
-crep$Player <- enc2native(crep$Player)
+crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
 availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>% 
   select(Player,pDFL,pSGP, Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
 
