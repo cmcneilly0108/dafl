@@ -58,19 +58,6 @@ print(g2)
 print(g3)
 dev.off()
 
-
-# Year End Totals
-sTots <- list()
-
-l1 <- loadPast2()
-eras <- l1[[1]]
-avgs <- l1[[2]]
-r3 <- l1[[3]]
-# Load Master file
-master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
-master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
-
-
 #Load Steamer rest of season projections
 hitters <- read.fg("steamerHROS.csv")
 hitters$pSGP <- hitSGP(hitters)
@@ -98,51 +85,10 @@ AllP <- left_join(AllP,ytdp,by=c('playerid'),copy=FALSE)
 AllP$pHLD <- with(AllP,round(((HD/4)*(tWeeks-Week)*.4)+((yHLD/Week)*(tWeeks-Week)*.6)),0)
 AllP$pSGP <- pitSGPh(AllP)
   
-# GENERATE DFL dollar values for all players
-#Set parameters
-nteams <- 15
-tdollars <- (nteams * (260+50)) * (1-(Week/tWeeks))
-# 63/37 split - just guessing
-pdollars <- round(tdollars*0.32)
-hdollars <- tdollars - pdollars
-# 13/12 hitters/pitchers based on rosters on 5/29/14
-nhitters <- 12
-npitchers <- 13
-thitters <- (nhitters * nteams) + 40
-tpitchers <- (npitchers * nteams) + 40
-# Only value a certain number of players
-bhitters <- filter(AllH,rank(-pSGP) <= thitters)
-hitSGP <- round(sum(bhitters$pSGP))
-bpitchers <- filter(AllP,rank(-pSGP) <= tpitchers)
-pitSGP <- round(sum(bpitchers$pSGP))
-hsgpd <- hdollars/hitSGP
-psgpd <- pdollars/pitSGP
-# Create dollar amounts
-bhitters$pDFL <- bhitters$pSGP * hsgpd
-bpitchers$pDFL <- bpitchers$pSGP * psgpd
-bhitters <- select(bhitters,playerid,pDFL)
-bpitchers <- select(bpitchers,playerid,pDFL)
-# find min $, subtract from everyone, then multiply everyone by %diff
-# Normalize for auction - three iterations
-hmin <- min(bhitters$pDFL) - 1
-hlost <- hmin * thitters
-bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-hmin <- min(bhitters$pDFL) - 1
-hlost <- hmin * thitters
-bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-hmin <- min(bhitters$pDFL) - 1
-hlost <- hmin * thitters
-bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
-
-pmin <- min(bpitchers$pDFL) - 1
-plost <- pmin * tpitchers
-bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
-pmin <- min(bpitchers$pDFL) - 1
-plost <- pmin * tpitchers
-bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
-pmin <- min(bpitchers$pDFL) - 1
-plost <- pmin * tpitchers
-bpitchers$pDFL <- (bpitchers$pDFL - pmin) * (pdollars/(pdollars - plost))
+#Generate dollars
+nlist <- preDollars(AllH,AllP,data.frame(),(1-(Week/tWeeks)),50,40)
+bhitters <- nlist[[1]]
+bpitchers <- nlist[[2]]
 
 
 # Incorporate scores back into AllH, AllP

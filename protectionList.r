@@ -1,4 +1,5 @@
 #Generate based on 2014 projections
+# Use better holds predictor
 
 library("xlsx")
 library("stringr")
@@ -9,16 +10,6 @@ library("reshape2")
 
 source("./daflFunctions.r")
 
-# Year End Totals
-sTots <- list()
-
-l1 <- loadPast2()
-eras <- l1[[1]]
-avgs <- l1[[2]]
-r3 <- l1[[3]]
-# Load Master file
-master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
-master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 
 
 #Load steamer data

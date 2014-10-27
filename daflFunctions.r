@@ -1,6 +1,3 @@
-# TBD - Function that maps input files to Lahman IDs
-# CBS, Fangraphs
-
 
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
@@ -159,21 +156,20 @@ loadPast2 <- function() {
   list(eras,avgs,final)
 }
 
-preDollars <- function(ihitters,ipitchers,prot=data.frame()) {
+preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   # GENERATE DFL dollar values for all players
   #Set parameters
   nteams <- 15
-  tdollars <- nteams * 260
-  tdollars <- tdollars - sum(prot$Salary)
+  tdollars <- nteams * (260 +dadj) * ratio
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.34)
+  pdollars <- round(tdollars*0.33)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
   npitchers <- 13
-  thitters <- (nhitters * nteams)
-  tpitchers <- (npitchers * nteams)
+  thitters <- (nhitters * nteams) + padj
+  tpitchers <- (npitchers * nteams) + padj
   
   # Remove protected players and change counts and dollars
   if (nrow(prot)>0) {
@@ -234,7 +230,7 @@ read.fg <- function(fn) {
 }
 
 read.cbs <- function(fn) {
-  m2 <- select(master,-Pos)
+  m2 <- select(master,-Pos,-Player) %>% rename(Player=cbs_name)
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
@@ -246,8 +242,20 @@ read.cbs <- function(fn) {
   gfull <- inner_join(df, m2,by=c('Player','MLB'))
   dfleft <- anti_join(df, m2,by=c('Player','MLB'))
   # Merge rest with only name
-  gname <- inner_join(dfleft, m2,by=c('Player'))
+  gname <- left_join(dfleft, m2,by=c('Player'))
   gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
-#  gname <- select(gname,-Pos.y) %>% rename(Pos=Pos.x) 
+  gname$playerid <- ifelse(is.na(gname$playerid),gname$Player,gname$playerid)
   rbind(gfull,gname)
 }
+
+# Year End Totals
+sTots <- list()
+
+l1 <- loadPast2()
+eras <- l1[[1]]
+avgs <- l1[[2]]
+r3 <- l1[[3]]
+# Load Master file
+master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
+master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
+

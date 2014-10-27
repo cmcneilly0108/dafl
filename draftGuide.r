@@ -1,8 +1,6 @@
 # For 2015
-# Refactor - Consolidate pDFL calculations
-# Refactor - constants
+# Modify to use real 2013 results, not fake results
 # Create 1st week stats collector - who had hot 1st week? - CBS-filter free agents, calculate SGPs, convert to DFL
-
 
 library("xlsx")
 library("stringr")
@@ -12,19 +10,6 @@ library("ggplot2")
 library("reshape2")
 
 source("./daflFunctions.r")
-
-# Year End Totals
-sTots <- list()
-
-l1 <- loadPast2()
-eras <- l1[[1]]
-avgs <- l1[[2]]
-r3 <- l1[[3]]
-# Load Master file
-master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
-master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
-
-
 
 #Load protection list
 protected <- read.csv("2014fakeprotected.csv",stringsAsFactors=FALSE)
