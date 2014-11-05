@@ -1,5 +1,4 @@
 # For 2015
-# Modify to use real 2013 results, not fake results
 # Create 1st week stats collector - who had hot 1st week? - CBS-filter free agents, calculate SGPs, convert to DFL
 
 library("xlsx")
@@ -14,7 +13,7 @@ source("./daflFunctions.r")
 #Load protection list
 protected <- read.csv("2014fakeprotected.csv",stringsAsFactors=FALSE)
 
-pstandings <- protected %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.3 | Value > 5) %>% 
+pstandings <- protected %>% group_by(Team) %>%
   summarize(NumProtected = length(Team),
             Spent = sum(Salary),
             TotalValue = sum(pDFL),
@@ -27,38 +26,11 @@ pstandings <- protected %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRa
 #This works, but only because I manually created the fake file.  Change up to merge with current projections.
 
 #Load steamer projection data
-hitters <- read.fg("steamerH2014.csv")
+hitters <- read.fg("steamerH2015.csv")
 hitters$pSGP <- hitSGP(hitters)
 
-pitchers <- read.fg("steamerP2014.csv")
-
-#Need to predict holds
-# Step 2 - copy over previous year's totals
-lyp <- read.cbs("AllP2013.csv")
-lyp <- select(lyp,playerid,lyHLD=HD)
-pitchers <- left_join(pitchers,lyp,by=c('playerid'))
-
-# Step 3 - use last year's totals plus fangraphs projected role
-# Use last year's data, if now a closer, set to 0, if true setup - make sure to up number
-# http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/
-c <- readHTMLTable("http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/",stringsAsFactors=F)
-f <- lapply(c,function(x) {is.data.frame(x) && ncol(x) == 5})
-c2 <- c[unlist(f)]
-crep <- c2[[1]]
-colnames(crep) <- c(' ','Closer','First','Second','DL/Minors')
-crep <- crep[-1,]
-#crep <- readHTMLTable(bp, header=T, which=15,stringsAsFactors=F)
-t <- data.frame(crep$Closer,10)
-t2 <- data.frame(crep$First,5)
-t3 <- data.frame(crep$Second,2)
-colnames(t) <- c('Player','pRole')
-colnames(t2) <- c('Player','pRole')
-colnames(t3) <- c('Player','pRole')
-crep <- rbind_list(t,t2,t3)
-crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
-pitchers <- left_join(pitchers,crep,c('Player'))
-pitchers$pRole <- ifelse(is.na(pitchers$pRole),0,pitchers$pRole)
-pitchers$pHLD <- with(pitchers,ifelse(pRole==10,0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
+pitchers <- read.fg("steamerP2015.csv")
+pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGPh(pitchers)
 
 #Generate pDFL for best players

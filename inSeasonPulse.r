@@ -6,8 +6,8 @@
 # update fangraphs bullpen URL
 
 #TBD
+# Might be broken - Pos for pitchers - preDollars
 # Automatically download projection files
-# Better tracking of prospects
 # Find opportunities/threats for points - find slopes of pre and post competitors, lowest slopes are easiest/most dangerous
 
 library("xlsx")
@@ -22,8 +22,8 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be update manually
-Week <- 25
-tWeeks <-27
+Week <- 1
+tWeeks <-26
 bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-17-2014/"
 ytdf <- "AllP20140918.csv"
 #prospectf <- "prospects0801.csv"

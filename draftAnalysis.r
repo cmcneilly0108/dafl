@@ -1,8 +1,3 @@
-# For 2015
-# Use better holds predictor
-# Calculate standings based on projected stats
-# inSeasonAnalysis - how can this be done?
-
 
 library("xlsx")
 library("stringr")
@@ -21,16 +16,13 @@ rPitchers <- filter(rosters,Pos == 'SP' | Pos == 'RP')
 
 
 #Load steamer data
-hitters <- read.fg("steamerH2014.csv") %>% select(-Player)
+hitters <- read.fg("steamerH2014.csv") 
 hitters$pSGP <- hitSGP(hitters)
-pitchers <- read.fg("steamerP2014.csv") %>% select(-Player)
-#Need to predict holds
-lyp <- read.cbs("AllP2013.csv")
-lyp <- select(lyp,playerid,lyHLD=HD)
-
-pitchers <- left_join(pitchers,lyp,by=c('playerid'))
-pitchers$pHLD <- pitchers$lyHLD
+pitchers <- read.fg("steamerP2014.csv") 
+pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGPh(pitchers)
+hitters <- select(hitters,-Player)
+pitchers <- select(pitchers,-Player)
 
 #Generate dollars
 nlist <- preDollars(hitters,pitchers)

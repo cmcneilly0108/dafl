@@ -163,7 +163,7 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   tdollars <- nteams * (260 +dadj) * ratio
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.33)
+  pdollars <- round(tdollars*0.40)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
@@ -175,10 +175,10 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   if (nrow(prot)>0) {
     ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
     ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
-    tpitchers <- tpitchers - nrow(prot[prot$Pos == 'P',])
-    thitters <- thitters - nrow(prot[prot$Pos != 'P',])
-    pdollars <- pdollars - sum(protected[protected$Pos=='P','Salary'])
-    hdollars <- hdollars - sum(protected[protected$Pos!='P','Salary'])
+    tpitchers <- tpitchers - nrow(prot[prot$Pos %in% c('SP','MR','CL'),])
+    thitters <- thitters - nrow(prot[!(prot$Pos %in% c('SP','MR','CL')),])
+    pdollars <- pdollars - sum(protected[prot$Pos %in% c('SP','MR','CL'),'Salary'])
+    hdollars <- hdollars - sum(protected[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
   } else {
     ih2 <- ihitters
     ip2 <- ipitchers
@@ -220,6 +220,28 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   
   list(bhitters,bpitchers)
 }
+postDollars <- function(ihitters,ipitchers) {
+  # GENERATE DFL dollar values for all players
+  #Set parameters
+  nteams <- 15
+  tdollars <- nteams * (260 + 75)
+  # 66/34 split - just guessing
+  # books say 69/31, but that seems high for DAFL
+  pdollars <- round(tdollars*0.40)
+  hdollars <- tdollars - pdollars
+  # 13/12 hitters/pitchers based on rosters on 5/29/14
+    
+  # Only value a certain number of players
+  hitSGP <- round(sum(ihitters$pSGP))
+  pitSGP <- round(sum(ipitchers$pSGP))
+  hsgpd <- hdollars/hitSGP
+  psgpd <- pdollars/pitSGP
+  # Create dollar amounts
+  ihitters$pDFL <- ihitters$pSGP * hsgpd
+  ipitchers$pDFL <- ipitchers$pSGP * psgpd
+    
+  list(ihitters,ipitchers)
+}
 
 read.fg <- function(fn) {
   m2 <- select(master,playerid,Pos,MLB)
@@ -248,6 +270,58 @@ read.cbs <- function(fn) {
   rbind(gfull,gname)
 }
 
+read.inseasonrecap <- function(fn,pos) {
+  m2 <- select(master,-Pos,-Player) %>% rename(Player=cbs_name)
+  df <- read.xlsx(fn,pos,stringsAsFactors=FALSE)
+  colnames(df) <- str_join('p',colnames(df))
+  df <- rename(df,Player=pPlayer)
+  df <- mutate(df, Pos = pullPos(Player))
+  df <- mutate(df, MLB = pullMLB(Player))
+  df$Player <- unlist(lapply(df$Player,swapName2))
+  # Team abbreviations are not the same - find all discrepancies WAS->WSH
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
+  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
+  # Merge with team
+  gfull <- inner_join(df, m2,by=c('Player','MLB'))
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
+  # Merge rest with only name
+  gname <- left_join(dfleft, m2,by=c('Player'))
+  gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
+  gname$playerid <- ifelse(is.na(gname$playerid),gname$Player,gname$playerid)
+  rbind(gfull,gname)
+}
+
+predictHolds <- function(pitchers) {
+  #Need to predict holds
+  # Step 2 - copy over previous year's totals
+  lyp <- read.cbs("AllP2013.csv")
+  lyp <- select(lyp,playerid,lyHLD=HD)
+  pitchers <- left_join(pitchers,lyp,by=c('playerid'))
+  
+  # Step 3 - use last year's totals plus fangraphs projected role
+  # Use last year's data, if now a closer, set to 0, if true setup - make sure to up number
+  # http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/
+  c <- readHTMLTable("http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/",stringsAsFactors=F)
+  f <- lapply(c,function(x) {is.data.frame(x) && ncol(x) == 5})
+  c2 <- c[unlist(f)]
+  crep <- c2[[1]]
+  colnames(crep) <- c(' ','Closer','First','Second','DL/Minors')
+  crep <- crep[-1,]
+  #crep <- readHTMLTable(bp, header=T, which=15,stringsAsFactors=F)
+  t <- data.frame(crep$Closer,10)
+  t2 <- data.frame(crep$First,5)
+  t3 <- data.frame(crep$Second,2)
+  colnames(t) <- c('Player','pRole')
+  colnames(t2) <- c('Player','pRole')
+  colnames(t3) <- c('Player','pRole')
+  crep <- rbind_list(t,t2,t3)
+  crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
+  pitchers <- left_join(pitchers,crep,c('Player'))
+  pitchers$pRole <- ifelse(is.na(pitchers$pRole),0,pitchers$pRole)
+  pitchers$pHLD <- with(pitchers,ifelse(pRole==10,0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
+  return(pitchers)  
+}
+
 # Year End Totals
 sTots <- list()
 
@@ -256,6 +330,6 @@ eras <- l1[[1]]
 avgs <- l1[[2]]
 r3 <- l1[[3]]
 # Load Master file
-master <- read.csv("master_14.csv",stringsAsFactors=FALSE)
+master <- read.csv("master141031.csv",stringsAsFactors=FALSE)
 master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 
