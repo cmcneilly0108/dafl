@@ -1,3 +1,5 @@
+# TBD
+# Evaluate combined projections - when they have 2015 available
 
 library("xlsx")
 library("stringr")
@@ -56,9 +58,9 @@ rpreds$DollarRate <- rpreds$pDFL/rpreds$Salary
 rpreds <- rename(rpreds,Salary=Salary,Contract=Contract)
 
 #lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
-lcp <- filter(rpreds,Team == 'Liquor Crickets',DollarRate > 1.3 | Value > 5) %>% arrange(-DollarRate) %>%
+lcp <- filter(rpreds,Team == 'Liquor Crickets',DollarRate > 1.3 | Value > 5) %>% arrange(-Value) %>%
   filter(rank(-Value) < 13)
-lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-DollarRate)
+lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
 
 # Logic - filter to players that either have a valueRate > 1.3 or totalValue > 5, sort by Value descending
 totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.1 | Value > 2) %>% 
@@ -71,7 +73,8 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.
             DollarValue = TotalValue/Spent) %>%
   arrange(-MoneyEarned)
 
-prosters <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.1 | Value > 2)
+prosters <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.1 | Value > 2) %>%
+  arrange(Team,-Value)
 write.csv(prosters,"2014fakeprotected.csv")
 # Need to give more weight to spending more
 # sum(Salary) * DollarRate = probably too much?  log?

@@ -1,3 +1,8 @@
+# TBD
+# Improve holds projections
+# Fix - Miguel Gonzalez - only obvious dup left "AllP2014.csv"
+# Bug seems to be in read.cbs
+
 
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
@@ -80,10 +85,12 @@ swapName2 <- function(n){
   comma <- str_locate(n,',')
   ln <- str_sub(n,1,comma-1)
   rest <- str_sub(n,comma+2,-1)
-  space <- str_locate(rest,' ')
-  fn <- str_sub(rest,1,space-1)
+  fn <- str_match(n,".+, (.+) [^|]+ .+")
+  fn <- fn[,2]
+  #space <- str_locate(rest,' ')
+  #fn <- str_sub(rest,1,space-1)
   nn <- str_join(fn,ln,sep=" ",collapse=NULL)
-  nn[1] 
+  nn[1]
 }
 
 pullPos <- function(n){
@@ -163,7 +170,7 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   tdollars <- nteams * (260 +dadj) * ratio
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.40)
+  pdollars <- round(tdollars*0.39)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
@@ -186,6 +193,7 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
 
   # Only value a certain number of players
   bhitters <- filter(ih2,rank(-pSGP) <= thitters)
+  
   hitSGP <- round(sum(bhitters$pSGP))
   bpitchers <- filter(ip2,rank(-pSGP) <= tpitchers)
   pitSGP <- round(sum(bpitchers$pSGP))
@@ -194,8 +202,6 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   # Create dollar amounts
   bhitters$pDFL <- bhitters$pSGP * hsgpd
   bpitchers$pDFL <- bpitchers$pSGP * psgpd
-  bhitters <- select(bhitters,playerid,pDFL)
-  bpitchers <- select(bpitchers,playerid,pDFL)
   # find min $, subtract from everyone, then multiply everyone by %diff
   # Normalize for auction - three iterations
   hmin <- min(bhitters$pDFL) - 1
@@ -207,6 +213,19 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   hmin <- min(bhitters$pDFL) - 1
   hlost <- hmin * thitters
   bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  
+  # count C's
+  nc <- nrow(filter(bhitters,Pos=='C'))
+  bh2 <- head(bhitters,-(nteams-nc))
+  ac <- filter(hitters,Pos=='C') %>% arrange(-pSGP)
+  bh3 <- ac[nc+1:(nteams-nc),]
+  bh3$pDFL <- 1
+  bhitters <- rbind(bh2,bh3)
+
+  
+  
+  bhitters <- select(bhitters,playerid,pDFL)
+  bpitchers <- select(bpitchers,playerid,pDFL)
   
   pmin <- min(bpitchers$pDFL) - 1
   plost <- pmin * tpitchers
@@ -227,7 +246,7 @@ postDollars <- function(ihitters,ipitchers) {
   tdollars <- nteams * (260 + 75)
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.40)
+  pdollars <- round(tdollars*0.39)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
     
@@ -256,6 +275,7 @@ read.cbs <- function(fn) {
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
+  # okay to here - swapname2 stripping out middle name
   df$Player <- unlist(lapply(df$Player,swapName2))
   # Team abbreviations are not the same - find all discrepancies WAS->WSH
   df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
@@ -294,7 +314,7 @@ read.inseasonrecap <- function(fn,pos) {
 predictHolds <- function(pitchers) {
   #Need to predict holds
   # Step 2 - copy over previous year's totals
-  lyp <- read.cbs("AllP2013.csv")
+  lyp <- read.cbs("AllP2014.csv")
   lyp <- select(lyp,playerid,lyHLD=HD)
   pitchers <- left_join(pitchers,lyp,by=c('playerid'))
   
