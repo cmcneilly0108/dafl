@@ -1,5 +1,6 @@
 # TBD
 # Evaluate combined projections - when they have 2015 available
+# Francisco Rodriguez bug - again!
 
 library("xlsx")
 library("stringr")
@@ -18,13 +19,23 @@ hitters$pSGP <- hitSGP(hitters)
 
 pitchers <- read.fg("steamerP2015.csv")
 pitchers <- predictHolds(pitchers)
-pitchers$pSGP <- pitSGPh(pitchers)
+pitchers$pSGP <- pitSGP(pitchers)
 
-#Load 2013 final rosters
+#Load 2014 final rosters
 rosters <- read.cbs("2015RostersU.csv")
 #split into P,H tables
 rHitters <- filter(rosters,Pos != 'SP' & Pos != 'RP') 
 rPitchers <- filter(rosters,Pos == 'SP' | Pos == 'RP')
+
+nteams <- 15
+tdollars <- nteams * 260
+pdollars <- round(tdollars*0.39)
+hdollars <- tdollars - pdollars
+nhitters <- 12
+npitchers <- 13
+chitters <- (nhitters * nteams)
+cpitchers <- (npitchers * nteams)
+
 
 #Generate dollars
 nlist <- preDollars(hitters,pitchers)
@@ -57,13 +68,54 @@ rpreds <- rbind(select(rhitters,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pH
 rpreds$DollarRate <- rpreds$pDFL/rpreds$Salary
 rpreds <- rename(rpreds,Salary=Salary,Contract=Contract)
 
+prosters <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
+  arrange(Team,-Value)
+
+ohi <- 0
+opi <- 0
+nhi <- 1
+npi <- 1
+ct <- 0
+prosters2 <- prosters
+while ((ohi != nhi | opi != npi) & ct < 8) {
+  ct <- ct + 1
+  inf <- calcInflation(prosters2)
+  ohi <- nhi
+  opi <- npi
+  nhi <- inf[[1]]
+  npi <- inf[[2]]
+  rhitters2 <- rhitters
+  rpitchers2 <- rpitchers
+  rhitters2$pDFL <- (rhitters2$pDFL * nhi)
+  rpitchers2$pDFL <- (rpitchers2$pDFL * npi)
+  
+  pmin <- min(rpitchers2$pDFL) - 1
+  plost <- pmin * cpitchers
+  rpitchers2$pDFL <- (rpitchers2$pDFL - pmin) * (pdollars/(pdollars - plost))
+  hmin <- min(rhitters2$pDFL) - 1
+  hlost <- hmin * chitters
+  rhitters2$pDFL <- (rhitters2$pDFL - hmin) * (hdollars/(hdollars - hlost))
+  
+  rhitters2$Value <- rhitters2$pDFL - rhitters2$Salary
+  rpitchers2$Value <- rpitchers2$pDFL - rpitchers2$Salary
+  rpreds2 <- rbind(select(rhitters2,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB),
+                   select(rpitchers2,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV))
+  rpreds2$DollarRate <- rpreds2$pDFL/rpreds2$Salary
+  prosters2 <- rpreds2 %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
+    arrange(Team,-Value)
+  print(nhi)
+  print(npi)
+}
+rpreds <- rpreds2
+prosters <- prosters2
+
 #lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
-lcp <- filter(rpreds,Team == 'Liquor Crickets',DollarRate > 1.3 | Value > 5) %>% arrange(-Value) %>%
+lcp <- filter(rpreds,Team == 'Liquor Crickets',Value > 1) %>% arrange(-Value) %>%
   filter(rank(-Value) < 13)
 lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
 
 # Logic - filter to players that either have a valueRate > 1.3 or totalValue > 5, sort by Value descending
-totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.1 | Value > 2) %>% 
+totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>% 
   summarize(NumProtected = length(Team),
             Spent = sum(Salary),
             TotalValue = sum(pDFL),
@@ -73,8 +125,6 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.
             DollarValue = TotalValue/Spent) %>%
   arrange(-MoneyEarned)
 
-prosters <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,DollarRate > 1.1 | Value > 2) %>%
-  arrange(Team,-Value)
 write.csv(prosters,"2014fakeprotected.csv")
 # Need to give more weight to spending more
 # sum(Salary) * DollarRate = probably too much?  log?
@@ -154,4 +204,3 @@ tabs[[length(tabs)+1]] <- list('CL',pcl)
 
 lapply(tabs,addSheet,protect)
 saveWorkbook(protect,"protectionAnalysis.xlsx")
-

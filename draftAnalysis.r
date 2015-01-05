@@ -20,7 +20,7 @@ hitters <- read.fg("steamerH2014.csv")
 hitters$pSGP <- hitSGP(hitters)
 pitchers <- read.fg("steamerP2014.csv") 
 pitchers <- predictHolds(pitchers)
-pitchers$pSGP <- pitSGPh(pitchers)
+pitchers$pSGP <- pitSGP(pitchers)
 hitters <- select(hitters,-Player)
 pitchers <- select(pitchers,-Player)
 

@@ -1,5 +1,4 @@
-# For 2015
-# Create 1st week stats collector - who had hot 1st week? - CBS-filter free agents, calculate SGPs, convert to DFL
+# ToDo - Create tab of my protection list
 
 library("xlsx")
 library("stringr")
@@ -31,7 +30,7 @@ hitters$pSGP <- hitSGP(hitters)
 
 pitchers <- read.fg("steamerP2015.csv")
 pitchers <- predictHolds(pitchers)
-pitchers$pSGP <- pitSGPh(pitchers)
+pitchers$pSGP <- pitSGP(pitchers)
 
 #Generate pDFL for best players
 nlist <- preDollars(hitters,pitchers,protected)
@@ -68,37 +67,37 @@ p2 <- inner_join(pedf, m2,by=c('Player','MLB'))
 p3 <- anti_join(pedf, m2,by=c('Player','MLB'))
 # Merge rest with only name
 p4 <- inner_join(p3, m2,by=c('Player'))
-p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y) 
+p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y)
 pedf <- rbind(p2,p4) %>% select(playerid,posEl)
 # Add column into AllH
-AllH <- left_join(AllH,pedf,by=c('playerid')) 
+AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 
 
 #Create separate tabs by position
-pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 
-psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
-pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
-pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 
 # Create prospect reports!!
@@ -116,14 +115,14 @@ p2 <- inner_join(prospects, m2,by=c('Player','MLB'))
 p3 <- anti_join(prospects, m2,by=c('Player','MLB'))
 # Merge rest with only name
 p4 <- inner_join(p3, m2,by=c('Player'))
-p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y) 
+p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y)
 prospects <- rbind(p2,p4) %>% select(playerid,rookRank)
 # Add column into AllH
-AllH <- left_join(AllH,prospects,by=c('playerid')) 
-AllP <- left_join(AllP,prospects,by=c('playerid')) 
-hp <- AllH %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>% 
+AllH <- left_join(AllH,prospects,by=c('playerid'))
+AllP <- left_join(AllP,prospects,by=c('playerid'))
+hp <- AllH %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>% 
+pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 
 
@@ -149,7 +148,3 @@ tabs[[length(tabs)+1]] <- list('PitProspect',pp)
 
 lapply(tabs,addSheet,draft)
 saveWorkbook(draft,"draftGuide.xlsx")
-
-
-
-

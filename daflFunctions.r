@@ -1,21 +1,30 @@
 # TBD
-# Improve holds projections
-# Fix - Miguel Gonzalez - only obvious dup left "AllP2014.csv"
-# Bug seems to be in read.cbs
-
+# Improve holds projections?
 
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
 }
 
 loadPast <- function() {
-  results <- read.xlsx("DAFLSGP.xlsx",2)
-  teams <- read.xlsx("DAFLSGP.xlsx",3)
-  r2 <- inner_join(results,teams,by=c('Year'),copy=FALSE)
-  # figure out ERA, AVG
-  r2$denom <- with(r2,(Top - Bottom)/Teams)
-  r3 <- r2 %>% group_by(Category) %>% summarize(ad = mean(denom))
-  list(r2,r3)
+  f1 <- read.csv("fs2014.csv")
+  res <- genDenoms(f1)
+  eras <- f1$ERA
+  avgs <- f1$AVG
+  f1 <- read.csv("fs2013.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
+    f1 <- read.csv("fs2012.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
+  f1 <- read.csv("fs2011.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
+  
+  final <- group_by(res,Category) %>% summarize(ad = mean(denom))
+  list(eras,avgs,final)
 }
 
 hitSGP <- function(h) {
@@ -36,42 +45,10 @@ pitSGP <- function(p) {
   innpit <- innpit * 7/8
   eruns <- eruns * 7/8
   
-  with(p,W/getd('W') + SO/getd('K') + (SV/getd('SV')) + 0.3*(HLD/getd('HLD')) +
-         ((avgera - ((eruns+ER) * (9/(innpit+IP))))/getd('ERA'))
-  )  
-}
-
-pitSGPh <- function(p) {
-  innpit <- (6 * 200) + (2 * 75)
-  avgera <- mean(eras)
-  eruns <-  (avgera/9) * innpit
-  innpit <- innpit * 7/8
-  eruns <- eruns * 7/8
-  
   with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + 0.3*(pHLD/getd('HLD')) +
          ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
   )
 }
-
-pitSGPhALL <- function(p) {
-  innpit <- (6 * 200) + (2 * 75)
-  avgera <- mean(eras)
-  # avgera is not correct - is the avg of the denoms
-  eruns <-  (avgera/9) * innpit
-  innpit <- innpit * 7/8
-  eruns <- eruns * 7/8
-  
-  p$pSGP <- with(p,pW/getd('W') + pSO/getd('K') + 0.7*(pSV/getd('SV')) + 0.35*(pHLD/getd('HLD')) +
-         ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA')))
-  p$sW <- with(p,pW/getd('W'))
-  p$sK <- with(p,pSO/getd('K'))
-  p$sSV <- with(p,pSV/getd('SV'))
-  p$sHLD <- with(p,pHLD/getd('HLD'))
-  p$sERA <- with(p,((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA')))
-  print(avgera)
-  return(p)
-}
-
 
 swapName <- function(n){
   comma <- str_locate(n,',')
@@ -84,7 +61,7 @@ swapName <- function(n){
 swapName2 <- function(n){
   comma <- str_locate(n,',')
   ln <- str_sub(n,1,comma-1)
-  rest <- str_sub(n,comma+2,-1)
+  #rest <- str_sub(n,comma+2,-1)
   fn <- str_match(n,".+, (.+) [^|]+ .+")
   fn <- fn[,2]
   #space <- str_locate(rest,' ')
@@ -92,6 +69,14 @@ swapName2 <- function(n){
   nn <- str_join(fn,ln,sep=" ",collapse=NULL)
   nn[1]
 }
+
+swapName3 <- function(n){
+  # For trades file
+  dash <- str_locate(n,'-')
+  first <- str_sub(n,1,dash-1)
+  swapName2(first)
+}
+
 
 pullPos <- function(n){
   n <- str_trim(n)
@@ -145,23 +130,6 @@ genDenoms <- function(df) {
   v
 }
 
-loadPast2 <- function() {
-  f1 <- read.csv("fs2013.csv")
-  res <- genDenoms(f1)
-  eras <- f1$ERA
-  avgs <- f1$AVG
-  f1 <- read.csv("fs2012.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("fs2011.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  
-  final <- group_by(res,Category) %>% summarize(ad = mean(denom))
-  list(eras,avgs,final)
-}
 
 preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   # GENERATE DFL dollar values for all players
@@ -184,8 +152,8 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
     ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
     tpitchers <- tpitchers - nrow(prot[prot$Pos %in% c('SP','MR','CL'),])
     thitters <- thitters - nrow(prot[!(prot$Pos %in% c('SP','MR','CL')),])
-    pdollars <- pdollars - sum(protected[prot$Pos %in% c('SP','MR','CL'),'Salary'])
-    hdollars <- hdollars - sum(protected[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
+    pdollars <- pdollars - sum(prot[prot$Pos %in% c('SP','MR','CL'),'Salary'])
+    hdollars <- hdollars - sum(prot[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
   } else {
     ih2 <- ihitters
     ip2 <- ipitchers
@@ -215,9 +183,10 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   bhitters$pDFL <- (bhitters$pDFL - hmin) * (hdollars/(hdollars - hlost))
   
   # count C's
+  bhitters <- arrange(bhitters,-pDFL)
   nc <- nrow(filter(bhitters,Pos=='C'))
   bh2 <- head(bhitters,-(nteams-nc))
-  ac <- filter(hitters,Pos=='C') %>% arrange(-pSGP)
+  ac <- filter(bhitters,Pos=='C') %>% arrange(-pSGP)
   bh3 <- ac[nc+1:(nteams-nc),]
   bh3$pDFL <- 1
   bhitters <- rbind(bh2,bh3)
@@ -239,6 +208,7 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   
   list(bhitters,bpitchers)
 }
+
 postDollars <- function(ihitters,ipitchers) {
   # GENERATE DFL dollar values for all players
   #Set parameters
@@ -262,6 +232,37 @@ postDollars <- function(ihitters,ipitchers) {
   list(ihitters,ipitchers)
 }
 
+calcInflation <- function(prot) {
+  # GENERATE DFL dollar values for all players
+  #Set parameters
+  nteams <- 15
+  tdollars <- nteams * 260
+  # 66/34 split - just guessing
+  # books say 69/31, but that seems high for DAFL
+  pdollars <- round(tdollars*0.39)
+  hdollars <- tdollars - pdollars
+  # 13/12 hitters/pitchers based on rosters on 5/29/14
+  nhitters <- 12
+  npitchers <- 13
+  thitters <- (nhitters * nteams)
+  tpitchers <- (npitchers * nteams)
+  oh <- hdollars/thitters
+  op <- pdollars/tpitchers
+  
+  pp <- filter(prot,Pos %in% c('SP','MR','CL'))
+  ph <- filter(prot,!(Pos %in% c('SP','MR','CL')))
+  
+  tpitchers <- tpitchers - nrow(pp)
+  thitters <- thitters - nrow(ph)
+  pdollars <- pdollars - sum(pp$Salary)
+  hdollars <- hdollars - sum(ph$Salary)
+  nh <- hdollars/thitters
+  np <- pdollars/tpitchers
+  
+  list(nh/oh,np/op)
+}
+
+
 read.fg <- function(fn) {
   m2 <- select(master,playerid,Pos,MLB)
   df <- read.csv(fn,stringsAsFactors=FALSE)
@@ -275,14 +276,15 @@ read.cbs <- function(fn) {
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
-  # okay to here - swapname2 stripping out middle name
   df$Player <- unlist(lapply(df$Player,swapName2))
   # Team abbreviations are not the same - find all discrepancies WAS->WSH
   df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
   df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
   # Merge with team
   gfull <- inner_join(df, m2,by=c('Player','MLB'))
-  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))  # %>% filter(!is.na(MLB))
+  m2 <- anti_join(m2,df,by=c('Player','MLB'))
+
   # Merge rest with only name
   gname <- left_join(dfleft, m2,by=c('Player'))
   gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
@@ -338,18 +340,18 @@ predictHolds <- function(pitchers) {
   crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
   pitchers <- left_join(pitchers,crep,c('Player'))
   pitchers$pRole <- ifelse(is.na(pitchers$pRole),0,pitchers$pRole)
-  pitchers$pHLD <- with(pitchers,ifelse(pRole==10,0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
+  pitchers$pHLD <- with(pitchers,ifelse((pRole==10 | pSV > 10),0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
   return(pitchers)  
 }
 
 # Year End Totals
 sTots <- list()
 
-l1 <- loadPast2()
+l1 <- loadPast()
 eras <- l1[[1]]
 avgs <- l1[[2]]
 r3 <- l1[[3]]
 # Load Master file
-master <- read.csv("master141031.csv",stringsAsFactors=FALSE)
+master <- read.csv("master141101.csv",stringsAsFactors=FALSE)
 master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 

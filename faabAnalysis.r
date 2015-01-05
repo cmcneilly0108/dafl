@@ -14,7 +14,7 @@ hitters$pSGP <- hitSGP(hitters)
 
 pitchers <- read.inseasonrecap("2014AccruedStats.xlsx",3)
 pitchers <- rename(pitchers,pSV=pS,pHLD=pHD,pIP=pINN)
-pitchers$pSGP <- pitSGPh(pitchers)
+pitchers$pSGP <- pitSGP(pitchers)
 
 #Generate dollars
 nlist <- postDollars(hitters,pitchers)
@@ -42,7 +42,7 @@ AllP$asrc <- ifelse(AllP$asrc=='protect' & AllP$pContract==1,'draft',AllP$asrc)
 
 # Load trades file
 trades <- read.csv("2014trades.csv")
-trades$Player <- unlist(lapply(trades$Players,swapName2))
+trades$Player <- unlist(lapply(trades$Players,swapName3))
 trades <- select(trades,pTeam=Team,Player,Traded=Effective)
 AllH <- left_join(AllH,trades,by=c('pTeam','Player'))
 AllP <- left_join(AllP,trades,by=c('pTeam','Player'))
