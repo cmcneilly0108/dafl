@@ -1,15 +1,13 @@
 # 2 projection files - fangraphs
 # 2 FA files - cbssports
-# 1 prospects file - fangraphs
+# 1 prospects file - fangraphs (replace with new prospects work)
 # update Week
-# update Pitchers YTD totals (for holds)
+# update Pitchers YTD totals (for holds) - from cbs
 # update fangraphs bullpen URL
+# update weekly standings file
 
 #TBD
 # BUG - its all broken right now - needs to be rebuilt from bottom up - data files are from last/this year, no way to fix.
-
-# Automatically download projection files
-# Find opportunities/threats for points - find slopes of pre and post competitors, lowest slopes are easiest/most dangerous
 
 library("xlsx")
 library("stringr")
@@ -22,7 +20,7 @@ library("reshape2")
 source("./daflFunctions.r")
 
 
-# Data that needs to be update manually
+# Data that needs to be updated manually
 Week <- 25
 tWeeks <-26
 bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-17-2014/"

@@ -1,4 +1,3 @@
-# ToDo - Create tab of my protection list
 
 library("xlsx")
 library("stringr")
@@ -8,6 +7,8 @@ library("ggplot2")
 library("reshape2")
 
 source("./daflFunctions.r")
+
+system("./pullSteamer.sh")
 
 #Load protection list
 protected <- read.csv("2014fakeprotected.csv",stringsAsFactors=FALSE)
@@ -23,6 +24,8 @@ pstandings <- protected %>% group_by(Team) %>%
             DollarValue = TotalValue/Spent) %>%
   arrange(-FullValue)
 #This works, but only because I manually created the fake file.  Change up to merge with current projections.
+
+lc <- filter(protected,Team == 'Liquor Crickets') %>% select(-X,-Team) %>% arrange(-Value)
 
 #Load steamer projection data
 hitters <- read.fg("steamerH2015.csv")
@@ -109,17 +112,10 @@ prospects <- filter(prospects,SB!="")
 prospects <- mutate(prospects,rookRank=as.numeric(SB)) %>% select(-SB) %>% rename(MLB=Team)
 # Strip out weird character
 prospects$Player <- str_replace(prospects$Player,"Â."," ")
-# merge with master, split hitters,pitchers, merge with projections, spit out report
-m2 <- select(master,-Pos)
-p2 <- inner_join(prospects, m2,by=c('Player','MLB'))
-p3 <- anti_join(prospects, m2,by=c('Player','MLB'))
-# Merge rest with only name
-p4 <- inner_join(p3, m2,by=c('Player'))
-p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y)
-prospects <- rbind(p2,p4) %>% select(playerid,rookRank)
-# Add column into AllH
-AllH <- left_join(AllH,prospects,by=c('playerid'))
-AllP <- left_join(AllP,prospects,by=c('playerid'))
+prs <- select(prospects,Player,rookRank)
+AllH <- inner_join(AllH,prs,by=c('Player'))
+AllP <- inner_join(AllP,prs,by=c('Player'))
+
 hp <- AllH %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
@@ -131,6 +127,7 @@ pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
 draft <- createWorkbook()
 tabs <- list()
 tabs[[length(tabs)+1]] <- list('Early Standings',pstandings)
+tabs[[length(tabs)+1]] <- list('Crickets',lc)
 tabs[[length(tabs)+1]] <- list('C',pc)
 tabs[[length(tabs)+1]] <- list('1B',p1b)
 tabs[[length(tabs)+1]] <- list('2B',p2b)

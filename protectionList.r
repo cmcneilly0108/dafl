@@ -1,6 +1,5 @@
 # TBD
 # Evaluate combined projections - when they have 2015 available
-# Francisco Rodriguez bug - again!
 
 library("xlsx")
 library("stringr")
@@ -11,6 +10,7 @@ library("reshape2")
 
 source("./daflFunctions.r")
 
+system("./pullSteamer.sh")
 
 
 #Load steamer data
@@ -22,14 +22,18 @@ pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 
 #Load 2014 final rosters
-rosters <- read.cbs("2015RostersU.csv")
+#rosters <- read.cbs("2015RostersU.csv")
+
+#official file
+rosters <- read.cbs("2014 Season Ending Rosters.csv")
+
 #split into P,H tables
 rHitters <- filter(rosters,Pos != 'SP' & Pos != 'RP') 
 rPitchers <- filter(rosters,Pos == 'SP' | Pos == 'RP')
 
 nteams <- 15
 tdollars <- nteams * 260
-pdollars <- round(tdollars*0.39)
+pdollars <- round(tdollars*0.38)
 hdollars <- tdollars - pdollars
 nhitters <- 12
 npitchers <- 13

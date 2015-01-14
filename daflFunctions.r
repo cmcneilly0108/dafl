@@ -138,11 +138,11 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   tdollars <- nteams * (260 +dadj) * ratio
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.39)
+  pdollars <- round(tdollars*0.36)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
-  nhitters <- 12
-  npitchers <- 13
+  nhitters <- 13
+  npitchers <- 12
   thitters <- (nhitters * nteams) + padj
   tpitchers <- (npitchers * nteams) + padj
   
@@ -282,7 +282,7 @@ read.cbs <- function(fn) {
   df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
   # Merge with team
   gfull <- inner_join(df, m2,by=c('Player','MLB'))
-  dfleft <- anti_join(df, m2,by=c('Player','MLB'))  # %>% filter(!is.na(MLB))
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
   m2 <- anti_join(m2,df,by=c('Player','MLB'))
 
   # Merge rest with only name
