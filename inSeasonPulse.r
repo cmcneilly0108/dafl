@@ -6,8 +6,6 @@
 # update fangraphs bullpen URL
 # update weekly standings file
 
-#TBD
-# BUG - its all broken right now - needs to be rebuilt from bottom up - data files are from last/this year, no way to fix.
 
 library("xlsx")
 library("stringr")
@@ -21,7 +19,7 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be updated manually
-Week <- 25
+Week <- 1
 tWeeks <-26
 bp <- "http://www.fangraphs.com/fantasy/bullpen-report-september-17-2014/"
 ytdf <- "AllP20140918.csv"
@@ -165,33 +163,14 @@ prospects <- filter(prospects,SB!="")
 prospects <- mutate(prospects,rookRank=as.numeric(SB)) %>% select(-SB) %>% rename(MLB=Team)
 # Strip out weird character
 prospects$Player <- str_replace(prospects$Player,"Â."," ")
-# merge with master, split hitters,pitchers, merge with projections, spit out report
-m2 <- select(master,-Pos)
-p2 <- inner_join(prospects, m2,by=c('Player','MLB'))
-p3 <- anti_join(prospects, m2,by=c('Player','MLB'))
-# Merge rest with only name
-p4 <- inner_join(p3, m2,by=c('Player'))
-p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y)
-prospects <- rbind(p2,p4) %>% select(playerid,rookRank)
-# Add column into AllH
-AllH <- left_join(AllH,prospects,by=c('playerid'))
-AllP <- left_join(AllP,prospects,by=c('playerid'))
+prs <- select(prospects,Player,rookRank)
+AllH <- inner_join(AllH,prs,by=c('Player'))
+AllP <- inner_join(AllP,prs,by=c('Player'))
+
 hp <- AllH %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
-
-
-#Load minor league stats
-#mhitters <- read.csv("minHitters.csv")
-#mhitters$Player <- as.character(mhitters$Name)
-#FAPHp <- inner_join(mhitters,FAH,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-#  select(Player,Team,Age,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR.x,RBI.x,R.x,SB.x,AVG)
-
-#mpitchers <- read.csv("minPitchers.csv")
-#mpitchers$Player <- as.character(mpitchers$Name)
-#FAPPp <- inner_join(mpitchers,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL,-pSGP) %>% 
-#  select(Player,Team,Age,Pos,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W.x,SO,SV,ERA.x)
 
 
 #Create xlsx with tabbed data

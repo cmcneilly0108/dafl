@@ -27,6 +27,23 @@ loadPast <- function() {
   list(eras,avgs,final)
 }
 
+pgoals <- function(f) {
+  f1 <- read.csv(f)
+  avg <- f1$AVG[[match(12,rank(f1$AVG,ties.method='random'))]]
+  hr <- f1$HR[[match(12,rank(f1$HR,ties.method='random'))]]
+  rbi <- f1$RBI[[match(12,rank(f1$RBI,ties.method='random'))]]
+  r <- f1$R[[match(12,rank(f1$R,ties.method='random'))]]
+  sb <- f1$SB[[match(12,rank(f1$SB,ties.method='random'))]]
+  
+  w <- f1$W[[match(12,rank(f1$W,ties.method='random'))]]
+  k <- f1$K[[match(12,rank(f1$K,ties.method='random'))]]
+  sv <- f1$SV[[match(12,rank(f1$SV,ties.method='random'))]]
+  hld <- f1$HLD[[match(12,rank(f1$HLD,ties.method='random'))]]
+  era <- f1$ERA[[match(12,rank(-f1$ERA,ties.method='random'))]]
+  
+  list(hr,rbi,r,sb,avg,w,k,sv,hld,era)
+}
+
 hitSGP <- function(h) {
   atBats <- 510 * 9
   avgavg <- mean(avgs)
@@ -141,8 +158,8 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   pdollars <- round(tdollars*0.36)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
-  nhitters <- 13
-  npitchers <- 12
+  nhitters <- 12
+  npitchers <- 13
   thitters <- (nhitters * nteams) + padj
   tpitchers <- (npitchers * nteams) + padj
   
@@ -216,7 +233,7 @@ postDollars <- function(ihitters,ipitchers) {
   tdollars <- nteams * (260 + 75)
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.39)
+  pdollars <- round(tdollars*0.36)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
     
@@ -239,7 +256,7 @@ calcInflation <- function(prot) {
   tdollars <- nteams * 260
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
-  pdollars <- round(tdollars*0.39)
+  pdollars <- round(tdollars*0.36)
   hdollars <- tdollars - pdollars
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 12
@@ -289,6 +306,11 @@ read.cbs <- function(fn) {
   gname <- left_join(dfleft, m2,by=c('Player'))
   gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
   gname$playerid <- ifelse(is.na(gname$playerid),gname$Player,gname$playerid)
+  
+  rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE) %>% select(-X)
+  gname <- left_join(gname,rooks,by=c('Player'))
+  gname <- rename(gname,playerid = playerid.y) %>% select(-playerid.x)
+  
   rbind(gfull,gname)
 }
 

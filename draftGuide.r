@@ -1,3 +1,6 @@
+#BUG - Cricket protection list - both of my pitchers
+#BUG - only 2 catchers
+
 
 library("xlsx")
 library("stringr")
@@ -13,19 +16,19 @@ system("./pullSteamer.sh")
 #Load protection list
 protected <- read.csv("2014fakeprotected.csv",stringsAsFactors=FALSE)
 
-pstandings <- protected %>% group_by(Team) %>%
-  summarize(NumProtected = length(Team),
-            Spent = sum(Salary),
-            TotalValue = sum(pDFL),
-            MoneyEarned = TotalValue - Spent,
-            VPPlayer = TotalValue/NumProtected,
-            DPRemaining = (260-sum(Salary))/(25-NumProtected),
-            FullValue = TotalValue + (260-sum(Salary)),
-            DollarValue = TotalValue/Spent) %>%
-  arrange(-FullValue)
-#This works, but only because I manually created the fake file.  Change up to merge with current projections.
+#merge with Master file - BUG
+m2 <- select(master,-Pos,-Player) %>% rename(Player=cbs_name)
+gname <- inner_join(protected, m2,by=c('Player')) %>% select(Team,Player,playerid,Pos,Contract,Salary)
+grest <- anti_join(protected, m2,by=c('Player'))
+#gname$playerid <- ifelse(is.na(gname$playerid),gname$Player,gname$playerid)
 
-lc <- filter(protected,Team == 'Liquor Crickets') %>% select(-X,-Team) %>% arrange(-Value)
+rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE) %>% select(-X)
+g2name <- inner_join(grest,rooks,by=c('Player')) %>% select(Team,Player,playerid,Pos,Contract,Salary)
+protected <- rbind(gname,g2name)
+
+#split into P,H tables
+rHitters <- filter(protected,Pos != 'SP' & Pos != 'RP') 
+rPitchers <- filter(protected,Pos == 'SP' | Pos == 'RP')
 
 #Load steamer projection data
 hitters <- read.fg("steamerH2015.csv")
@@ -34,6 +37,47 @@ hitters$pSGP <- hitSGP(hitters)
 pitchers <- read.fg("steamerP2015.csv")
 pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
+
+#Generate pDFL for best players - no protections!
+nlist <- preDollars(hitters,pitchers)
+thitters <- nlist[[1]]
+tpitchers <- nlist[[2]]
+
+# Incorporate scores back into AllH, AllP
+AllH <- left_join(hitters,thitters,by=c('playerid'))
+AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
+AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
+AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
+#merge with steamer
+rhitters <- left_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
+rpitchers <- left_join(rPitchers,AllP,by=c('playerid'),copy=FALSE)
+rhitters <- select(rhitters,-Pos.x,-Player.x) %>% rename(Pos=Pos.y,Player=Player.y)
+rpitchers <- select(rpitchers,-Pos.x,-Player.x) %>% rename(Pos=Pos.y,Player=Player.y)
+rhitters$Value <- rhitters$pDFL - rhitters$Salary
+rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
+
+rhitters <- select(rhitters,Team,Player,Salary,pDFL)
+rpitchers <- select(rpitchers,Team,Player,Salary,pDFL)
+
+protClean <- rbind(rhitters,rpitchers)
+protClean$pDFL <- replace(protClean$pDFL,is.na(protClean$pDFL),0)
+
+
+# Create Pre-Draft Standings
+pstandings <- protClean %>% group_by(Team) %>%
+  summarize(NumProtected = length(Team),
+            Spent = sum(Salary),
+            TotalValue = sum(pDFL),
+            MoneyEarned = TotalValue - Spent,
+            VPPlayer = TotalValue/NumProtected,
+            DPRemaining = (260-sum(Salary))/(25-NumProtected),
+            FullValue = TotalValue + (260-sum(Salary)),
+            DollarValue = TotalValue/Spent) %>%
+  arrange(-MoneyEarned)
+#This works, but only because I manually created the fake file.  Change up to merge with current projections.
+
+lc <- filter(protClean,Team == 'Liquor Crickets') %>% select(-Team) %>% arrange(-pDFL)
+
 
 #Generate pDFL for best players
 nlist <- preDollars(hitters,pitchers,protected)
@@ -92,7 +136,7 @@ pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrang
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
+pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 

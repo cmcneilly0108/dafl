@@ -1,5 +1,4 @@
-# TBD
-# Evaluate combined projections - when they have 2015 available
+
 
 library("xlsx")
 library("stringr")
@@ -33,7 +32,7 @@ rPitchers <- filter(rosters,Pos == 'SP' | Pos == 'RP')
 
 nteams <- 15
 tdollars <- nteams * 260
-pdollars <- round(tdollars*0.38)
+pdollars <- round(tdollars*0.36)
 hdollars <- tdollars - pdollars
 nhitters <- 12
 npitchers <- 13
@@ -130,8 +129,6 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
   arrange(-MoneyEarned)
 
 write.csv(prosters,"2014fakeprotected.csv")
-# Need to give more weight to spending more
-# sum(Salary) * DollarRate = probably too much?  log?
 
 # Add in position eligibility based on 20 games
 pedf <- read.xlsx("2014 Position Counts.xlsx",1)
@@ -182,7 +179,15 @@ pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
   select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 
+bh <- as.data.frame(prosters) %>% filter(Value>20) %>% arrange(-Value)
+bp <- as.data.frame(prosters) %>% filter(Pos=='SP',Value>7) %>% arrange(-Value) 
 
+# Create Trends tab
+targets <- data.frame()
+targets <- rbind(targets,c(2014,pgoals('fs2014.csv')))
+targets <- rbind(targets,c(2013,pgoals('fs2013.csv')))
+targets <- rbind(targets,c(2012,pgoals('fs2012.csv')))
+colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 
 
 # Create spreadsheet
@@ -203,8 +208,20 @@ tabs[[length(tabs)+1]] <- list('Other',pna)
 tabs[[length(tabs)+1]] <- list('SP',psp)
 tabs[[length(tabs)+1]] <- list('MR',pmr)
 tabs[[length(tabs)+1]] <- list('CL',pcl)
+tabs[[length(tabs)+1]] <- list('BP',bp)
+tabs[[length(tabs)+1]] <- list('BH',bh)
+tabs[[length(tabs)+1]] <- list('Targets',targets)
 
 
 
 lapply(tabs,addSheet,protect)
 saveWorkbook(protect,"protectionAnalysis.xlsx")
+
+# some code to remember later
+#sp <- inner_join(gleft,pitchers,by=c('Player')) %>% select(Player,playerid=playerid.y)
+#sh <- inner_join(gleft,hitters,by=c('Player')) %>% select(Player,playerid=playerid.y)
+#rooks <- rbind(sh,sp)
+#write.csv(rooks,"2015RookieIDs.csv")
+
+
+
