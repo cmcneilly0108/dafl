@@ -62,7 +62,9 @@ pitSGP <- function(p) {
   innpit <- innpit * 7/8
   eruns <- eruns * 7/8
   
-  with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + 0.3*(pHLD/getd('HLD')) +
+  # I forget why I'm multiplying Holds by 0.3.  Were MR's getting too much $$$?
+  hdiscount <- 0.3
+  with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + hdiscount*(pHLD/getd('HLD')) +
          ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
   )
 }
@@ -85,6 +87,13 @@ swapName2 <- function(n){
   #fn <- str_sub(rest,1,space-1)
   nn <- str_join(fn,ln,sep=" ",collapse=NULL)
   nn[1]
+}
+
+stripName <- function(n){
+  #nm <- str_match(n,"(.+) .{1,2} |")
+  nm <- str_match(n,"(.+) [^|]+ .+")
+  nm <- str_match(n,"(.+)( [^ |]{1,2} )|")
+  nm[,2]
 }
 
 swapName3 <- function(n){
@@ -203,7 +212,7 @@ preDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=
   bhitters <- arrange(bhitters,-pDFL)
   nc <- nrow(filter(bhitters,Pos=='C'))
   bh2 <- head(bhitters,-(nteams-nc))
-  ac <- filter(bhitters,Pos=='C') %>% arrange(-pSGP)
+  ac <- filter(ihitters,Pos=='C') %>% arrange(-pSGP)
   bh3 <- ac[nc+1:(nteams-nc),]
   bh3$pDFL <- 1
   bhitters <- rbind(bh2,bh3)
@@ -281,11 +290,12 @@ calcInflation <- function(prot) {
 
 
 read.fg <- function(fn) {
-  m2 <- select(master,playerid,Pos,MLB)
+  m2 <- select(master,playerid,Pos,MLB,birth_year)
   df <- read.csv(fn,stringsAsFactors=FALSE)
   colnames(df) <- str_join('p',colnames(df))
   df <- rename(df,playerid=pplayerid,Player=pName)
   df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
+  df <- mutate(df,Age=year(Sys.time())-birth_year)
 }
 
 read.cbs <- function(fn) {
@@ -364,6 +374,11 @@ predictHolds <- function(pitchers) {
   pitchers$pRole <- ifelse(is.na(pitchers$pRole),0,pitchers$pRole)
   pitchers$pHLD <- with(pitchers,ifelse((pRole==10 | pSV > 10),0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
   return(pitchers)  
+}
+
+aRPV <- function(p,pl=15) {
+  top <- filter(p,rank(-SGP) <= pl)
+  median(top$SGP)
 }
 
 # Year End Totals

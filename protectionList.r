@@ -6,11 +6,16 @@ library("dplyr")
 library("XML")
 library("ggplot2")
 library("reshape2")
+library("lubridate")
 
 source("./daflFunctions.r")
 
-system("./pullSteamer.sh")
-
+fd <- file.info("steamerH2015.csv")$mtime
+cd <- Sys.time()
+dt <- difftime(cd, fd, units = "hours")
+if (dt > 10) {
+  system("./pullSteamer.sh")
+}
 
 #Load steamer data
 hitters <- read.fg("steamerH2015.csv")
@@ -64,9 +69,67 @@ rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
 rpitchers$Pos <- with(rpitchers,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 
+# Add in position eligibility based on 20 games
+pedf <- read.xlsx("2014 Position Counts.xlsx",1)
+pedf <- rename(pedf,Player=PLAYER,MLB=Team)
+pedf$Player <- unlist(lapply(pedf$Player,swapName))
+pedf <- mutate(pedf,posEl = ifelse(X1B>19,',1B',''))
+pedf <- mutate(pedf,posEl = ifelse(X2B>19,str_c(posEl,',2B'),posEl))
+pedf <- mutate(pedf,posEl = ifelse(SS>19,str_c(posEl,',SS'),posEl))
+pedf <- mutate(pedf,posEl = ifelse(X3B>19,str_c(posEl,',3B'),posEl))
+pedf <- mutate(pedf,posEl = ifelse(OF>19,str_c(posEl,',OF'),posEl))
+pedf <- mutate(pedf,posEl = ifelse(C>19,str_c(posEl,',C'),posEl))
+pedf <- mutate(pedf,posEl = ifelse(DH>19,str_c(posEl,',DH'),posEl))
+pedf$posEl <- str_sub(pedf$posEl,2)
+m2 <- select(master,-Pos)
+p2 <- inner_join(pedf, m2,by=c('Player','MLB'))
+p3 <- anti_join(pedf, m2,by=c('Player','MLB'))
+# Merge rest with only name
+p4 <- inner_join(p3, m2,by=c('Player'))
+p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y) 
+pedf <- rbind(p2,p4) %>% select(playerid,posEl)
+# Add column into AllH
+AllH <- left_join(AllH,pedf,by=c('playerid')) 
 
-rpreds <- rbind(select(rhitters,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB),
-            select(rpitchers,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV))
+#Create separate tabs by position
+pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+pc <- mutate(pc,RPV = (SGP - aRPV(pc))/aRPV(pc))
+p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b))/aRPV(p1b))
+p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b))/aRPV(p2b))
+pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+pss <- mutate(pss,RPV = (SGP - aRPV(pss))/aRPV(pss))
+p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b))/aRPV(p3b))
+pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh))/aRPV(pdh))
+pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+pof <- mutate(pof,RPV = (SGP - aRPV(pof,45))/aRPV(pof,45))
+pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+
+
+psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+psp <- mutate(psp,RPV = (SGP - aRPV(psp,120))/aRPV(psp,120))
+pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl))/aRPV(pcl))
+pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr))/aRPV(pmr))
+
+
+rpreds <- rbind(select(rhitters,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB),
+            select(rpitchers,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV))
 
 rpreds$DollarRate <- rpreds$pDFL/rpreds$Salary
 rpreds <- rename(rpreds,Salary=Salary,Contract=Contract)
@@ -101,8 +164,8 @@ while ((ohi != nhi | opi != npi) & ct < 8) {
   
   rhitters2$Value <- rhitters2$pDFL - rhitters2$Salary
   rpitchers2$Value <- rpitchers2$pDFL - rpitchers2$Salary
-  rpreds2 <- rbind(select(rhitters2,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB),
-                   select(rpitchers2,Team,Player,Pos,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV))
+  rpreds2 <- rbind(select(rhitters2,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB),
+                   select(rpitchers2,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV))
   rpreds2$DollarRate <- rpreds2$pDFL/rpreds2$Salary
   prosters2 <- rpreds2 %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
     arrange(Team,-Value)
@@ -130,54 +193,8 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
 
 write.csv(prosters,"2014fakeprotected.csv")
 
-# Add in position eligibility based on 20 games
-pedf <- read.xlsx("2014 Position Counts.xlsx",1)
-pedf <- rename(pedf,Player=PLAYER,MLB=Team)
-pedf$Player <- unlist(lapply(pedf$Player,swapName))
-pedf <- mutate(pedf,posEl = ifelse(X1B>19,',1B',''))
-pedf <- mutate(pedf,posEl = ifelse(X2B>19,str_c(posEl,',2B'),posEl))
-pedf <- mutate(pedf,posEl = ifelse(SS>19,str_c(posEl,',SS'),posEl))
-pedf <- mutate(pedf,posEl = ifelse(X3B>19,str_c(posEl,',3B'),posEl))
-pedf <- mutate(pedf,posEl = ifelse(OF>19,str_c(posEl,',OF'),posEl))
-pedf <- mutate(pedf,posEl = ifelse(C>19,str_c(posEl,',C'),posEl))
-pedf <- mutate(pedf,posEl = ifelse(DH>19,str_c(posEl,',DH'),posEl))
-pedf$posEl <- str_sub(pedf$posEl,2)
-m2 <- select(master,-Pos)
-p2 <- inner_join(pedf, m2,by=c('Player','MLB'))
-p3 <- anti_join(pedf, m2,by=c('Player','MLB'))
-# Merge rest with only name
-p4 <- inner_join(p3, m2,by=c('Player'))
-p4 <- select(p4,-MLB.x) %>% rename(MLB=MLB.y) 
-pedf <- rbind(p2,p4) %>% select(playerid,posEl)
-# Add column into AllH
-AllH <- left_join(AllH,pedf,by=c('playerid')) 
 
 
-#Create separate tabs by position
-pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-
-
-psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
-pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
-pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 
 bh <- as.data.frame(prosters) %>% filter(Value>20) %>% arrange(-Value)
 bp <- as.data.frame(prosters) %>% filter(Pos=='SP',Value>7) %>% arrange(-Value) 
