@@ -7,6 +7,7 @@ library("dplyr")
 library("XML")
 library("ggplot2")
 library("reshape2")
+library("lubridate")
 
 source("./daflFunctions.r")
 
@@ -158,33 +159,39 @@ c2 <- rename(c2,cbsrank=V1) %>% select(-V2)
 AllH <- left_join(AllH,c2,by=c('Player'))
 AllP <- left_join(AllP,c2,by=c('Player'))
 
-
+injuries <- readHTMLTable("http://www.cbssports.com/mlb/injuries",skip=1,stringsAsFactors=F)
+injuries <- injuries[-c(1,2)]
+inj <- rbind_all(injuries) %>% select(-Updated,-V1,-Pos) %>% filter(!is.na(Player))
+inj$Player <- str_replace(inj$Player,"Â."," ")
+names(inj) <- sub(" ", ".", names(inj))
+AllH <- left_join(AllH,inj,by=c('Player'))
+AllP <- left_join(AllP,inj,by=c('Player'))
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
 
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 # Create prospect reports!!
 # http://www.scoutingbook.com/prospects/matrix
@@ -200,9 +207,9 @@ AllH <- inner_join(AllH,prs,by=c('Player'))
 AllP <- inner_join(AllP,prs,by=c('Player'))
 
 hp <- AllH %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-  select(Player,MLB,rookRank,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,rookRank,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pp <- AllP %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-  select(Player,MLB,rookRank,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,rookRank,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 # Create percent against goals worksheet
 # Step 1 - Create targets
@@ -225,12 +232,17 @@ pg <- inner_join(lcpt,targets) %>% mutate(needed=goal-collected,pc = (collected/
 
 gmet <- rbind(hg,pg) %>% arrange(pc)
 
+protected$Position <- with(protected,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
+ppp <- group_by(protected,Position) %>% summarize(Count=length(Position))
+
+
 # Create spreadsheet
 draft <- createWorkbook()
 tabs <- list()
 tabs[[length(tabs)+1]] <- list('Early Standings',pstandings)
 tabs[[length(tabs)+1]] <- list('Crickets',lc)
 tabs[[length(tabs)+1]] <- list('Goals',gmet)
+tabs[[length(tabs)+1]] <- list('Percent Protected',ppp)
 tabs[[length(tabs)+1]] <- list('C',pc)
 tabs[[length(tabs)+1]] <- list('1B',p1b)
 tabs[[length(tabs)+1]] <- list('2B',p2b)

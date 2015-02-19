@@ -62,8 +62,8 @@ pitSGP <- function(p) {
   innpit <- innpit * 7/8
   eruns <- eruns * 7/8
   
-  # I forget why I'm multiplying Holds by 0.3.  Were MR's getting too much $$$?
-  hdiscount <- 0.3
+  # I forget why I'm multiplying Holds by 0.2.  Were MR's getting too much $$$?
+  hdiscount <- 0.2
   with(p,pW/getd('W') + pSO/getd('K') + pSV/getd('SV') + hdiscount*(pHLD/getd('HLD')) +
          ((avgera - ((eruns+pER) * (9/(innpit+pIP))))/getd('ERA'))
   )
