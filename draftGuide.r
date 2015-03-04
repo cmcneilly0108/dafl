@@ -1,4 +1,4 @@
-#BUG - catchers - are there any in the list of players I'm deleting?
+#BUG - catchers - are there any in the list of players I'm deleting? YES!!
 
 
 library("xlsx")
@@ -85,21 +85,26 @@ pstandings <- protClean %>% group_by(Team) %>%
             VPPlayer = TotalValue/NumProtected,
             DPRemaining = (260-sum(Salary))/(25-NumProtected),
             FullValue = TotalValue + (260-sum(Salary)),
-            DollarValue = TotalValue/Spent) %>%
+            ValueRatio = TotalValue/Spent) %>%
   arrange(-MoneyEarned)
+pstandings$zScore <- scale(pstandings$MoneyEarned)
+
 #This works, but only because I manually created the fake file.  Change up to merge with current projections.
 
 lc <- filter(protClean,Team == 'Liquor Crickets') %>% select(-Team) %>% arrange(-pDFL)
 
 
 #Generate pDFL for best players
-nlist <- preDollars(hitters,pitchers,protected)
+#nlist <- preDollars(hitters,pitchers,protected)
+nlist <- preLPP(hitters,pitchers,protected)
 thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
 
 # Incorporate scores back into AllH, AllP
 AllH <- left_join(hitters,thitters,by=c('playerid'))
 AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
+AllH <- rename(AllH,pDFL=zDFL)
+AllP <- rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
@@ -167,31 +172,65 @@ names(inj) <- sub(" ", ".", names(inj))
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
 
+# Process new pitches file
+con  <- file("2015newPitch0303.txt", open = "r")
+
+npitch <- data.frame()
+while (length(oneLine <- readLines(con, n = 1, warn = FALSE)) > 0) {
+  # do stuff
+  p <- str_match(oneLine,".+\\) (.+) - (.+)")
+  nr <- data.frame(Player=p[,2],Pitch=p[,3])
+  npitch <- rbind(npitch,nr)
+} 
+
+close(con)
+AllP <- left_join(AllP,npitch,by=c('Player'))
+
+
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+pc <- mutate(pc,RPV = (SGP - aRPV(pc,nrow(filter(pc,DFL>0))))/aRPV(pc,nrow(filter(pc,DFL>0))))
 p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b,nrow(filter(p1b,DFL>0))))/aRPV(p1b,nrow(filter(p1b,DFL>0))))
+
 p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b,nrow(filter(p2b,DFL>0))))/aRPV(p2b,nrow(filter(p2b,DFL>0))))
+
 pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+pss <- mutate(pss,RPV = (SGP - aRPV(pss,nrow(filter(pss,DFL>0))))/aRPV(pss,nrow(filter(pss,DFL>0))))
+
 p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b,nrow(filter(p3b,DFL>0))))/aRPV(p3b,nrow(filter(p3b,DFL>0))))
+
 pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh,nrow(filter(pdh,DFL>0))))/aRPV(pdh,nrow(filter(pdh,DFL>0))))
+
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+pof <- mutate(pof,RPV = (SGP - aRPV(pof,nrow(filter(pof,DFL>0))))/aRPV(pof,nrow(filter(pof,DFL>0))))
+
 pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
 
+
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+psp <- mutate(psp,RPV = (SGP - aRPV(psp,nrow(filter(psp,DFL>0))))/aRPV(psp,nrow(filter(psp,DFL>0))))
+
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl,nrow(filter(pcl,DFL>0))))/aRPV(pcl,nrow(filter(pcl,DFL>0))))
+
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr,nrow(filter(pmr,DFL>0))))/aRPV(pmr,nrow(filter(pmr,DFL>0))))
 
 # Create prospect reports!!
 # http://www.scoutingbook.com/prospects/matrix
@@ -235,6 +274,15 @@ gmet <- rbind(hg,pg) %>% arrange(pc)
 protected$Position <- with(protected,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 ppp <- group_by(protected,Position) %>% summarize(Count=length(Position))
 
+# Who will be bidding against me?
+at <- as.data.frame(unique(protected$Team))
+names(at) <- c('Team')
+ww1b <- filter(rhitters,Pos %in% c('LF','CF','RF')) %>% group_by(Team) %>% 
+  summarize(Num=length(Team),tSal=sum(Salary),tDFL=sum(pDFL)) %>%
+  as.data.frame()
+ww1b <- left_join(at,ww1b)
+ww1b[is.na(ww1b)] <- 0
+ww1b <- arrange(ww1b,tDFL)
 
 # Create spreadsheet
 draft <- createWorkbook()
@@ -260,3 +308,4 @@ tabs[[length(tabs)+1]] <- list('PitProspect',pp)
 
 lapply(tabs,addSheet,draft)
 saveWorkbook(draft,"draftGuide.xlsx")
+

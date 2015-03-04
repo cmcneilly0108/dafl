@@ -45,7 +45,7 @@ chitters <- (nhitters * nteams)
 cpitchers <- (npitchers * nteams)
 
 
-#Generate dollars
+#Generate SGP dollars
 nlist <- preDollars(hitters,pitchers)
 thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
@@ -56,6 +56,16 @@ AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
+#Generate z-score dollars
+nlist <- preLPP(hitters,pitchers)
+thitters <- nlist[[1]]
+tpitchers <- nlist[[2]]
+
+# Incorporate scores back into AllH, AllP
+AllH <- left_join(AllH,thitters,by=c('playerid'))
+AllP <- left_join(AllP,tpitchers,by=c('playerid'))
+AllH$zDFL <- replace(AllH$zDFL,is.na(AllH$zDFL),0)
+AllP$zDFL <- replace(AllP$zDFL,is.na(AllP$zDFL),0)
 
 #merge with steamer
 rhitters <- inner_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
@@ -93,38 +103,38 @@ AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pc <- mutate(pc,RPV = (SGP - aRPV(pc))/aRPV(pc))
 p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b))/aRPV(p1b))
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b,20))/aRPV(p1b,20))
 p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b))/aRPV(p2b))
 pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pss <- mutate(pss,RPV = (SGP - aRPV(pss))/aRPV(pss))
 p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b))/aRPV(p3b))
 pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh))/aRPV(pdh))
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
-pof <- mutate(pof,RPV = (SGP - aRPV(pof,45))/aRPV(pof,45))
+  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+pof <- mutate(pof,RPV = (SGP - aRPV(pof,60))/aRPV(pof,60))
 pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 psp <- mutate(psp,RPV = (SGP - aRPV(psp,120))/aRPV(psp,120))
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl))/aRPV(pcl))
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
+  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD)
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr))/aRPV(pmr))
 
 
@@ -188,8 +198,10 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
             MoneyEarned = TotalValue - Spent,
             VPPlayer = TotalValue/NumProtected,
             DPRemaining = (260-sum(Salary))/(25-NumProtected),
-            DollarValue = TotalValue/Spent) %>%
+            ValueRatio = TotalValue/Spent) %>%
   arrange(-MoneyEarned)
+totals$zScore <- scale(totals$MoneyEarned)
+
 
 write.csv(prosters,"2014fakeprotected.csv")
 
@@ -208,6 +220,7 @@ colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA'
 
 
 # Create spreadsheet
+s <- createStyle(numFmt = "$ #,##0.00")
 protect <- createWorkbook()
 tabs <- list()
 tabs[[length(tabs)+1]] <- list('LeagueSummary',totals)
@@ -232,6 +245,7 @@ tabs[[length(tabs)+1]] <- list('Targets',targets)
 
 
 lapply(tabs,addSheet,protect)
+
 saveWorkbook(protect,"protectionAnalysis.xlsx")
 
 # some code to remember later
@@ -240,5 +254,10 @@ saveWorkbook(protect,"protectionAnalysis.xlsx")
 #rooks <- rbind(sh,sp)
 #write.csv(rooks,"2015RookieIDs.csv")
 
+#playing around with z-score
+bhitters <- filter(AllH,pDFL > 0)
+bhitters$zHR <- scale(bhitters$pHR)
 
+b1b <- filter(p1b,DFL>0)
+b1b$zScore <- scale(b1b$DFL)
 
