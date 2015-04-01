@@ -408,11 +408,15 @@ read.cbs <- function(fn) {
   # Merge rest with only name
   gname <- left_join(dfleft, m2,by=c('Player'))
   gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
-  gname$playerid <- ifelse(is.na(gname$playerid),gname$Player,gname$playerid)
   
   rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE) %>% select(-X)
   gname <- left_join(gname,rooks,by=c('Player'))
-  gname <- rename(gname,playerid = playerid.y) %>% select(-playerid.x)
+
+  gname <- rename(gname,playerid = playerid.x)
+
+  gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
+                           gname$playerid)
+  gname <- select(gname,-playerid.y)
   
   rbind(gfull,gname)
 }
@@ -448,7 +452,7 @@ predictHolds <- function(pitchers) {
   # Step 3 - use last year's totals plus fangraphs projected role
   # Use last year's data, if now a closer, set to 0, if true setup - make sure to up number
   # http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/
-  c <- readHTMLTable("http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/",stringsAsFactors=F)
+  c <- readHTMLTable("http://www.fangraphs.com/fantasy/bullpen-report-march-17-2015/",stringsAsFactors=F)
   f <- lapply(c,function(x) {is.data.frame(x) && ncol(x) == 5})
   c2 <- c[unlist(f)]
   crep <- c2[[1]]
@@ -483,6 +487,20 @@ eras <- l1[[1]]
 avgs <- l1[[2]]
 r3 <- l1[[3]]
 # Load Master file
-master <- read.csv("master141101.csv",stringsAsFactors=FALSE)
+master <- read.csv("master150327.csv",stringsAsFactors=FALSE)
+#master <- read.csv("master150301.csv",stringsAsFactors=FALSE)
 master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 
+calcGoals <- function(p,h,targets,t) {
+  lcht <- h %>% filter(Team == t) %>% 
+    summarize(HR = sum(pHR),RBI=sum(pRBI),R=sum(pR),SB=sum(pSB))
+  lcht <- melt(lcht) %>% rename(statistic = variable, collected = value)
+  hg <- inner_join(lcht,targets) %>% mutate(needed=goal-collected,pc = (collected/goal)*100)
+  
+  lcpt <- p %>% filter(Team == t) %>% 
+    summarize(W = sum(pW),HLD=sum(pHLD),K=sum(pSO),SV=sum(pSV))
+  lcpt <- melt(lcpt) %>% rename(statistic = variable, collected = value)
+  pg <- inner_join(lcpt,targets) %>% mutate(needed=goal-collected,pc = (collected/goal)*100)
+  
+  gmet <- rbind(hg,pg) %>% arrange(pc)
+}
