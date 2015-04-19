@@ -1,6 +1,8 @@
 # TBD
 # Improve holds projections?
 
+bullpen <- "http://www.fangraphs.com/fantasy/72100/"
+
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
 }
@@ -91,9 +93,11 @@ swapName2 <- function(n){
 
 stripName <- function(n){
   #nm <- str_match(n,"(.+) .{1,2} |")
-  nm <- str_match(n,"(.+) [^|]+ .+")
-  nm <- str_match(n,"(.+)( [^ |]{1,2} )|")
-  nm[,2]
+  #nm <- str_match(n,"(.+) [^|]+ .+")
+  #nm <- str_match(n,"(.+)( [^ |]{1,2} )|")
+  #nm[,2]
+  nm <- strsplit(n, "[ |]+")[[1]]
+  nm <- paste(head(nm,-2),collapse = ' ')
 }
 
 swapName3 <- function(n){
@@ -106,7 +110,7 @@ swapName3 <- function(n){
 
 pullPos <- function(n){
   n <- str_trim(n)
-  p <- str_match(n,".+, .+ ([^|]+) .+")
+  p <- str_match(n,".+ .+ ([^|]+) .+")
   p <- p[,2]
   p <- ifelse((p =='P'),'RP',p)
   ifelse((p %in% c('CF','RF','LF')),'OF',p)
@@ -114,7 +118,7 @@ pullPos <- function(n){
 
 pullMLB <- function(n){
   n <- str_trim(n)
-  p <- str_match(n,".+, .+ .+ (.+)")
+  p <- str_match(n,".+ .+ .+ (.+)")
   p <- p[,2]
 }
 
@@ -124,15 +128,20 @@ pullTeam <- function(tn){
   tP <- filter(AllP,Team == tn)
   tP <- select(tP,-Team)
   tP <- tP %>% arrange(-pDFL) %>% 
-    select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA)
+    select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,Injury,Expected.Return)
   tH <- tH %>% arrange(-pDFL) %>%
-    select(Player,Pos,pDFL,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
+    select(Player,Pos,pDFL,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
   list(tH,tP)
 }
 
-addSheet <- function(l,w){
+addSheet <- function(l,w) {
+  df <- l[[2]]
+  csTableColNames <- CellStyle(w) + Alignment(wrapText=TRUE, h="ALIGN_CENTER")
   sht <- createSheet(wb=w,sheetName=l[[1]])
-  addDataFrame(x=l[[2]],sheet=sht)
+  addDataFrame(x=df,sheet=sht,colStyle=l[[3]],colnamesStyle=csTableColNames)
+  cols <- l[[4]]
+  lapply(cols,function(x){autoSizeColumn(sht, x)})
+  printSetup(sht,landscape=TRUE,fitWidth=1,fitHeight=5)
 }
 
 # Create final stats file from past years total files
@@ -396,7 +405,7 @@ read.cbs <- function(fn) {
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
-  df$Player <- unlist(lapply(df$Player,swapName2))
+  df$Player <- unlist(lapply(df$Player,stripName))
   # Team abbreviations are not the same - find all discrepancies WAS->WSH
   df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
   df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
@@ -414,6 +423,37 @@ read.cbs <- function(fn) {
 
   gname <- rename(gname,playerid = playerid.x)
 
+  gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
+                           gname$playerid)
+  gname <- select(gname,-playerid.y)
+  
+  rbind(gfull,gname)
+}
+
+read.2014cbs <- function(fn) {
+  m2 <- select(master,-Pos,-Player) %>% rename(Player=cbs_name)
+  df <- read.csv(fn,skip=1,stringsAsFactors=FALSE)
+  df <- mutate(df, Pos = pullPos(Player))
+  df <- mutate(df, MLB = pullMLB(Player))
+  #df$Player <- unlist(lapply(df$Player,stripName))
+  df$Player <- unlist(lapply(df$Player,swapName2))
+  # Team abbreviations are not the same - find all discrepancies WAS->WSH
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
+  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
+  # Merge with team
+  gfull <- inner_join(df, m2,by=c('Player','MLB'))
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
+  m2 <- anti_join(m2,df,by=c('Player','MLB'))
+  
+  # Merge rest with only name
+  gname <- left_join(dfleft, m2,by=c('Player'))
+  gname <- select(gname,-MLB.x) %>% rename(MLB=MLB.y) 
+  
+  rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE) %>% select(-X)
+  gname <- left_join(gname,rooks,by=c('Player'))
+  
+  gname <- rename(gname,playerid = playerid.x)
+  
   gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
                            gname$playerid)
   gname <- select(gname,-playerid.y)
@@ -445,14 +485,14 @@ read.inseasonrecap <- function(fn,pos) {
 predictHolds <- function(pitchers) {
   #Need to predict holds
   # Step 2 - copy over previous year's totals
-  lyp <- read.cbs("AllP2014.csv")
+  lyp <- read.2014cbs("AllP2014.csv")
   lyp <- select(lyp,playerid,lyHLD=HD)
   pitchers <- left_join(pitchers,lyp,by=c('playerid'))
   
   # Step 3 - use last year's totals plus fangraphs projected role
   # Use last year's data, if now a closer, set to 0, if true setup - make sure to up number
   # http://www.fangraphs.com/fantasy/bullpen-report-september-24-2014/
-  c <- readHTMLTable("http://www.fangraphs.com/fantasy/bullpen-report-march-17-2015/",stringsAsFactors=F)
+  c <- readHTMLTable(bullpen,stringsAsFactors=F)
   f <- lapply(c,function(x) {is.data.frame(x) && ncol(x) == 5})
   c2 <- c[unlist(f)]
   crep <- c2[[1]]
@@ -469,7 +509,7 @@ predictHolds <- function(pitchers) {
   crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
   pitchers <- left_join(pitchers,crep,c('Player'))
   pitchers$pRole <- ifelse(is.na(pitchers$pRole),0,pitchers$pRole)
-  pitchers$pHLD <- with(pitchers,ifelse((pRole==10 | pSV > 10),0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
+  pitchers$pHLD <- with(pitchers,ifelse((pRole==10 | pSV > 10 | pGS > 10),0,ifelse(pRole==5 & lyHLD < 25,25,lyHLD)))
   pitchers$pHLD <- ifelse(is.na(pitchers$pHLD),0,pitchers$pHLD)
   return(pitchers)  
 }
@@ -495,12 +535,72 @@ calcGoals <- function(p,h,targets,t) {
   lcht <- h %>% filter(Team == t) %>% 
     summarize(HR = sum(pHR),RBI=sum(pRBI),R=sum(pR),SB=sum(pSB))
   lcht <- melt(lcht) %>% rename(statistic = variable, collected = value)
-  hg <- inner_join(lcht,targets) %>% mutate(needed=goal-collected,pc = (collected/goal)*100)
+  hg <- inner_join(lcht,targets) %>% mutate(needed=goal-collected,pc = (collected/goal))
   
   lcpt <- p %>% filter(Team == t) %>% 
     summarize(W = sum(pW),HLD=sum(pHLD),K=sum(pSO),SV=sum(pSV))
   lcpt <- melt(lcpt) %>% rename(statistic = variable, collected = value)
-  pg <- inner_join(lcpt,targets) %>% mutate(needed=goal-collected,pc = (collected/goal)*100)
+  pg <- inner_join(lcpt,targets) %>% mutate(needed=goal-collected,pc = (collected/goal))
   
   gmet <- rbind(hg,pg) %>% arrange(pc)
 }
+
+hotScores <- function(toph,topp) {
+  toph <- filter(toph,AB>0)
+  topp <- filter(topp,INN>0)
+  mHR <- mean(toph$HR)
+  sdHR <- sd(toph$HR)
+  mR <- mean(toph$R)
+  sdR <- sd(toph$R)
+  mSB <- mean(toph$SB)
+  sdSB <- sd(toph$SB)
+  mRBI <- mean(toph$RBI)
+  sdRBI <- sd(toph$RBI)
+  
+  mW <- mean(topp$W)
+  sdW <- sd(topp$W)
+  mSO <- mean(topp$K)
+  sdSO <- sd(topp$K)
+  mHLD <- mean(topp$HD)
+  sdHLD <- sd(topp$HD)
+  mSV <- mean(topp$S)
+  sdSV <- sd(topp$S)    
+  
+  mAvg <- mean(toph$BA)
+  sdAvg <- sd(toph$BA)
+  toph <- mutate(toph,xH = H-(AB * mAvg))
+  mxH <- mean(toph$xH)
+  sdxH <- sd(toph$xH)
+  
+  mERA <- mean(topp$ERA)
+  sdERA <- sd(topp$ERA)
+  topp <- mutate(topp,xER = (INN * mERA/9)-(INN * ERA/9))
+  mxER <- mean(topp$xER)
+  sdxER <- sd(topp$xER)
+  
+  toph <- mutate(toph,zHR=(HR-mHR)/sdHR,zR=(R-mR)/sdR,zRBI=(RBI-mRBI)/sdRBI,
+                     zSB=(SB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+  toph <- mutate(toph,zScore=zHR+zR+zRBI+zSB+zxH)
+  toph <- arrange(toph,-zScore)
+  
+  topp <- mutate(topp,zW=(W-mW)/sdW,zSO=(K-mSO)/sdSO,zHLD=(HD-mHLD)/sdHLD,
+                      zSV=(S-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+  topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  topp <- arrange(topp,-zScore)
+  
+  # Add the total thitter value to everyone
+  #toph <- head(toph,thitters)
+  toph$zScore <- toph$zScore - last(toph$zScore)
+  # Add pitchers
+  #topp <- head(topp,tpitchers)
+  topp$zScore <- topp$zScore - last(topp$zScore)
+  
+  ih2 <- toph
+  ip2 <- topp
+  
+  bhitters <- select(ih2,playerid,zScore)
+  bpitchers <- select(ip2,playerid,zScore)
+  
+  list(bhitters,bpitchers)
+}
+

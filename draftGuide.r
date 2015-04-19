@@ -9,11 +9,13 @@ library("lubridate")
 
 source("./daflFunctions.r")
 
+predUpdate <- FALSE
 fd <- file.info("steamerH2015.csv")$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 10) {
-  system("./pullSteamer.sh")
+  system("./pullSteameru.sh")
+  #predUpdate <- TRUE
 }
 
 #Load protection list
@@ -75,7 +77,7 @@ rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
 AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 hrank <- AllH %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP))
 hrank <- select(hrank,playerid,orank)
-AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR',ifelse(pW < 8,'MR','SP'))))
+AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 prank <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP))
 prank <- select(prank,playerid,orank)
 
@@ -86,16 +88,16 @@ protClean$pDFL <- replace(protClean$pDFL,is.na(protClean$pDFL),0)
 
 # Create Pre-Draft Standings
 pstandings <- protClean %>% group_by(Team) %>%
-  summarize(NumProtected = length(Team),
+  summarize(Players = length(Team),
             Spent = sum(Salary),
             TotalValue = sum(pDFL),
-            MoneyEarned = TotalValue - Spent,
-            VPPlayer = TotalValue/NumProtected,
-            DPRemaining = (260-sum(Salary))/(25-NumProtected),
+            Earned = TotalValue - Spent,
+            VPPlayer = TotalValue/Players,
+            DPP = (260-sum(Salary))/(25-Players),
             FullValue = TotalValue + (260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
-  arrange(-MoneyEarned)
-pstandings$zScore <- scale(pstandings$MoneyEarned)
+  arrange(-Earned)
+pstandings$zScore <- as.numeric(scale(pstandings$Earned))
 
 #This works, but only because I manually created the fake file.  Change up to merge with current projections.
 
@@ -122,7 +124,7 @@ AllP <- anti_join(AllP,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
 
 # Bucket pitchers by role
 #AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
-AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR',ifelse(pW < 8,'MR','SP'))))
+AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 
 
@@ -179,7 +181,7 @@ AllP <- left_join(AllP,c2,by=c('Player'))
 # Grab CBS injuries report - append to players, tab of draft for next year
 injuries <- readHTMLTable("http://www.cbssports.com/mlb/injuries",skip=1,stringsAsFactors=F)
 injuries <- injuries[-c(1,2)]
-inj <- rbind_all(injuries) %>% select(-Updated,-Pos,-V1) %>% filter(!is.na(Player))
+inj <- rbind_all(injuries) %>% select(-Updated,-Pos) %>% filter(!is.na(Player))
 inj$Player <- str_replace(inj$Player,"Â."," ")
 names(inj) <- sub(" ", ".", names(inj))
 AllH <- left_join(AllH,inj,by=c('Player'))
@@ -202,6 +204,18 @@ while (length(oneLine <- readLines(con, n = 1, warn = FALSE)) > 0) {
 close(con)
 AllP <- left_join(AllP,npitch,by=c('Player'))
 
+if (predUpdate==TRUE) {
+  write.csv(AllH,'AllHPrev.csv')
+  write.csv(AllP,'AllPPrev.csv')
+}
+
+oAllH <- read.csv('AllHPrev.csv',stringsAsFactors=FALSE)
+oAllP <- read.csv('AllPPrev.csv',stringsAsFactors=FALSE)
+oAllH <- select(oAllH,playerid,oDFL=pDFL)
+oAllP <- select(oAllP,playerid,oDFL=pDFL)
+oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
 
 #Create separate tabs by position
 #pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
@@ -227,11 +241,12 @@ p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrang
 p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b,nrow(filter(p3b,DFL>0))))/aRPV(p3b,nrow(filter(p3b,DFL>0))))
 p3b <- select(p3b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
-pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP)
+pdh <- AllH %>% filter(Pos == 'DH',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP)
 pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh,nrow(filter(pdh,DFL>0))))/aRPV(pdh,nrow(filter(pdh,DFL>0))))
 pdh <- select(pdh,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
-pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP)
+pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% 
+  rename(DFL=pDFL,SGP=pSGP)  %>% head(200)
 pof <- mutate(pof,RPV = (SGP - aRPV(pof,nrow(filter(pof,DFL>0))))/aRPV(pof,nrow(filter(pof,DFL>0))))
 pof <- select(pof,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
@@ -240,7 +255,7 @@ pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %
 
 
 
-psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP)
+psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 psp <- mutate(psp,RPV = (SGP - aRPV(psp,nrow(filter(psp,DFL>0))))/aRPV(psp,nrow(filter(psp,DFL>0))))
 psp <- select(psp,Player,MLB,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
 
@@ -248,7 +263,7 @@ pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(D
 pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl,nrow(filter(pcl,DFL>0))))/aRPV(pcl,nrow(filter(pcl,DFL>0))))
 pcl <- select(pcl,Player,MLB,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
 
-pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP)
+pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr,nrow(filter(pmr,DFL>0))))/aRPV(pmr,nrow(filter(pmr,DFL>0))))
 pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,rbrank,cbsrank,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
 
@@ -311,28 +326,49 @@ ww1b <- arrange(ww1b,tDFL)
 
 # Create spreadsheet
 draft <- createWorkbook()
-tabs <- list()
-tabs[[length(tabs)+1]] <- list('Early Standings',pstandings)
-tabs[[length(tabs)+1]] <- list('Crickets',lc)
-tabs[[length(tabs)+1]] <- list('Goals',gmet)
-tabs[[length(tabs)+1]] <- list('Percent Protected',ppp)
-tabs[[length(tabs)+1]] <- list('C',pc)
-tabs[[length(tabs)+1]] <- list('1B',p1b)
-tabs[[length(tabs)+1]] <- list('2B',p2b)
-tabs[[length(tabs)+1]] <- list('SS',pss)
-tabs[[length(tabs)+1]] <- list('3B',p3b)
-tabs[[length(tabs)+1]] <- list('OF',pof)
-tabs[[length(tabs)+1]] <- list('DH',pdh)
-tabs[[length(tabs)+1]] <- list('Other',pna)
-tabs[[length(tabs)+1]] <- list('SP',psp)
-tabs[[length(tabs)+1]] <- list('MR',pmr)
-tabs[[length(tabs)+1]] <- list('CL',pcl)
-tabs[[length(tabs)+1]] <- list('HitProspect',hp)
-tabs[[length(tabs)+1]] <- list('PitProspect',pp)
-tabs[[length(tabs)+1]] <- list('OutForYear',OFY)
-tabs[[length(tabs)+1]] <- list('NTGoals',ntmet)
-tabs[[length(tabs)+1]] <- list('CSGoals',csmet)
+csRatioColumn <- CellStyle(draft, dataFormat=DataFormat("#0.00")) 
+csPctColumn <- CellStyle(draft, dataFormat=DataFormat("#0.00%")) 
+csMoneyColumn <- CellStyle(draft, dataFormat=DataFormat("$#,##0.00;-$#,##0.00")) 
+# st <- list('3'=csMoneyColumn,'4'=csMoneyColumn,'5'=csMoneyColumn,'6'=csMoneyColumn,'7'=csMoneyColumn,
+#            '8'=csMoneyColumn,'9'=csRatioColumn,'10'=csRatioColumn)
+# sht <- createSheet(wb=draft,sheetName='Test')
+# addDataFrame(x=pstandings,sheet=sht,colStyle=st)
+# setColumnWidth(sht, colIndex=2, colWidth= 1.4*max(length(pstandings[[2]])))
+# saveWorkbook(draft,"test.xlsx")
 
+
+tabs <- list()
+st <- list('3'=csMoneyColumn,'4'=csMoneyColumn,'5'=csMoneyColumn,'6'=csMoneyColumn,'7'=csMoneyColumn,
+           '8'=csMoneyColumn,'9'=csRatioColumn,'10'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('Early Standings',pstandings,st,c(2))
+st <- list('4'=csMoneyColumn)
+tabs[[length(tabs)+1]] <- list('Crickets',lc,st,c(2,7))
+st <- list('5'=csPctColumn)
+tabs[[length(tabs)+1]] <- list('Goals',gmet,st,c())
+tabs[[length(tabs)+1]] <- list('Percent Protected',ppp,st,c())
+st <- list('5'=csMoneyColumn,'6'=csRatioColumn,'7'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('C',pc,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('1B',p1b,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('2B',p2b,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('SS',pss,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('3B',p3b,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('OF',pof,st,c(2,18))
+tabs[[length(tabs)+1]] <- list('DH',pdh,st,c(2))
+#tabs[[length(tabs)+1]] <- list('Other',pna,st,c(2))
+st <- list('4'=csMoneyColumn,'5'=csRatioColumn,'6'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('SP',psp,st,c(2,17,18))
+tabs[[length(tabs)+1]] <- list('MR',pmr,st,c(2,17,18))
+tabs[[length(tabs)+1]] <- list('CL',pcl,st,c(2,17,18))
+st <- list('5'=csMoneyColumn,'6'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('HitProspect',hp,st,c(2,14))
+tabs[[length(tabs)+1]] <- list('PitProspect',pp,st,c(2,14))
+tabs[[length(tabs)+1]] <- list('OutForYear',OFY,st,c(2,3,4))
+st <- list('5'=csPctColumn)
+tabs[[length(tabs)+1]] <- list('NTGoals',ntmet,st,c())
+tabs[[length(tabs)+1]] <- list('CSGoals',csmet,st,c())
+tabs[[length(tabs)+1]] <- list('BJGoals',bjmet,st,c())
+st <- list('2'=csMoneyColumn,'3'=csMoneyColumn)
+tabs[[length(tabs)+1]] <- list('Recent Changes',change,st,c(2))
 
 lapply(tabs,addSheet,draft)
 saveWorkbook(draft,"draftGuide.xlsx")

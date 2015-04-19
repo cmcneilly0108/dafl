@@ -9,29 +9,31 @@ library("reshape2")
 source("./daflFunctions.r")
 
 # Week 1 rosters
-rosters <- read.cbs("2014DraftResults.csv")
+rosters <- read.cbs("2015DraftResults.csv")
 #split into P,H tables
 rHitters <- filter(rosters,Pos != 'SP' & Pos != 'RP') 
 rPitchers <- filter(rosters,Pos == 'SP' | Pos == 'RP')
 
 
 #Load steamer data
-hitters <- read.fg("steamerH2014.csv") 
+hitters <- read.fg("steamerH2015final.csv") 
 hitters$pSGP <- hitSGP(hitters)
-pitchers <- read.fg("steamerP2014.csv") 
+pitchers <- read.fg("steamerP2015final.csv") 
 pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 hitters <- select(hitters,-Player)
 pitchers <- select(pitchers,-Player)
 
 #Generate dollars
-nlist <- preDollars(hitters,pitchers)
+nlist <- preLPP(hitters,pitchers)
 thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
 
 # Incorporate scores back into AllH, AllP
 AllH <- left_join(hitters,thitters,by=c('playerid'))
 AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
+AllH <- rename(AllH,pDFL=zDFL)
+AllP <- rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
@@ -76,11 +78,17 @@ lc <- rbind(RH,RP)
 
 # Create spreadsheet
 draft <- createWorkbook()
+csRatioColumn <- CellStyle(draft, dataFormat=DataFormat("##0.00")) 
+csPctColumn <- CellStyle(draft, dataFormat=DataFormat("#0.00%")) 
+csMoneyColumn <- CellStyle(draft, dataFormat=DataFormat("$#,##0.00;-$#,##0.00")) 
+
+
 tabs <- list()
-tabs[[length(tabs)+1]] <- list('StandingsByDFL',RTot)
-tabs[[length(tabs)+1]] <- list('SByProtect',RProtect)
-tabs[[length(tabs)+1]] <- list('SByAuction',RAuction)
-tabs[[length(tabs)+1]] <- list('HP Splits',Splits)
+st <- list('2'=csMoneyColumn,'4'=csMoneyColumn,'6'=csMoneyColumn)
+tabs[[length(tabs)+1]] <- list('StandingsByDFL',RTot,st,c(2))
+tabs[[length(tabs)+1]] <- list('SByProtect',RProtect,st,c(2))
+tabs[[length(tabs)+1]] <- list('SByAuction',RAuction,st,c(2))
+tabs[[length(tabs)+1]] <- list('HP Splits',Splits,st,c(2))
 
 lapply(tabs,addSheet,draft)
 saveWorkbook(draft,"draftAnalysis.xlsx")
