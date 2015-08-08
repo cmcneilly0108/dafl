@@ -1,8 +1,4 @@
-# 2 projection files - fangraphs
-# 2 FA files - cbssports
-# 1 prospects file - fangraphs (replace with new prospects work)
 # update Week
-# update Pitchers YTD totals (for holds) - from cbs
 # update fangraphs bullpen URL
 # update weekly standings file
 
@@ -20,15 +16,15 @@ source("./daflFunctions.r")
 
 
 # Data that needs to be updated manually
-Week <- 2
+Week <- 18
 tWeeks <-26
-bp <- "http://www.fangraphs.com/fantasy/72100/"
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-august-6-2015/"
 ytdf <- "AllPYTD.csv"
 # End manual update data
 
 
 #Create Charts
-standings <- read.csv("DAFLWeeklyStandings.csv")
+standings <- read.csv("DAFLWeeklyStandings.csv",stringsAsFactors=FALSE)
 standings$Rank <- as.numeric(str_extract(standings$Rank,'[0-9]+'))
 leaders <- standings %>% filter(Week == max(Week), Rank <= 5 | Team == 'Cricket') %>% select(Team)
 #l2 <- ifelse('Cricket' %in% leaders$Team,leaders$Team,append(leaders$Team,'Cricket'))
@@ -39,15 +35,15 @@ s2 <- standings %>% group_by(Week) %>% mutate(rHR = rank(HR),rR = rank(R),rSB = 
                                               ,rERA = rank(-ERA))
 s2 <- mutate(s2,TP=rHR+rR+rSB+rRBI+rBA+rW+rS+rHD+rK+rERA)
 # create line graph
-g1 <- ggplot(data=filter(s2,Team %in% leaders$Team), 
-             aes(x=Week, y=TP, group=Team, shape=Team, color=Team)) + geom_line(size=1.2) + 
+g1 <- ggplot(data=filter(s2,Team %in% leaders$Team),
+             aes(x=Week, y=TP, group=Team, shape=Team, color=Team)) + geom_line(size=1.2) +
   geom_point(size=4) + labs(title='Top 5 plus Crickets',y='Total Points')
 s3 <- melt(s2,c('Team','Week'))
-g2 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rHR','rR','rRBI','rBA','rSB')), 
-             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) + 
+g2 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rHR','rR','rRBI','rBA','rSB')),
+             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) +
   geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Hitting by Week',y='Points')
-g3 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rW','rK','rS','rHD','rERA')), 
-             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) + 
+g3 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rW','rK','rS','rHD','rERA')),
+             aes(x=Week, y=value, group=variable, shape=variable,color=variable)) +
   geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Pitching by Week',y='Points')
 pdf("DAFLcharts.pdf")
 print(g1)
@@ -60,12 +56,13 @@ cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 10) {
   system("./pullSteamerROS.sh")
-  system("./pullCBS.sh")  
+  system("./pullCBS.sh")
 }
 
 
 #Load Steamer rest of season projections
 hitters <- read.fg("steamerHROS.csv")
+hitters$Pos <- replace(hitters$Pos,is.na(hitters$Pos),'DH')
 hitters$pSGP <- hitSGP(hitters)
 hitters <- select(hitters,-Player,-MLB,-Pos)
 
@@ -82,15 +79,16 @@ Allpitchers <- read.cbs("AllPitchers.csv")
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
 ytdp <- read.cbs(ytdf)
-ytdp <- select(ytdp,playerid,HD) %>% rename(yHLD = HD)
+ytdh <- read.cbs("AllHYTD.csv")
+ytdp2 <- select(ytdp,playerid,HD) %>% rename(yHLD = HD)
 
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
-AllP <- left_join(AllP,ytdp,by=c('playerid'),copy=FALSE)
+AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE)
 # give 60/40 weight to YTD/3WKS
-AllP$pHLD <- with(AllP,round(((HD/4)*(tWeeks-Week)*.4)+((yHLD/Week)*(tWeeks-Week)*.6)),0)
+AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-Week)*.2)+((yHLD/Week)*(tWeeks-Week)*.8)),0)
 AllP$pSGP <- pitSGP(AllP)
-  
+
 #Generate dollars
 #nlist <- preDollars(AllH,AllP,data.frame(),(1-(Week/tWeeks)),50,40)
 nlist <- preLPP(AllH,AllP,data.frame(),(1-(Week/tWeeks)),50,40)
@@ -111,12 +109,35 @@ topp <- Allpitchers
 r <- hotScores(toph,topp)
 oh <- r[[1]]
 op <- r[[2]]
+
 # Incorporate scores back into AllH, AllP
 AllH <- left_join(AllH,oh,by=c('playerid'))
 AllP <- left_join(AllP,op,by=c('playerid'))
 AllH <- rename(AllH,hotscore=zScore)
 AllP <- rename(AllP,hotscore=zScore)
 
+
+# # Generate YTD zScores
+r2 <- hotScores(ytdh,ytdp)
+oh2 <- r2[[1]]
+op2 <- r2[[2]]
+AllH <- left_join(AllH,oh2,by=c('playerid'))
+AllP <- left_join(AllP,op2,by=c('playerid'))
+AllH <- rename(AllH,ytdscore=zScore)
+AllP <- rename(AllP,ytdscore=zScore)
+
+
+# # # Generate positional advantage zScores
+r <- zScoresST(AllH,AllP)
+oh3 <- r[[1]]
+op3 <- r[[2]]
+oh3 <- rename(oh3,pScore = zScore)
+op3 <- rename(op3,pScore = zScore)
+# Incorporate scores back into AllH, AllP
+AllH <- left_join(AllH,oh3,by=c('playerid'))
+AllP <- left_join(AllP,op3,by=c('playerid'))
+AllH <- mutate(AllH,diffscore = pScore - ytdscore)
+AllP <- mutate(AllP,diffscore = pScore - ytdscore)
 
 
 # Grab CBS injuries report - append to players, tab of draft for next year
@@ -140,7 +161,7 @@ FAP <- select(FAP,-Team)
 myteam <- pullTeam('Liquor Crickets')
 mh <- myteam[[1]]
 mp <- myteam[[2]]
-  
+
 # Create worksheets
 allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pHLD==0,pSV==0, pGS > 0) %>%
   select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
@@ -148,13 +169,18 @@ allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pHLD==0,pSV==0, pGS > 0) %>%
 allClosers <- FAP %>% arrange(-pSV,-S,-pDFL) %>% filter(pSV>0) %>%
   select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
-allHolds <- FAP %>% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %>% 
+#allHolds <- FAP %>% filter(pHLD>0, pK.9 > 8.0, pBB.9 < 3.5) %>%
+allHolds <- FAP %>% filter(pHLD>0) %>%
   arrange(-pHLD,-pDFL) %>%
   select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
-TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 5) %>%
+allHolds2 <- FAP %>% filter(pHLD>0,pK.9 > 9,pDFL > 0) %>%
+  arrange(-pDFL) %>%
+  select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
+
+TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 8) %>%
   select(Player,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
-      
+
 # Closer report
 c <- readHTMLTable(bp,stringsAsFactors=F)
 
@@ -166,30 +192,36 @@ colnames(crep) <- c(' ','Closer','First','Second','DL/Minors')
 crep <- crep[-1,]
 
 #crep <- readHTMLTable(bp, header=T, which=15,stringsAsFactors=F)
-t <- data.frame(crep$Closer,10)
-t2 <- data.frame(crep$First,5)
-t3 <- data.frame(crep$Second,2)
+t <- data.frame(crep$Closer,10,stringsAsFactors=FALSE)
+t2 <- data.frame(crep$First,5,stringsAsFactors=FALSE)
+t3 <- data.frame(crep$Second,2,stringsAsFactors=FALSE)
 colnames(t) <- c('Player','Score')
 colnames(t2) <- c('Player','Score')
 colnames(t3) <- c('Player','Score')
 crep <- rbind_list(t,t2,t3)
+
 crep$Player <- iconv(crep$Player,'UTF-8','ASCII')
-availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>% 
+availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>%
   select(Player,Pos,pDFL,pSGP, Score,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
 
 # TALENT Tab - Calculate total SGPs per team, rank
-nicks <- read.csv("nicknames.csv")
-st <- filter(standings,Week == max(Week)) %>% mutate(Short = Team, Actual = Rank) %>% 
+nicks <- read.csv("nicknames.csv",stringsAsFactors=FALSE)
+st <- filter(standings,Week == max(Week)) %>% mutate(Short = Team, Actual = Rank) %>%
   select(Short,Actual) %>% inner_join(nicks,by=c('Short'))
+
+# Positional Strength Chart
+RH2 <- filter(AllH,Team != 'Free Agent') %>% group_by(Team,Pos) %>% summarize(hDFL = sum(pDFL))
+RP2 <- filter(AllP,Team != 'Free Agent') %>% group_by(Team,Pos) %>% summarize(piDFL = sum(pDFL))
 
 RH <- filter(AllH,Team != 'Free Agent') %>% group_by(Team) %>% summarize(hDFL = sum(pDFL))
 RP <- filter(AllP,Team != 'Free Agent') %>% group_by(Team) %>% summarize(piDFL = sum(pDFL))
-RTot <- inner_join(RH,RP,by=c('Team')) %>% 
-  mutate(tDFL = hDFL + piDFL,hRank = rank(-hDFL),pRank = rank(-piDFL)) %>% 
+RTot <- inner_join(RH,RP,by=c('Team')) %>%
+  mutate(tDFL = hDFL + piDFL,hRank = rank(-hDFL),pRank = rank(-piDFL)) %>%
   inner_join(st,by=c('Team')) %>%
   select(Team,hDFL,hRank,piDFL,pRank,tDFL,Actual) %>% arrange(-tDFL)
 
+RTot$zScore <- as.numeric(scale(RTot$tDFL))
 # Create prospect reports!!
 # http://www.scoutingbook.com/prospects/matrix
 prospects <- readHTMLTable("http://www.scoutingbook.com/prospects/matrix",stringsAsFactors=F)
@@ -203,20 +235,20 @@ prs <- select(prospects,Player,rookRank)
 AllHr <- inner_join(AllH,prs,by=c('Player'))
 AllPr <- inner_join(AllP,prs,by=c('Player'))
 
-hp <- AllHr %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
+hp <- AllHr %>% filter(!is.na(rookRank) & Team=='Free Agent') %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-pp <- AllPr %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
+pp <- AllPr %>% filter(!is.na(rookRank) & Team=='Free Agent') %>% arrange(-pDFL,rookRank) %>%
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 
 #Create xlsx with tabbed data
 wkly <- createWorkbook()
-csRatioColumn <- CellStyle(wkly, dataFormat=DataFormat("##0.00")) 
-csPctColumn <- CellStyle(wkly, dataFormat=DataFormat("#0.00%")) 
-csMoneyColumn <- CellStyle(wkly, dataFormat=DataFormat("$#,##0.00;-$#,##0.00")) 
+csRatioColumn <- CellStyle(wkly, dataFormat=DataFormat("##0.00"))
+csPctColumn <- CellStyle(wkly, dataFormat=DataFormat("#0.00%"))
+csMoneyColumn <- CellStyle(wkly, dataFormat=DataFormat("$#,##0.00;-$#,##0.00"))
 
 tabs <- list()
-st <- list('2'=csMoneyColumn,'4'=csMoneyColumn,'6'=csMoneyColumn)
+st <- list('2'=csMoneyColumn,'4'=csMoneyColumn,'6'=csMoneyColumn,'8'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('Talent',RTot,st,c(2))
 st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'16'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('My Hitters',mh,st,c(2,18,19))
@@ -243,36 +275,39 @@ saveWorkbook(wkly,"weeklyUpdate.xlsx")
 #ad hoc queries
 
 # # For a position, who has surplus?
-# f <- AllH %>% filter(Pos == 'C',pSGP > 5) %>% group_by(Team) %>% summarize(nGood = length(Team))
-# f2 <- AllH %>% filter(Pos == '1B') %>% group_by(Team) %>% summarize(nTotal = length(Team))
-# ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
-# 
+ f <- AllH %>% filter(Pos == '2B',pDFL > 8) %>% group_by(Team) %>% summarize(nGood = length(Team))
+ f2 <- AllH %>% filter(Pos == '2B') %>% group_by(Team) %>% summarize(nTotal = length(Team))
+ ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
+#
 # f <- AllP %>% filter(pSV > 10) %>% group_by(Team) %>% summarize(nGood = length(Team)) %>% arrange(-nGood)
-# 
+#
 # #Find out what a team has that I can use
 # pullTeam('clowndog & banjo')[[1]]
-# 
+#
 # #Find players by position who can help immediately
-# FAH %>% filter(Pos == 'C',pSGP > 2, pAVG > 0.25) %>% arrange(-pDFL,-pSGP) %>% 
+# FAH %>% filter(Pos == 'C',pSGP > 2, pAVG > 0.25) %>% arrange(-pDFL,-pSGP) %>%
 #   select(Player,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
-# 
-# FAH %>% filter(pSGP > 8, BA > 0.26) %>% arrange(-pSGP) %>% 
+#
+# FAH %>% filter(pSGP > 8, BA > 0.26) %>% arrange(-pSGP) %>%
 #   select(Player,Pos,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
-# 
+#
 # # Filters by strong K's and low BB's
 # FAP %>% filter(pHLD>10, pK.9 > 8.0, pBB.9 < 3.5) %>% arrange(-pDFL,-pHLD,-pSGP) %>%
 #   select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA)
-# 
+#
 # # Top FA in a stat
 # FAH %>% arrange(-pDFL,-pSGP) %>% filter(pHR > 9, pDFL > 5) %>%
 #   select(Player,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA)
-# 
+#
 # FAP %>% arrange(-pDFL,-pSGP) %>% filter(QS>1,pBB.9 < 3.5) %>%
 # select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA)
-# 
+#
 # #game <- "http://www.baseball-reference.com/boxes/TBA/TBA201405220.shtml"
 # #c <- readHTMLTable(game,stringASFactors=F)
-# 
-# #li <- AllP %>% filter(Team != 'Free Agent') %>% group_by(Team,Pos) %>% 
+#
+# #li <- AllP %>% filter(Team != 'Free Agent') %>% group_by(Team,Pos) %>%
 # #  summarize(Count = length(Pos))
-# 
+
+# Problems - rosscore is only scoring top players, differences in sample size
+blh <- arrange(AllH,-diffscore) %>% filter(is.na(Injury),diffscore > 0)
+blp <- arrange(AllP,-diffscore) %>% filter(is.na(Injury),diffscore > 0)

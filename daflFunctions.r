@@ -1,7 +1,7 @@
 # TBD
 # Improve holds projections?
 
-bullpen <- "http://www.fangraphs.com/fantasy/72100/"
+bullpen <- "http://www.fangraphs.com/fantasy/bullpen-report-april-25-2015/"
 
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
@@ -75,7 +75,7 @@ swapName <- function(n){
   comma <- str_locate(n,',')
   ln <- str_sub(n,1,comma-1)
   fn <- str_sub(n,comma+2,-1)
-  nn <- str_join(fn,ln,sep=" ",collapse=NULL)
+  nn <- str_c(fn,ln,sep=" ",collapse=NULL)
   nn[1] 
 }
 
@@ -87,7 +87,7 @@ swapName2 <- function(n){
   fn <- fn[,2]
   #space <- str_locate(rest,' ')
   #fn <- str_sub(rest,1,space-1)
-  nn <- str_join(fn,ln,sep=" ",collapse=NULL)
+  nn <- str_c(fn,ln,sep=" ",collapse=NULL)
   nn[1]
 }
 
@@ -127,9 +127,9 @@ pullTeam <- function(tn){
   tH <- select(tH,-Team)
   tP <- filter(AllP,Team == tn)
   tP <- select(tP,-Team)
-  tP <- tP %>% arrange(-pDFL) %>% 
+  tP <- tP %>% arrange(-hotscore) %>% 
     select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,Injury,Expected.Return)
-  tH <- tH %>% arrange(-pDFL) %>%
+  tH <- tH %>% arrange(-hotscore) %>%
     select(Player,Pos,pDFL,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
   list(tH,tP)
 }
@@ -394,10 +394,14 @@ calcInflation <- function(prot) {
 read.fg <- function(fn) {
   m2 <- select(master,playerid,Pos,MLB,birth_year)
   df <- read.csv(fn,stringsAsFactors=FALSE)
-  colnames(df) <- str_join('p',colnames(df))
+  colnames(df) <- str_c('p',colnames(df))
   df <- rename(df,playerid=pplayerid,Player=pName)
   df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
+  df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
   df <- mutate(df,Age=year(Sys.time())-birth_year)
+  dfh <- anti_join(df,m2,by=c('playerid'),copy=FALSE)
+  df$playerid <- ifelse(df$playerid %in% dfh$playerid,df$Player,df$playerid)
+  df
 }
 
 read.cbs <- function(fn) {
@@ -423,11 +427,14 @@ read.cbs <- function(fn) {
 
   gname <- rename(gname,playerid = playerid.x)
 
-  gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
-                           gname$playerid)
+  #gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
+  #                         gname$playerid)
   gname <- select(gname,-playerid.y)
   
-  rbind(gfull,gname)
+  final <- rbind(gfull,gname)
+  final$playerid <- ifelse(is.na(final$playerid),final$Player,final$playerid)
+  final$playerid <- ifelse(str_length(final$playerid)==0,final$Player,final$playerid)
+  final
 }
 
 read.2014cbs <- function(fn) {
@@ -464,7 +471,7 @@ read.2014cbs <- function(fn) {
 read.inseasonrecap <- function(fn,pos) {
   m2 <- select(master,-Pos,-Player) %>% rename(Player=cbs_name)
   df <- read.xlsx(fn,pos,stringsAsFactors=FALSE)
-  colnames(df) <- str_join('p',colnames(df))
+  colnames(df) <- str_c('p',colnames(df))
   df <- rename(df,Player=pPlayer)
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
@@ -527,8 +534,8 @@ eras <- l1[[1]]
 avgs <- l1[[2]]
 r3 <- l1[[3]]
 # Load Master file
-master <- read.csv("master150327.csv",stringsAsFactors=FALSE)
-#master <- read.csv("master150301.csv",stringsAsFactors=FALSE)
+master <- read.csv("master.csv",stringsAsFactors=FALSE)
+#master <- read.csv("master150801.csv",stringsAsFactors=FALSE)
 master <- rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 
 calcGoals <- function(p,h,targets,t) {
@@ -603,4 +610,125 @@ hotScores <- function(toph,topp) {
   
   list(bhitters,bpitchers)
 }
+
+
+zScores <- function(toph,topp) {
+  toph <- filter(toph,pAB>0)
+  topp <- filter(topp,pIP>0)
+  mHR <- mean(toph$pHR)
+  sdHR <- sd(toph$pHR)
+  mR <- mean(toph$pR)
+  sdR <- sd(toph$pR)
+  mSB <- mean(toph$pSB)
+  sdSB <- sd(toph$pSB)
+  mRBI <- mean(toph$pRBI)
+  sdRBI <- sd(toph$pRBI)
+  
+  mW <- mean(topp$pW)
+  sdW <- sd(topp$pW)
+  mSO <- mean(topp$pSO)
+  sdSO <- sd(topp$pSO)
+  mHLD <- mean(topp$pHLD)
+  sdHLD <- sd(topp$pHLD)
+  mSV <- mean(topp$pSV)
+  sdSV <- sd(topp$pSV)    
+  
+  mAvg <- mean(toph$pAVG)
+  sdAvg <- sd(toph$pAVG)
+  toph <- mutate(toph,xH = pH-(pAB * mAvg))
+  mxH <- mean(toph$xH)
+  sdxH <- sd(toph$xH)
+  
+  mERA <- mean(topp$pERA)
+  sdERA <- sd(topp$pERA)
+  topp <- mutate(topp,xER = (pIP * mERA/9)-(pIP * pERA/9))
+  mxER <- mean(topp$xER)
+  sdxER <- sd(topp$xER)
+  
+  toph <- mutate(toph,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                 zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+  toph <- mutate(toph,zScore=zHR+zR+zRBI+zSB+zxH)
+  toph <- arrange(toph,-zScore)
+  
+  topp <- mutate(topp,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                 zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+  topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  topp <- arrange(topp,-zScore)
+  
+  # Add the total thitter value to everyone
+  #toph <- head(toph,thitters)
+  toph$zScore <- toph$zScore - last(toph$zScore)
+  # Add pitchers
+  #topp <- head(topp,tpitchers)
+  topp$zScore <- topp$zScore - last(topp$zScore)
+  
+  ih2 <- toph
+  ip2 <- topp
+  
+  bhitters <- select(ih2,playerid,zScore)
+  bpitchers <- select(ip2,playerid,zScore)
+  
+  list(bhitters,bpitchers)
+}
+
+zScoresST <- function(ihitters,ipitchers) {
+  
+  toph <- ihitters
+  topp <- ipitchers
+  mHR <- mean(toph$pHR)
+  sdHR <- sd(toph$pHR)
+  mR <- mean(toph$pR)
+  sdR <- sd(toph$pR)
+  mSB <- mean(toph$pSB)
+  sdSB <- sd(toph$pSB)
+  mRBI <- mean(toph$pRBI)
+  sdRBI <- sd(toph$pRBI)
+  
+  mW <- mean(topp$pW)
+  sdW <- sd(topp$pW)
+  mSO <- mean(topp$pSO)
+  sdSO <- sd(topp$pSO)
+  mHLD <- mean(topp$pHLD)
+  sdHLD <- sd(topp$pHLD)
+  mSV <- mean(topp$pSV)
+  sdSV <- sd(topp$pSV)    
+  
+  mAvg <- mean(toph$pAVG)
+  sdAvg <- sd(toph$pAVG)
+  ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
+  toph <- mutate(toph,xH = pH-(pAB * mAvg))
+  mxH <- mean(toph$xH)
+  sdxH <- sd(toph$xH)
+  
+  mERA <- mean(topp$pERA)
+  sdERA <- sd(topp$pERA)
+  ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
+  topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
+  mxER <- mean(topp$xER)
+  sdxER <- sd(topp$xER)
+  
+  ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                     zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+  ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
+  ihitters <- arrange(ihitters,-zScore)
+  
+  ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                      zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+  ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  ipitchers <- arrange(ipitchers,-zScore)
+  
+  # Add the total thitter value to everyone
+  #toph <- head(toph,thitters)
+  #toph$zScore <- toph$zScore - last(toph$zScore)
+  # Add pitchers
+  #topp <- head(topp,tpitchers)
+  #topp$zScore <- topp$zScore - last(topp$zScore)
+    
+  bhitters <- select(ihitters,playerid,zScore)
+  bpitchers <- select(ipitchers,playerid,zScore)
+  
+  list(bhitters,bpitchers)
+}
+
+
 
