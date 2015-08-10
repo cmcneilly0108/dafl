@@ -164,7 +164,7 @@ mp <- myteam[[2]]
 
 # Create worksheets
 allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pHLD==0,pSV==0, pGS > 0) %>%
-  select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
 allClosers <- FAP %>% arrange(-pSV,-S,-pDFL) %>% filter(pSV>0) %>%
   select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
@@ -179,7 +179,7 @@ allHolds2 <- FAP %>% filter(pHLD>0,pK.9 > 9,pDFL > 0) %>%
   select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
 TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 8) %>%
-  select(Player,Pos,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
 
 # Closer report
 c <- readHTMLTable(bp,stringsAsFactors=F)
@@ -254,14 +254,14 @@ st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'16'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('My Hitters',mh,st,c(2,18,19))
 st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'18'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('My Pitchers',mp,st,c(2,20,21))
-st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'16'=csRatioColumn)
-tabs[[length(tabs)+1]] <- list('Top Hitters',TopFAH,st,c(2,18,19))
-st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'17'=csRatioColumn)
-tabs[[length(tabs)+1]] <- list('SP',allsp,st,c(2,20,21))
+st <- list('4'=csMoneyColumn,'5'=csRatioColumn,'17'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('Top Hitters',TopFAH,st,c(2,19,20))
+st <- list('4'=csMoneyColumn,'5'=csRatioColumn,'18'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('SP',allsp,st,c(2,21,22))
 st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'18'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('Cl',allClosers,st,c(2,20,21))
-st <- list('2'=csMoneyColumn,'3'=csRatioColumn,'19'=csRatioColumn)
-tabs[[length(tabs)+1]] <- list('FanCl',availCL,st,c(2,20,21))
+st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'20'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('FanCl',availCL,st,c(2,22,23))
 st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'18'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('Hld',allHolds,st,c(2,20,21))
 st <- list('4'=csMoneyColumn,'5'=csRatioColumn)
