@@ -10,22 +10,54 @@ library("XML")
 library("ggplot2")
 library("reshape2")
 library("lubridate")
-
+library("zoo")
 
 source("./daflFunctions.r")
 
 
+fd <- file.info("steamerHROS.csv")$mtime
+cd <- Sys.time()
+dt <- difftime(cd, fd, units = "hours")
+if (dt > 10) {
+  system("./pullSteamerROS.sh")
+  system("./pullCBS.sh")
+}
+
+
 # Data that needs to be updated manually
-Week <- 18
+#aWeek <- 21
+# 04/05/2015
+aWeek <- as.integer((as.integer(today() - as.Date("2015-04-05"))-1)/7) + 1
 tWeeks <-26
-bp <- "http://www.fangraphs.com/fantasy/bullpen-report-august-6-2015/"
+bp <- "http://www.fangraphs.com/fantasy/bullpen-report-august-25-2015/"
 ytdf <- "AllPYTD.csv"
 # End manual update data
 
-
-#Create Charts
+#Load DAFL standings file
 standings <- read.csv("DAFLWeeklyStandings.csv",stringsAsFactors=FALSE)
 standings$Rank <- as.numeric(str_extract(standings$Rank,'[0-9]+'))
+#Update DAFL standings file
+dstand <- read.csv('overall.csv',stringsAsFactors=FALSE,nrows=15) %>% select(Rank,Team,Total)
+ddeets <- read.csv('overall.csv',stringsAsFactors=FALSE,header=FALSE,skip=17)
+ddeets <- select(ddeets,-V3,-V4,-V5)
+# Need to convert format of columns
+
+dfl <- split(ddeets, (0:nrow(ddeets) %/% 16))
+dfl <- lapply(dfl,function(x) {colnames(x) = x[1, ]
+                               x <- x[-1,]
+                               x[[2]] <- as.numeric(x[[2]])
+                               x})
+dfl <- dfl[-11]
+cstand <- Reduce(function(x, y) inner_join(x,y,by=c('Team')), c(list(dstand),dfl))
+cstand$Week <- aWeek
+nicks <- read.csv("nicknames.csv",stringsAsFactors=FALSE)
+cstand <- inner_join(cstand,nicks,by=c('Team')) %>% select(-Team) %>% rename(Team=Short)
+
+standings <- filter(standings,Week != aWeek)
+standings <- rbind(standings,cstand)
+write.csv(standings,"DAFLWeeklyStandings.csv",row.names=FALSE)
+
+#Create Charts
 leaders <- standings %>% filter(Week == max(Week), Rank <= 5 | Team == 'Cricket') %>% select(Team)
 #l2 <- ifelse('Cricket' %in% leaders$Team,leaders$Team,append(leaders$Team,'Cricket'))
 # add category rank columns
@@ -51,15 +83,6 @@ print(g2)
 print(g3)
 dev.off()
 
-fd <- file.info("steamerHROS.csv")$mtime
-cd <- Sys.time()
-dt <- difftime(cd, fd, units = "hours")
-if (dt > 10) {
-  system("./pullSteamerROS.sh")
-  system("./pullCBS.sh")
-}
-
-
 #Load Steamer rest of season projections
 hitters <- read.fg("steamerHROS.csv")
 hitters$Pos <- replace(hitters$Pos,is.na(hitters$Pos),'DH')
@@ -78,20 +101,21 @@ AllH <- inner_join(Allhitters,hitters,by=c('playerid'),copy=FALSE)
 Allpitchers <- read.cbs("AllPitchers.csv")
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
-ytdp <- read.cbs(ytdf)
-ytdh <- read.cbs("AllHYTD.csv")
+ytdp <- read.cbs(ytdf) %>% filter(INN > 0)
+ytdh <- read.cbs("AllHYTD.csv") %>% filter(AB > 0)
 ytdp2 <- select(ytdp,playerid,HD) %>% rename(yHLD = HD)
 
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
 AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE)
 # give 60/40 weight to YTD/3WKS
-AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-Week)*.2)+((yHLD/Week)*(tWeeks-Week)*.8)),0)
+AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-aWeek)*.2)+((yHLD/aWeek)*(tWeeks-aWeek)*.8)),0)
+AllP$pHLD <- ifelse(is.na(AllP$pHLD),0,AllP$pHLD)
 AllP$pSGP <- pitSGP(AllP)
 
 #Generate dollars
-#nlist <- preDollars(AllH,AllP,data.frame(),(1-(Week/tWeeks)),50,40)
-nlist <- preLPP(AllH,AllP,data.frame(),(1-(Week/tWeeks)),50,40)
+#nlist <- preDollars(AllH,AllP,data.frame(),(1-(aWeek/tWeeks)),50,40)
+nlist <- preLPP(AllH,AllP,data.frame(),(1-(aWeek/tWeeks)),50,40)
 bhitters <- nlist[[1]]
 bpitchers <- nlist[[2]]
 
@@ -128,7 +152,7 @@ AllP <- rename(AllP,ytdscore=zScore)
 
 
 # # # Generate positional advantage zScores
-r <- zScoresST(AllH,AllP)
+r <- zScores(AllH,AllP)
 oh3 <- r[[1]]
 op3 <- r[[2]]
 oh3 <- rename(oh3,pScore = zScore)
@@ -149,6 +173,19 @@ names(inj) <- sub(" ", ".", names(inj))
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
 
+# Add season standings and L10 for Holds guys
+stand <- readHTMLTable("http://www.cbssports.com/mlb/standings",stringsAsFactors=F)
+sdf <- lapply(stand,function(x) {is.data.frame(x) && ncol(x) == 15})
+stand <- stand[unlist(sdf)]
+stand <- do.call("rbind", stand)
+colnames(stand) = stand[1, ]
+stand <- mutate(stand,Season=str_c(W,L,sep='-'))
+stand <- select(stand,Team,Season,L10) %>% filter(!str_detect(Team,'Team'))
+stand$Team <- str_trim(str_replace(stand$Team,"\\(.+",""))
+abbrev <- read.csv('teamAb.csv',stringsAsFactors=FALSE)
+stand <- left_join(stand,abbrev) %>% select(-Team)
+AllP <- left_join(AllP,stand,by=c('MLB'))
+
 
 
 # Create Free Agents
@@ -161,6 +198,7 @@ FAP <- select(FAP,-Team)
 myteam <- pullTeam('Liquor Crickets')
 mh <- myteam[[1]]
 mp <- myteam[[2]]
+
 
 # Create worksheets
 allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pHLD==0,pSV==0, pGS > 0) %>%
@@ -176,7 +214,7 @@ allHolds <- FAP %>% filter(pHLD>0) %>%
 
 allHolds2 <- FAP %>% filter(pHLD>0,pK.9 > 9,pDFL > 0) %>%
   arrange(-pDFL) %>%
-  select(Player,Pos,pDFL,pSGP, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
+  select(Player,Pos,pDFL,pSGP, MLB, Season, L10, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
 TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 8) %>%
   select(Player,Pos,Age,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,BA,hotscore,Injury,Expected.Return)
@@ -206,7 +244,6 @@ availCL <- inner_join(crep,FAP,by=c('Player'),copy=FALSE) %>% arrange(-pDFL) %>%
 
 
 # TALENT Tab - Calculate total SGPs per team, rank
-nicks <- read.csv("nicknames.csv",stringsAsFactors=FALSE)
 st <- filter(standings,Week == max(Week)) %>% mutate(Short = Team, Actual = Rank) %>%
   select(Short,Actual) %>% inner_join(nicks,by=c('Short'))
 
@@ -241,6 +278,27 @@ pp <- AllPr %>% filter(!is.na(rookRank) & Team=='Free Agent') %>% arrange(-pDFL,
   select(Player,MLB,rookRank,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 
+# Add Salary, Contract to players
+# create cron job to pull file
+s <- read.csv("salaryinfo.csv",header=FALSE,stringsAsFactors=FALSE)
+colnames(s) <- c('Player','Pos','Salary','Contract','Rank','Extra')
+sal <- select(s,-Rank,-Extra) %>% 
+  filter(!(Player %in% c('Batters','Pitchers','Player','TOTALS')))
+#sal <- mutate(sal,Team = lag(Player))
+#sal$Team <- ifelse(str_detect(sal$Team,'|'),lag(sal$Team),sal$Team)
+sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Player),NA)) %>% filter(str_length(Pos)>0)
+#sal$Team <- ifelse(str_length(sal$Team)==0,lag(sal$Team),sal$Team)
+sal$Team <- na.locf(sal$Team)
+sal <- mutate(sal, MLB = pullMLB(Player))
+sal$Player <- unlist(lapply(sal$Player,stripName))
+sal$Salary <- as.integer(sal$Salary)
+sal$Contract <- as.integer(sal$Contract)
+sal <- addPlayerid(sal) %>% select(playerid,Salary,Contract)
+AllH <- left_join(AllH,sal,by=c('playerid'))
+AllP <- left_join(AllP,sal,by=c('playerid'))
+
+
+
 #Create xlsx with tabbed data
 wkly <- createWorkbook()
 csRatioColumn <- CellStyle(wkly, dataFormat=DataFormat("##0.00"))
@@ -264,6 +322,8 @@ st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'20'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('FanCl',availCL,st,c(2,22,23))
 st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'18'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('Hld',allHolds,st,c(2,20,21))
+st <- list('3'=csMoneyColumn,'4'=csRatioColumn,'21'=csRatioColumn)
+tabs[[length(tabs)+1]] <- list('Hld2',allHolds2,st,c(2,23,24))
 st <- list('4'=csMoneyColumn,'5'=csRatioColumn)
 tabs[[length(tabs)+1]] <- list('Prosp P',pp,st,c(2,12,13))
 tabs[[length(tabs)+1]] <- list('Prosp H',hp,st,c(2,12,13))
@@ -309,5 +369,8 @@ saveWorkbook(wkly,"weeklyUpdate.xlsx")
 # #  summarize(Count = length(Pos))
 
 # Problems - rosscore is only scoring top players, differences in sample size
-blh <- arrange(AllH,-diffscore) %>% filter(is.na(Injury),diffscore > 0)
-blp <- arrange(AllP,-diffscore) %>% filter(is.na(Injury),diffscore > 0)
+#blh <- arrange(AllH,-diffscore) %>% filter(is.na(Injury),diffscore > 0)
+#blp <- arrange(AllP,-diffscore) %>% filter(is.na(Injury),diffscore > 0)
+
+#unPit <- arrange(AllP,-diffscore) %>% filter(!(Team %in% c('Free Agent','Liquor Crickets')),diffscore > 0) %>% select(Player, Team, Salary, Contract, pDFL, diffscore, hotscore, ytdscore,pScore)
+#unHit <- arrange(AllH,-diffscore) %>% filter(!(Team %in% c('Free Agent','Liquor Crickets')),diffscore > 0) %>% select(Player, Team, Salary, Contract, pDFL, diffscore, hotscore, ytdscore,pScore)
