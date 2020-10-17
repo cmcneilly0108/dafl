@@ -1,0 +1,112 @@
+---
+title: "Update Pre-Season Rosters"
+output: html_notebook
+---
+
+Files to create first:
+- 20xxsalaryinfo.csv - copy and rename salaryinfo.csv
+- 20xxTransactions.csv - http://dafl.baseball.cbssports.com/transactions/2019/all/all_but_lineup
+- 20xxProtectionLists.csv - ???
+- 20xxsalaryOverrides.csv - 
+- 20xxRosters.csv - make sure to change the year of the output file first
+
+
+
+
+```{r}
+library("tidyr")
+library("splitstackshape")
+#library("xlsx")
+library("stringr")
+library("XML")
+#library("ggplot2")
+library("reshape2")
+#library("lubridate")
+library("zoo")
+#library("xml2")
+library("dplyr")
+
+source("./daflFunctions.r")
+
+```
+
+Step 1:  Load in last year's final roster file
+
+NOTE:  When making manual changes to salaries/contracts, only edit this file!!!
+```{r}
+
+lysalaries <- createProtection("2019salaryinfo.csv")
+
+tysalaries <- lysalaries
+
+```
+
+Next, process the transaction file and update FA mistakes
+```{r}
+# Code to take all the Won transactions and update the Salaries
+fabids <- read.csv("2019Transactions.csv",stringsAsFactors=FALSE)
+fabids <- cSplit(fabids,"Players",sep="\n",direction="long")
+#BUG - Player column is empty
+
+fabids$Player <- unlist(lapply(fabids$Players,swapName4))
+fabids$fTeam <- unlist(lapply(fabids$Players,tradeFrom))
+fabids <- select(fabids,Team,Player,Acquired=Effective,fTeam)
+fabids <- filter(fabids,str_detect(fTeam,'Won'))
+fabids <- filter(fabids,!str_detect(fTeam,'\\$0'))
+fabids <- mutate(fabids,Salary=as.numeric(str_match(fTeam,"\\$([0-9]+)")[,2]))
+fabids <- select(fabids,-fTeam)
+fabids <- fabids[!duplicated(fabids$Player),]
+
+f2 <- select(fabids,Player,NSalary = Salary)
+r3 <- left_join(tysalaries,f2)
+r3$NSalary <- ifelse(is.na(r3$NSalary),r3$Salary,r3$NSalary)
+tysalaries <- select(r3,-Salary,Salary=NSalary)
+
+```
+
+Questionable Players = players where the Contract year is less than how they started the year, or the salary is different.  If the Contract is different, its usually because the player was dropped and then picked back up later.
+```{r}
+
+# Find salary errors
+# need to switch names from lastyr
+# join and relabel columns
+# delete if year hasn't increased by 1
+lastyr <- read.csv("2019ProtectionLists.csv",stringsAsFactors=FALSE)
+lastyr$playerid <- as.character(lastyr$playerid)
+lastyr <- dplyr::rename(lastyr,PContract=Contract,PSalary=Salary)
+lastyr <- select(lastyr,playerid,PSalary,PContract)
+
+check <- inner_join(tysalaries,lastyr)
+check2 <- filter(check,Contract <= PContract,Salary != PSalary)
+write.csv(check2,'questionable.csv')
+
+```
+
+Manual overrides step - after all this, there are still mistakes that are reported.  Collect them and manually apply at the end - this is before incrementing salaries!
+```{r}
+manual <- read.csv("2020salaryOverrides.csv",stringsAsFactors=FALSE)
+manual$playerid <- as.character(manual$playerid)
+manual <- select(manual,playerid,osalary=Salary,ocontract=Contract)
+
+r3 <- left_join(tysalaries,manual)
+r3 <- mutate(r3,Salary=ifelse(is.na(r3$osalary),r3$Salary,r3$osalary))
+r3 <- mutate(r3,Contract=ifelse(is.na(r3$ocontract),r3$Contract,r3$ocontract))
+
+tysalaries <- select(r3,-osalary,-ocontract)
+
+
+```
+
+
+Finally, increment salaries and write out file.
+```{r}
+
+tysalaries$Contract <- tysalaries$Contract + 1
+tysalaries <- filter(tysalaries,Contract < 5)
+tysalaries <- mutate(tysalaries,Salary=ifelse(Contract==3,Salary+5,ifelse(Contract==4,Salary+10,Salary)))
+
+tysalaries <- select(tysalaries,Player,Pos,Team,Salary,Contract,MLB,playerid)
+write.csv(tysalaries,'2020Rosters1.csv')
+
+```
+
