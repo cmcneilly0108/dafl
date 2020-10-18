@@ -4,7 +4,7 @@
 hpratio <- .40
 
 bullpen <- "http://www.fangraphs.com/fantasy/bullpen-report-april-25-2015/"
-nicks <- read.csv("nicknames.csv",stringsAsFactors=FALSE)
+nicks <- read.csv("../data/nicknames.csv",stringsAsFactors=FALSE)
 nicks <- mutate(nicks,Avail=str_sub(Team,1,6))
 
 getd <- function(c) {
@@ -12,19 +12,19 @@ getd <- function(c) {
 }
 
 loadPast <- function() {
-  f1 <- read.csv("fs2019.csv")
+  f1 <- read.csv("../data/fs2019.csv")
   res <- genDenoms(f1)
   eras <- f1$ERA
   avgs <- f1$AVG
-  f1 <- read.csv("fs2018.csv")
+  f1 <- read.csv("../data/fs2018.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("fs2017.csv")
+  f1 <- read.csv("../data/fs2017.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("fs2016.csv")
+  f1 <- read.csv("../data/fs2016.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
@@ -615,14 +615,14 @@ addPlayerid <- function(df) {
   gname <- left_join(dfleft, m2,by=c('Player'))
   gname <- select(gname,-MLB.x) %>% dplyr::rename(MLB=MLB.y)
 
-  rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE, encoding="UTF-8") %>% select(-X)
-  gname <- left_join(gname,rooks,by=c('Player'))
+  #rooks <- read.csv('2015RookieIDs.csv',stringsAsFactors=FALSE, encoding="UTF-8") %>% select(-X)
+  #gname <- left_join(gname,rooks,by=c('Player'))
 
-  gname <- dplyr::rename(gname,playerid = playerid.x)
+  #gname <- dplyr::rename(gname,playerid = playerid.x)
 
   #gname$playerid <- ifelse(is.na(gname$playerid),ifelse(is.na(gname$playerid.y),gname$Player,gname$playerid.y),
   #                         gname$playerid)
-  gname <- select(gname,-playerid.y)
+  #gname <- select(gname,-playerid.y)
 
   final <- rbind(gfull,gname)
   #final$playerid <- ifelse(is.na(final$playerid),final$Player,final$playerid)
@@ -715,7 +715,7 @@ avgs <- l1[[2]]
 r3 <- l1[[3]]
 
 # Load Master file
-master <- read.csv("master.csv",stringsAsFactors=FALSE, encoding="UTF-8")
+master <- read.csv("../master.csv",stringsAsFactors=FALSE, encoding="UTF-8")
 # Use fangraphs id as player_id
 master <- dplyr::rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
 master <- mutate(master, birth_year = as.integer(str_sub(birth_date,1,4)))

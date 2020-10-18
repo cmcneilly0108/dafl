@@ -42,7 +42,7 @@ year <- "2020"
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
 #pl <- read.csv("2019Accrued.csv",header=FALSE,stringsAsFactors=FALSE)
-pl <- read.csv(str_c(year,"Accrued.csv"),header=FALSE,stringsAsFactors=FALSE)
+pl <- read.csv(str_c("../",year,"Accrued.csv"),header=FALSE,stringsAsFactors=FALSE)
 players <- cleanRosters(pl)
 
 hitters <- filter(players,porh=='Batters') %>%  select(Player,Pos,Salary,Contract,S1,S2,S3,S4,S5,S6,Team,playerid)
@@ -77,7 +77,7 @@ RTot <- inner_join(RH,RP,by=c('Team')) %>%
 
 # Week 1 rosters
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:f/salary%20info/
-drosters <- read.csv(str_c(year,"DraftResults.csv"),header=FALSE,stringsAsFactors=FALSE)
+drosters <- read.csv(str_c("../",year,"DraftResults.csv"),header=FALSE,stringsAsFactors=FALSE)
 colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
 drosters <- select(drosters,-Rank,-E1) %>%
   filter(!(Player %in% c('Player','TOTALS')))
@@ -101,7 +101,7 @@ pitchers$asrc <- ifelse(pitchers$asrc=='protect' & pitchers$Contract==1,'draft',
 
 # Load trades file
 # http://dafl.baseball.cbssports.com/transactions/all/trades/?print_rows=9999
-trades <- read.csv(str_c(year,"trades.csv"),stringsAsFactors=FALSE)
+trades <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
 
 # new - need to filter for only 'Traded' rows
 trades <- filter(trades,str_detect(Players,'Traded'))
@@ -117,7 +117,7 @@ hitters$asrc <- ifelse(is.na(hitters$Traded),hitters$asrc,'trade')
 pitchers$asrc <- ifelse(is.na(pitchers$Traded),pitchers$asrc,'trade')
 
 # Lets add injuries!
-injured <- read.csv(str_c(year,"trades.csv"),stringsAsFactors=FALSE)
+injured <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
 injured <- filter(injured,str_detect(Players,'Injured'))
 numinj <- injured %>% count(Team) %>% rename(injured = n)
 #numinj <- numinj %>% mutate(irank = rank(injured))
@@ -146,11 +146,11 @@ pitchers <- arrange(pitchers,-Value)
 
 
 #Load DAFL standings file
-standings <- read.csv("DAFLWeeklyStandings.csv",stringsAsFactors=FALSE)
+standings <- read.csv("../DAFLWeeklyStandings.csv",stringsAsFactors=FALSE)
 standings$Rank <- as.numeric(str_extract(standings$Rank,'[0-9]+'))
 final <- filter(standings,Week==max(Week)) %>% select(Actual=Rank,Short=Team)
 
-nicks <- read.csv("nicknames.csv",stringsAsFactors=FALSE)
+nicks <- read.csv("../data/nicknames.csv",stringsAsFactors=FALSE)
 fstand <- inner_join(final,nicks,by=c('Short')) %>% select(-Short) 
 
 
@@ -203,7 +203,7 @@ addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 11,gridE
 
 setColWidths(review, 'valueByAcq', cols = 1:25, widths = "auto")
 
-saveWorkbook(review,str_c(year,"seasonReview.xlsx"),overwrite = TRUE)
+saveWorkbook(review,str_c("../",year,"seasonReview.xlsx"),overwrite = TRUE)
 
 
 # Deep Dive
