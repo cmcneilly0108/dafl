@@ -169,6 +169,17 @@ seasonResults <- mutate(seasonResults,overall = draft_DFL+faab_DFL+protect_DFL+t
 seasonResults <- left_join(seasonResults,numinj)
 seasonResults <- seasonResults %>% replace_na(list(injured=0)) %>%  mutate(irank = rank(injured))
 
+
+# Top FAAB
+tfh <- hitters %>% filter(asrc=="faab") %>% select(Player,Pos,Team,DFL)
+tfp <- pitchers %>% filter(asrc=="faab") %>% select(Player,Pos,Team,DFL)
+
+topfaab <- bind_rows(tfh,tfp) %>% arrange(-DFL)
+
+
+
+
+
 #Create xlsx with tabbed data
 review <- createWorkbook()
 headerStyle <- createStyle(halign = "CENTER", textDecoration = "Bold")
@@ -189,5 +200,13 @@ addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 11,gridE
 
 setColWidths(review, 'valueByAcq', cols = 1:25, widths = "auto")
 
+addWorksheet(review,'topFAABers')
+writeData(review,'topFAABers',topfaab,headerStyle = headerStyle)
+addStyle(review, 'topFAABers',style = csMoneyColumn,rows = 2:250, cols = 4,gridExpand = TRUE)
+setColWidths(review, 'topFAABers', cols = 1:25, widths = "auto")
+
+
+
 saveWorkbook(review,str_c("../",year,"seasonReview.xlsx"),overwrite = TRUE)
+
 
