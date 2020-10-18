@@ -1,9 +1,6 @@
 # Create accrued file
 #   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
 #   2019Accrued.csv
-# Remember to update the week 1 rosters file
-#   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:f/salary%20info/
-#   2019DraftResults.csv
 # Trades file!
 #   http://dafl.baseball.cbssports.com/transactions/all/trades/?print_rows=9999
 #   2019trades.csv
@@ -75,29 +72,25 @@ RTot <- inner_join(RH,RP,by=c('Team')) %>%
   mutate(tDFL = hDFL + piDFL,hRank = rank(-hDFL),pRank = rank(-piDFL)) %>%
   arrange(-tDFL)
 
-# Week 1 rosters
-# http://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:f/salary%20info/
-drosters <- read.csv(str_c("../",year,"DraftResults.csv"),header=FALSE,stringsAsFactors=FALSE)
-colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
-drosters <- select(drosters,-Rank,-E1) %>%
-  filter(!(Player %in% c('Player','TOTALS')))
-drosters <- mutate(drosters,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
-  fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
-drosters <- mutate(drosters,Team=ifelse((Player %in% c('')),Avail,NA)) %>% 
-  fill(Team) %>% filter(!(Player %in% c('')))
-drosters <- mutate(drosters, MLB = pullMLB(Player))
-drosters$Player <- unlist(lapply(drosters$Player,stripName))
-drosters <- addPlayerid(drosters)
-drosters <- mutate(drosters,asrc='protect',Salary=as.integer(Salary),Contract=as.integer(Contract))
-dc <- select(drosters,playerid,asrc)
 
-# join and create w1 - which players were on week 1 roster?
-hitters <- left_join(hitters,dc)
-hitters$asrc <- replace(hitters$asrc,is.na(hitters$asrc),'faab')
-hitters$asrc <- ifelse(hitters$asrc=='protect' & hitters$Contract==1,'draft',hitters$asrc)
-pitchers <- left_join(pitchers,dc)
-pitchers$asrc <- replace(pitchers$asrc,is.na(pitchers$asrc),'faab')
-pitchers$asrc <- ifelse(pitchers$asrc=='protect' & pitchers$Contract==1,'draft',pitchers$asrc)
+# Now create the asrc field
+# Load ProtectionList file - 'protect'
+# Load DraftRecap file - 'draft'
+# Everything else - 'faab'
+prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
+prot <- prot %>% mutate(asrc='protect') %>% select(playerid,asrc)
+hitters <- left_join(hitters,prot)
+pitchers <- left_join(pitchers,prot)
+
+draft <- read.csv(str_c("../data/",year,"DraftRecap.csv"),stringsAsFactors=FALSE)
+draft <- draft %>% mutate(dft='draft') %>% select(Player,dft)
+hitters <- left_join(hitters,draft)
+pitchers <- left_join(pitchers,draft)
+
+
+hitters$asrc <- coalesce(hitters$asrc,hitters$dft,"faab")
+pitchers$asrc <- coalesce(pitchers$asrc,pitchers$dft,"faab")
+
 
 # Load trades file
 # http://dafl.baseball.cbssports.com/transactions/all/trades/?print_rows=9999
@@ -131,13 +124,6 @@ ta <- rbind(taH,taP) %>% group_by(Team) %>% summarize(taway =sum(taway))
 hitters <- mutate(hitters, Salary = as.integer(Salary))
 pitchers <- mutate(pitchers, Salary = as.integer(Salary))
 
-dr2 <- select(drosters,Player,Team,Salary,Contract)
-hitters <- left_join(hitters,dr2,by=c('Player','Team'))
-hitters <- mutate(hitters,Salary=ifelse((is.na(Salary.y) | Salary.y == 1),Salary.x,Salary.y))
-hitters <- mutate(hitters,Contract=ifelse(is.na(Contract.y),Contract.x,Contract.y))
-pitchers <- left_join(pitchers,dr2,by=c('Player','Team'))
-pitchers <- mutate(pitchers,Salary=ifelse((is.na(Salary.y) | Salary.y == 1),Salary.x,Salary.y))
-pitchers <- mutate(pitchers,Contract=ifelse(is.na(Contract.y),Contract.x,Contract.y))
 
 hitters <- mutate(hitters, Value = DFL - Salary)
 pitchers <- mutate(pitchers, Value = DFL - Salary)
@@ -205,23 +191,3 @@ setColWidths(review, 'valueByAcq', cols = 1:25, widths = "auto")
 
 saveWorkbook(review,str_c("../",year,"seasonReview.xlsx"),overwrite = TRUE)
 
-
-# Deep Dive
-lcp <- filter(pitchers, Team=='Liquor Crickets') %>% 
-  select(Player,Pos,Salary=Salary.x,Contract,DFL,asrc) %>% 
-  mutate(Value = DFL - Salary) %>% arrange(-Value)
-
-# BUG - no K's in pitcher file!!!
-# BUG - pitcher DFL values don't make sense.  Hopefully because of above
-
-# # Read in draftAnalysis
-# da <- read.xlsx("draftAnalysis.xlsx",2)
-# da <- select(da,Team=Team,prep=tDFL)
-# seasonResults2 <- inner_join(seasonResults,da)
-# da <- read.xlsx("draftAnalysis.xlsx",3)
-# da <- select(da,Team=Team,pred=tDFL)
-# seasonResults2 <- inner_join(seasonResults2,da)
-#
-# seasonResults2 <- mutate(seasonResults2,deltap = protect - prep,deltad = draft-pred) %>%
-#   select(Team,overall,protect,prank,prep,deltap,draft,drank,pred,deltad,faab,frank,trade,trank) %>% arrange(-overall)
-#
