@@ -1,0 +1,49 @@
+
+```{r}
+library(tidyr)
+source("./daflFunctions.r")
+```
+
+2019 Draft Results file is incorrect!  Only has active players (17)
+```{r}
+drosters <- read.csv("2018DraftResults.csv",header=FALSE,stringsAsFactors=FALSE)
+colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
+drosters <- select(drosters,-Rank,-E1) %>%
+  filter(!(Player %in% c('Player','TOTALS')))
+drosters <- mutate(drosters,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
+  fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
+drosters <- mutate(drosters,Team=ifelse((Player %in% c('')),Avail,NA)) %>% 
+  fill(Team) %>% filter(!(Player %in% c('')))
+drosters <- mutate(drosters, MLB = pullMLB(Player),hp = ifelse(Pos=='P','P','H'),
+                   Salary = as.integer(Salary))
+drosters$Player <- unlist(lapply(drosters$Player,stripName))
+
+```
+2019 = 60/40
+2018 = 54/46
+2017 = 62/38
+2016 = 61/39
+
+```{r}
+total <- sum(drosters$Salary,na.rm=TRUE)
+res <- drosters %>% group_by(hp) %>% tally(Salary)
+res <- mutate(res,share=n/total)
+res
+```
+Now determine how many hitters vs pitchers on opening day rosters.
+```{r}
+drosters %>% filter(Pos=='P') %>% nrow()/16
+drosters %>% filter(Pos!='P') %>% nrow()/16
+```
+2018 = 12/13
+
+Lets try with Craig's file
+```{r}
+cfile <- read.csv("DraftRecap2019.csv",stringsAsFactors=FALSE)
+```
+2019
+Only 2 pitchers were drafted in 2019 > $50 - $68, $56 - and then $45
+There were 3 protected from earlier years > $50 - 70, 67, 52 - and then nothing until 23
+
+2020
+Only 1 pitcher protected > 50 - 56 (Verlander)

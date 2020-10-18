@@ -1,0 +1,36 @@
+
+```{r}
+library("dplyr")
+library("ggplot2")
+library("directlabels")
+library("here")
+set_here()
+```
+
+```{r}
+
+htrend <- read.csv('hTrend.csv',stringsAsFactors=FALSE)
+lastday <- filter(htrend,Date==sort(htrend$Date,decreasing = TRUE)[1])
+top <- unique(lastday$Player)[1:7]
+ht1 <- subset(htrend,Player %in% top)
+ht2 <- subset(htrend,!(Player %in% top))
+
+```
+
+```{r}
+chrt1 <- ggplot(data=ht1,
+             aes(x=Date, y=hotscore, group=Player,color=Player)) +
+  geom_dl(aes(label=Player),method="top.bumpup") + theme(legend.position="none") +
+  geom_line(size=1) + geom_point(size=1) + labs(title='Hitter Trend',y='Hotness')
+
+chrt2 <- ggplot(data=ht2,
+             aes(x=Date, y=hotscore, group=Player,color=Player)) +
+  geom_dl(aes(label=Player),method="top.bumpup") + theme(legend.position="none") +
+  geom_line(size=1) + geom_point(size=1) + labs(title='Hitter Trend',y='Hotness')
+
+pdf("hitterTrending.pdf")
+print(chrt1)
+print(chrt2)
+dev.off()
+```
+

@@ -1,0 +1,140 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library("dplyr")
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+processRoster <- function(fn,yr) {
+  drosters <- read.csv(fn,header=FALSE,stringsAsFactors=FALSE)
+  colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
+  drosters <- select(drosters,-Rank,-E1) %>%
+    filter(!(Player %in% c('Player','TOTALS')))
+  drosters <- mutate(drosters,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
+    fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
+  drosters <- mutate(drosters,Team=ifelse((Player %in% c('')),Avail,NA)) %>% 
+    fill(Team) %>% filter(!(Player %in% c('')))
+  drosters$Salary <- as.integer(drosters$Salary) %>% replace_na(1)
+  drosters <- mutate(drosters,Year=yr)
+  drosters
+}
+
+```
+
+Add 2016-2018 together, add new year column
+B/P split
+P - >40,30-40,20-30, below 20
+H - similar
+```{r}
+# drosters <- read.csv("2018DraftResults.csv",header=FALSE,stringsAsFactors=FALSE)
+# colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
+# drosters <- select(drosters,-Rank,-E1) %>%
+#   filter(!(Player %in% c('Player','TOTALS')))
+# drosters <- mutate(drosters,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
+#   fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
+# drosters <- mutate(drosters,Team=ifelse((Player %in% c('')),Avail,NA)) %>% 
+#   fill(Team) %>% filter(!(Player %in% c('')))
+# drosters$Salary <- as.integer(drosters$Salary) %>% replace_na(1)
+drosters <- bind_rows(processRoster("2018DraftResults.csv",2018),
+                      processRoster("2017DraftResults.csv",2017),
+                      processRoster("2016DraftResults.csv",2016))
+```
+
+```{r}
+res <- drosters %>% group_by(Year,porh) %>% summarise(spent = sum(Salary))
+res
+```
+2018 = 46%
+2017 = 38%
+2016 = 39%
+
+P - >40,30-40,20-30, below 20
+```{r}
+hitters <- drosters %>% filter(porh=="Batters",Contract==1) %>%
+  mutate(SalCat = if_else(Salary < 20,"$1 - $19",
+                          if_else(Salary < 30,"$20 - $30",
+                                  if_else(Salary < 40,"$30 - $40","$40+"))))
+
+pitchers <- drosters %>% filter(porh=="Pitchers",Contract==1,str_detect(Player,"SP")) %>%
+  mutate(SalCat = if_else(Salary < 20,"$1 - $19",
+                          if_else(Salary < 30,"$20 - $30",
+                                  if_else(Salary < 40,"$30 - $40","$40+"))))
+pitchers
+```
+
+```{r}
+res <- pitchers %>% count(Year,SalCat) %>% group_by(Year) %>% mutate(Percentage = n/sum(n)*100) 
+arrange(res,-Year,desc(SalCat))
+```
+
+```{r}
+res <- hitters %>% count(Year,SalCat) %>% group_by(Year) %>% mutate(Percentage = n/sum(n)*100) 
+arrange(res,-Year,desc(SalCat))
+```
+Splits by protected vs auctioned
+```{r}
+#ggplot(pitchers, aes(x=Salary,color=Year)) + geom_histogram(binwidth=10)
+df2 <- hitters %>% add_count(Year) %>% group_by(Year,n) %>% tally(Salary)
+colnames(df2) <- c('Year','nProtected','Spent')
+teams <- c(15,15,16)
+df2$Teams <- teams
+df2
+```
+
+
+Total pitchers by bucket
+2018 - 10 > 30, 13 20-30
+2017 - 6 > 30, 5 20-30
+2016 - 8 > 30, 4 20-30
+
+So far in 2019,
+2019 - 3 > 30, 5 20-30
+
+```{r}
+cpitchers <- drosters %>% filter(porh=="Pitchers",str_detect(Player,"SP")) %>%
+  mutate(SalCat = if_else(Salary < 20,"$1 - $19",
+                          if_else(Salary < 30,"$20 - $30",
+                                  if_else(Salary < 40,"$30 - $40","$40+"))))
+res <- cpitchers %>% count(Year,SalCat) %>% group_by(Year) %>% mutate(Percentage = n/sum(n)*100) 
+arrange(res,-Year,desc(SalCat))
+
+```
+
+```{r}
+prosters <- read.csv("2019ProtectionLists.csv",stringsAsFactors=FALSE)
+cpitchers <- prosters %>% filter(str_detect(Pos,"P")) %>%
+  mutate(SalCat = if_else(Salary < 20,"$1 - $19",
+                          if_else(Salary < 30,"$20 - $30",
+                                  if_else(Salary < 40,"$30 - $40","$40+"))))
+chitters <- prosters %>% filter(!str_detect(Pos,"P")) %>%
+  mutate(SalCat = if_else(Salary < 20,"$1 - $19",
+                          if_else(Salary < 30,"$20 - $30",
+                                  if_else(Salary < 40,"$30 - $40","$40+"))))
+
+res <- cpitchers %>% count(SalCat) %>% mutate(Percentage = n/sum(n)*100) 
+arrange(res,desc(SalCat))
+
+```
+
+```{r}
+# df2 <- chitters %>% add_count(Year) %>% group_by(Year,n) %>% tally(Salary)
+df3 <- chitters %>% add_count()  %>% group_by(n) %>% tally(Salary)
+colnames(df3) <- c('nProtected','Spent')
+# teams <- c(15,15,16)
+df3$Year <- 2019
+df3$Teams <- 16
+df3
+
+```
+
+```{r}
+hsums <- bind_rows(df2,df3)
+hsums <- mutate(hsums,ASpend = Spent/nProtected,left = Teams*13-nProtected)
+hsums
+```
+

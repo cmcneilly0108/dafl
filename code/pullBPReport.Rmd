@@ -1,0 +1,106 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library("openxlsx")
+library("stringr")
+library("dplyr")
+library("XML")
+library("ggplot2")
+library("reshape2")
+library("lubridate")
+library("zoo")
+library("xml2")
+library("rvest")
+library("tidyr")
+
+source("./daflFunctions.r")
+```
+
+```{r}
+#Get latest bullpen report
+f <- read_html('http://www.fangraphs.com/fantasy/category/bullpen-report/')
+#l <- xml_find_one(f,'//a[contains(@title,"Bullpen")]')
+l <- xml_find_first(f,'//a[contains(@title,"Bullpen")]')
+bp <- xml_attr(l,'href')
+
+df <- getbpReport(bp)
+
+```
+Get report for a specific date - '0520'.
+
+Example URL = "http://www.fangraphs.com/fantasy/bullpen-report-May-20-2018/"
+
+```{r}
+fnames <- dir("./holds/")
+#dates <- arrange(unique(lapply(fnames,function(x) {str_sub(x,start=str_length(x)-7,end=-5)})))
+dates <- lapply(fnames,function(x) {str_sub(x,start=str_length(x)-7,end=-5)}) %>% 
+  unique() %>% unlist() %>% sort()
+dates <- as.data.frame(dates)
+names(dates) <- c('dt')
+dates$wk <- 1:nrow(dates)
+
+#Start with filename
+#fn <- '2018wk05-0429'
+
+writeBP <- function(dstring) {
+  dt <- as.Date(dstring,'%m%d')
+  prefix <- 'http://www.fangraphs.com/fantasy/bullpen-report-'
+  url <- paste(prefix,format(dt, "%B-%d-%Y"),sep='')
+  
+  df <- getbpReport(bp)
+  write.csv(df,paste('2018-bpReport-',dstring,'.csv',sep=''))
+}
+
+```
+
+```{r}
+lapply(dates$date,writeBP)
+```
+
+```{r}
+#grab the dates
+#join in 4 files, add date column, append to full DS
+#save resulting DS
+
+allholds <- data.frame()
+
+createWeeklyHolds <- function(dstring, wk) {
+  fnames <- dir("./holds/",pattern=paste('.*',dstring,'.*',sep=''))
+  adv <- read.cbs(paste('./holds/',fnames[str_detect(fnames,'adv')],sep=''))
+  sta <- read.cbs(paste('./holds/',fnames[str_detect(fnames,'sta')],sep=''))
+  std <- read.cbs(paste('./holds/',fnames[str_detect(fnames,'std')],sep=''))
+  bpReport <- read.csv(paste('./holds/',fnames[str_detect(fnames,'bpReport')],sep=''))
+  
+  df <- inner_join(adv,std,by=c('playerid'))
+  df <- inner_join(df,sta,by=c('playerid'))
+  df <- left_join(df,bpReport,by=c('Player'))
+  
+  # clean up columns, add label
+  df$Score <- df$Score %>% replace_na(0)
+  df$wk <- wk
+  
+  weekResults <- df %>% select(Player=Player.x,APP,WHIP=WHIP.x,BAA,GS=GS.x,Score,Kd9,
+                               S=S.x,wk,
+                               HD=HD.x)
+  
+  weekResults
+  # add cumulative holds/stats, last 2 weeks (don't need this if use RNN)
+}
+```
+
+```{r}
+res <- createWeeklyHolds('0708',15)
+```
+- create one dataset for all weeks
+- add label
+- add cumulative stats?
+- train model
+```{r}
+ndf <- mutate(dates,createWeeklyHolds(dates,week))
+
+```
+
+
