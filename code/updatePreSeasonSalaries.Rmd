@@ -16,18 +16,16 @@ Files to create first:
 ```{r}
 library("tidyr")
 library("splitstackshape")
-#library("xlsx")
 library("stringr")
 library("XML")
-#library("ggplot2")
 library("reshape2")
-#library("lubridate")
 library("zoo")
-#library("xml2")
 library("dplyr")
 
 source("./daflFunctions.r")
 
+year <- "2021"
+last <- "2020"
 ```
 
 Step 1:  Load in last year's final roster file
@@ -35,7 +33,7 @@ Step 1:  Load in last year's final roster file
 NOTE:  When making manual changes to salaries/contracts, only edit this file!!!
 ```{r}
 
-lysalaries <- createProtection("2019salaryinfo.csv")
+lysalaries <- createProtection(str_c("../",last,"salaryinfo.csv"))
 
 tysalaries <- lysalaries
 
@@ -44,7 +42,7 @@ tysalaries <- lysalaries
 Next, process the transaction file and update FA mistakes
 ```{r}
 # Code to take all the Won transactions and update the Salaries
-fabids <- read.csv("2019Transactions.csv",stringsAsFactors=FALSE)
+fabids <- read.csv(str_c("../",last,"Transactions.csv"),stringsAsFactors=FALSE)
 fabids <- cSplit(fabids,"Players",sep="\n",direction="long")
 #BUG - Player column is empty
 
@@ -71,20 +69,22 @@ Questionable Players = players where the Contract year is less than how they sta
 # need to switch names from lastyr
 # join and relabel columns
 # delete if year hasn't increased by 1
-lastyr <- read.csv("2019ProtectionLists.csv",stringsAsFactors=FALSE)
+lastyr <- read.csv(str_c("../data/",last,"ProtectionLists.csv"),stringsAsFactors=FALSE)
 lastyr$playerid <- as.character(lastyr$playerid)
 lastyr <- dplyr::rename(lastyr,PContract=Contract,PSalary=Salary)
 lastyr <- select(lastyr,playerid,PSalary,PContract)
 
 check <- inner_join(tysalaries,lastyr)
 check2 <- filter(check,Contract <= PContract,Salary != PSalary)
-write.csv(check2,'questionable.csv')
+write.csv(check2,'../questionable.csv')
 
 ```
 
-Manual overrides step - after all this, there are still mistakes that are reported.  Collect them and manually apply at the end - this is before incrementing salaries!
+Manual overrides step - after all this, there are still mistakes that are reported.  Collect them and manually apply at the end - this is before changing salaries!
+
+Use the same file format as 
 ```{r}
-manual <- read.csv("2020salaryOverrides.csv",stringsAsFactors=FALSE)
+manual <- read.csv(str_c("../",year,"salaryOverrides.csv"),stringsAsFactors=FALSE)
 manual$playerid <- as.character(manual$playerid)
 manual <- select(manual,playerid,osalary=Salary,ocontract=Contract)
 
@@ -106,7 +106,7 @@ tysalaries <- filter(tysalaries,Contract < 5)
 tysalaries <- mutate(tysalaries,Salary=ifelse(Contract==3,Salary+5,ifelse(Contract==4,Salary+10,Salary)))
 
 tysalaries <- select(tysalaries,Player,Pos,Team,Salary,Contract,MLB,playerid)
-write.csv(tysalaries,'2020Rosters1.csv')
+write.csv(tysalaries,str_c("../",year,'Rosters.csv'))
 
 ```
 
