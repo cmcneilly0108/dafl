@@ -1,46 +1,52 @@
 
 ```{r}
 library(tidyr)
+library(stringr)
 source("./daflFunctions.r")
+year <- "2020"
 ```
-
+Need to load 2 files - draft and protection
 2019 Draft Results file is incorrect!  Only has active players (17)
 ```{r}
-drosters <- read.csv("2018DraftResults.csv",header=FALSE,stringsAsFactors=FALSE)
-colnames(drosters) <- c('Avail','Player','Pos','Salary','Contract','Rank','E1')
-drosters <- select(drosters,-Rank,-E1) %>%
-  filter(!(Player %in% c('Player','TOTALS')))
-drosters <- mutate(drosters,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
-  fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
-drosters <- mutate(drosters,Team=ifelse((Player %in% c('')),Avail,NA)) %>% 
-  fill(Team) %>% filter(!(Player %in% c('')))
-drosters <- mutate(drosters, MLB = pullMLB(Player),hp = ifelse(Pos=='P','P','H'),
-                   Salary = as.integer(Salary))
-drosters$Player <- unlist(lapply(drosters$Player,stripName))
+prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
+prot$playerid <- as.character(prot$playerid)
+prot <- select(prot,Team,Player,Pos,Salary,Contract)
 
+draft <- read.csv(str_c("../data/",year,"DraftRecap.csv"),stringsAsFactors=FALSE)
+#draft <- addPlayeridOnly(draft)
+m2 <- select(master,-Player) %>% dplyr::rename(Player=cbs_name)
+m2 <- select(m2,Player,MLB,playerid,Pos)
+# Merge with team
+draft <- left_join(draft, m2,by=c('Player'))
+draft$playerid <- ifelse(is.na(draft$playerid),draft$Player,draft$playerid)
+draft$playerid <- ifelse(str_length(draft$playerid)==0,draft$Player,draft$playerid)
+draft <- select(draft,Team,Player,Pos,Salary,Contract)
+
+players <- bind_rows(prot,draft)
+players <- mutate(players,hp = ifelse(Pos=='P','P','H'))
 ```
+
+
+2020 = 57/43
 2019 = 60/40
 2018 = 54/46
 2017 = 62/38
 2016 = 61/39
 
 ```{r}
-total <- sum(drosters$Salary,na.rm=TRUE)
-res <- drosters %>% group_by(hp) %>% tally(Salary)
+total <- sum(players$Salary,na.rm=TRUE)
+res <- players %>% group_by(hp) %>% tally(Salary)
 res <- mutate(res,share=n/total)
 res
 ```
 Now determine how many hitters vs pitchers on opening day rosters.
 ```{r}
-drosters %>% filter(Pos=='P') %>% nrow()/16
-drosters %>% filter(Pos!='P') %>% nrow()/16
+players %>% filter(Pos=='P') %>% nrow()/16
+players %>% filter(Pos!='P') %>% nrow()/16
 ```
 2018 = 12/13
 
-Lets try with Craig's file
-```{r}
-cfile <- read.csv("DraftRecap2019.csv",stringsAsFactors=FALSE)
-```
+
 2019
 Only 2 pitchers were drafted in 2019 > $50 - $68, $56 - and then $45
 There were 3 protected from earlier years > $50 - 70, 67, 52 - and then nothing until 23
