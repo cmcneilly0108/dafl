@@ -2,7 +2,7 @@
 #    updatePreSeasonSalaries.Rmd
 # Files to update each year
 #    - Position Eligibility - line 110 - from cbs dafl
-# http://dafl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:OF:U/2018:p/PosElig/
+# http://dafl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:OF:U/2021:p/PosElig/
 #    - update loadPast with latest year
 # fs2019.csv
 #    - update predictHolds with latest bullpen report URL
@@ -23,28 +23,31 @@ library("rvest")
 
 source("./daflFunctions.r")
 
-fd <- file.info("steamerH2020.csv")$mtime
+year <- "2021"
+lastyear <- "2020"
+
+fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
   #system("./pullSteamer.sh")
-  system("bash ./pullSteamer.sh")
+  system("bash ../scripts/pullSteamer.sh")
   #system("bash ./pullATC.sh")
 }
 
 #Load steamer data
-hitters <- read.fg("steamerH2020.csv")
+hitters <- read.fg(str_c("../steamerH",year,".csv"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
-pitchers <- read.fg("steamerP2020.csv")
+pitchers <- read.fg(str_c("../steamerP",year,".csv"))
 #pitchers <- read.fg("atcP2020.csv")
 pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 
 
 #official file
-rosters <- read.csv("2020Rosters1.csv", encoding="UTF-8")
+rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
 
 # sal2$nSalary <- ifelse(sal2$Contract==1,sal2$Salary,ifelse(sal2$Contract==2,sal2$Salary+5,sal2$Salary+10))
 # sal2$nContract <- sal2$Contract+1
@@ -111,27 +114,8 @@ rpitchers$Pos <- with(rpitchers,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 
 
 # Add in position eligibility based on 20 games
-#pedf <- read.xlsx2("2014 Position Counts.xlsx",1,stringsAsFactors=F)
-pedf <- read.cbs("2019PosElig.csv")
+pedf <- read.cbs(str_c("../",year,"PosElig.csv"))
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
-# pedf <- dplyr::rename(pedf,Player=PLAYER,MLB=Team)
-# pedf$Player <- unlist(lapply(pedf$Player,swapName))
-# pedf <- mutate(pedf,posEl = ifelse(X1B>19,',1B',''))
-# pedf <- mutate(pedf,posEl = ifelse(X2B>19,str_c(posEl,',2B'),posEl))
-# pedf <- mutate(pedf,posEl = ifelse(SS>19,str_c(posEl,',SS'),posEl))
-# pedf <- mutate(pedf,posEl = ifelse(X3B>19,str_c(posEl,',3B'),posEl))
-# pedf <- mutate(pedf,posEl = ifelse(OF>19,str_c(posEl,',OF'),posEl))
-# pedf <- mutate(pedf,posEl = ifelse(C>19,str_c(posEl,',C'),posEl))
-# pedf <- mutate(pedf,posEl = ifelse(DH>19,str_c(posEl,',DH'),posEl))
-# pedf$posEl <- str_sub(pedf$posEl,2)
-# m2 <- select(master,-Pos)
-# p2 <- inner_join(pedf, m2,by=c('Player','MLB'))
-# p3 <- anti_join(pedf, m2,by=c('Player','MLB'))
-# # Merge rest with only name
-# p4 <- inner_join(p3, m2,by=c('Player'))
-# p4 <- select(p4,-MLB.x) %>% dplyr::rename(MLB=MLB.y)
-# pedf <- rbind(p2,p4) %>% select(playerid,posEl)
-# Add column into AllH
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 # Injuries data
@@ -225,7 +209,10 @@ while ((ohi != nhi | opi != npi) & ct < 8) {
 }
 rpreds <- rpreds2
 prosters <- select(prosters2,Player,Pos,Team,Salary,Contract,playerid,orank)
-write.csv(prosters,"2020fakeprotected.csv")
+write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
+
+
+
 lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value) %>% 
   select(Player,Pos,Team,Salary,Contract,playerid,orank)
 prosters <- select(prosters,-playerid)
@@ -265,14 +252,14 @@ fairpriced <- bind_rows(t1,t2) %>% arrange(orank)
 
 # Create Trends tab
 targets <- data.frame()
-targets <- rbind(targets,c(2019,pgoals('fs2019.csv')))
-targets <- rbind(targets,c(2018,pgoals('fs2018.csv')))
-targets <- rbind(targets,c(2017,pgoals('fs2017.csv')))
-targets <- rbind(targets,c(2016,pgoals('fs2016.csv')))
-targets <- rbind(targets,c(2015,pgoals('fs2015.csv')))
-targets <- rbind(targets,c(2014,pgoals('fs2014.csv')))
-targets <- rbind(targets,c(2013,pgoals('fs2013.csv')))
-targets <- rbind(targets,c(2012,pgoals('fs2012.csv')))
+targets <- rbind(targets,c(2019,pgoals('../data/fs2019.csv')))
+targets <- rbind(targets,c(2018,pgoals('../data/fs2018.csv')))
+targets <- rbind(targets,c(2017,pgoals('../data/fs2017.csv')))
+targets <- rbind(targets,c(2016,pgoals('../data/fs2016.csv')))
+targets <- rbind(targets,c(2015,pgoals('../data/fs2015.csv')))
+targets <- rbind(targets,c(2014,pgoals('../data/fs2014.csv')))
+targets <- rbind(targets,c(2013,pgoals('../data/fs2013.csv')))
+targets <- rbind(targets,c(2012,pgoals('../data/fs2012.csv')))
 colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 
 
@@ -426,7 +413,7 @@ writeData(protect,'Targets',targets,headerStyle = headerStyle)
 setColWidths(protect, 'Targets', cols = 1:15, widths = "auto")
 #addStyle(protect, 'Targets',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
-saveWorkbook(protect,"protectionAnalysis.xlsx",overwrite = TRUE)
+saveWorkbook(protect,"../protectionAnalysis.xlsx",overwrite = TRUE)
 
 #lapply(tabs,addSheet,protect)
 
