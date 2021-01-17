@@ -2,7 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 ---
-
+I don't remember why I have this.  I think moneySplit does a better job of the same thing.
 
 ```{r}
 library("dplyr")
