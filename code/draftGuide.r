@@ -1,6 +1,7 @@
 # TODO
-# ppp - use posElig
-# 2020 new pitches
+# commented out SavesHolds tab
+# Not using 2021 new pitches
+# ADP is all 999 - wait for ATC file to arrive and use that, comment out ADP.tsv
 
 library("openxlsx")
 library("stringr")
@@ -14,7 +15,8 @@ library("rvest")
 library("tidyr")
 source("./daflFunctions.r")
 
-cyear <- 2020
+cyear <- 2021
+lastyear <- "2020"
 #src <- 'atc'
 src <- 'steamer'
 
@@ -22,7 +24,7 @@ positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
 
 #predUpdate <- FALSE
 predUpdate <- TRUE
-fd <- file.info(str_c('steamerH',as.character(cyear),'.csv',sep=''))$mtime
+fd <- file.info(str_c("../steamerH",cyear,".csv"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 14) {
@@ -33,8 +35,8 @@ if (dt > 14) {
 
 
 #official file
-protected <- read.csv(str_c(as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-#protected <- read.csv("2020fakeprotectedFixed.csv",stringsAsFactors=FALSE)
+#protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -45,12 +47,12 @@ rPitchers <- filter(protected,Pos == 'P' |Pos == 'SP' | Pos == 'MR' | Pos == 'CL
 hitters <- NULL
 pitchers <- NULL
 if (src=='atc') {
-  hitters <- read.fg(str_c('atcH',as.character(cyear),'.csv',sep=''))
-  pitchers <- read.fg(str_c('atcP',as.character(cyear),'.csv',sep=''))
+  hitters <- read.fg(str_c('../atcH',as.character(cyear),'.csv',sep=''))
+  pitchers <- read.fg(str_c('../atcP',as.character(cyear),'.csv',sep=''))
 } else {
   #Load steamer projection data
-  hitters <- read.fg(str_c('steamerH',as.character(cyear),'.csv',sep=''))
-  pitchers <- read.fg(str_c('steamerP',as.character(cyear),'.csv',sep=''))
+  hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.csv',sep=''))
+  pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.csv',sep=''))
 }
 
 pitchers <- predictHolds(pitchers)
@@ -135,7 +137,8 @@ AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 
 
 # Add in position eligibility based on 20 games
-pedf <- read.cbs(positionElig)
+#pedf <- read.cbs(positionElig)
+pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 # Add column into AllH
 AllH <- left_join(AllH,pedf,by=c('playerid'))
@@ -177,8 +180,8 @@ npitch$Player <- stripDates(npitch$Player)
 
 AllP <- left_join(AllP,npitch,by=c('Player'))
 
-oAllH <- read.csv('AllHPrev.csv',stringsAsFactors=FALSE)
-oAllP <- read.csv('AllPPrev.csv',stringsAsFactors=FALSE)
+oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
+oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
 oAllH <- select(oAllH,playerid,oDFL=pDFL)
 oAllP <- select(oAllP,playerid,oDFL=pDFL)
 oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
@@ -186,8 +189,8 @@ oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL)
 change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
 
 if (predUpdate==TRUE) {
-  write.csv(AllH,'AllHPrev.csv')
-  write.csv(AllP,'AllPPrev.csv')
+  write.csv(AllH,'../AllHPrev.csv')
+  write.csv(AllP,'../AllPPrev.csv')
 }
 
 #Add bogus pADP column until its filled for realz.
@@ -195,7 +198,7 @@ if (predUpdate==TRUE) {
 #AllP$pADP <- 1
 # Can I get ADP?
 # from https://nfc.shgn.com/adp/baseball
-adp <- read.csv("ADP.tsv",stringsAsFactors=FALSE,sep = "\t")
+adp <- read.csv("../ADP.tsv",stringsAsFactors=FALSE,sep = "\t")
 adp <- select(adp,Player,pADP=ADP)
 adp$Player <- unlist(lapply(adp$Player,swapName))
 #test <- left_join(AllH,adp)
@@ -269,7 +272,7 @@ pp <- prop %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
 # Create percent against goals worksheet
 # Step 1 - Create targets
 targets <- data.frame()
-targets <- rbind(targets,c(2019,pgoals('fs2019.csv')))
+targets <- rbind(targets,c(lastyear,pgoals('../data/fs2019.csv')))
 colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 targets <- select(targets,-AVG,-ERA,-year)
 targets <- melt(targets)
@@ -361,10 +364,10 @@ protectSummary <- data.frame(type=c("hitter","pitcher"),pnum=c(hpr,ppr),pspent=c
 topHitters <- AllH %>% filter(pDFL > 16) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
-savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
-savesholds <- rename(savesholds,Player=Pitcher)
-savesholds <- inner_join(savesholds,AllP)
-savesholds <- select(savesholds,Player,MLB,Age,Rank,pDFL,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+# savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
+# savesholds <- rename(savesholds,Player=Pitcher)
+# savesholds <- inner_join(savesholds,AllP)
+# savesholds <- select(savesholds,Player,MLB,Age,Rank,pDFL,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
 
 
 # Create spreadsheet
@@ -478,12 +481,12 @@ addStyle(draft, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = T
 addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
 setColWidths(draft, 'CL', cols = 1:20, widths = "auto")
 
-# Athletic Article
-addWorksheet(draft,'SavesHolds')
-writeData(draft,'SavesHolds',savesholds,headerStyle = headerStyle)
-addStyle(draft, 'SavesHolds',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-#addStyle(draft, 'SavesHolds',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-setColWidths(draft, 'SavesHolds', cols = 1:20, widths = "auto")
+# # Athletic Article
+# addWorksheet(draft,'SavesHolds')
+# writeData(draft,'SavesHolds',savesholds,headerStyle = headerStyle)
+# addStyle(draft, 'SavesHolds',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+# #addStyle(draft, 'SavesHolds',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
+# setColWidths(draft, 'SavesHolds', cols = 1:20, widths = "auto")
 
 
 # st <- list('5'=csMoneyColumn,'6'=csRatioColumn)
@@ -526,7 +529,7 @@ writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
 addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
 setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
 
-saveWorkbook(draft,"draftGuide.xlsx",overwrite = TRUE)
+saveWorkbook(draft,"../draftGuide.xlsx",overwrite = TRUE)
 
 # histograms
 # hist(rhitters$Value)

@@ -8,8 +8,7 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# Todos
-#   - reduce warnings (8)
+
 
 library("openxlsx")
 library("stringr")
@@ -32,6 +31,7 @@ dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
   #system("./pullSteamer.sh")
   system("bash ../scripts/pullSteamer.sh")
+  system("bash ../scripts/pullMaster.sh")
   #system("bash ./pullATC.sh")
 }
 
