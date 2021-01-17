@@ -3,6 +3,9 @@
 # Not using 2021 new pitches
 # ADP is all 999 - wait for ATC file to arrive and use that, comment out ADP.tsv
 
+# For live draft, create CSV with all players and teams, free agents have Team = 'Free Agent'
+# Then update draftguide to remove those rows - line 149 is when protected are removed
+
 library("openxlsx")
 library("stringr")
 library("dplyr")
@@ -20,7 +23,7 @@ lastyear <- "2020"
 #src <- 'atc'
 src <- 'steamer'
 
-positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
+#positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
 
 #predUpdate <- FALSE
 predUpdate <- TRUE
