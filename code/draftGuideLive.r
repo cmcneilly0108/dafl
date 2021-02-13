@@ -39,8 +39,12 @@ if (dt > 14) {
 
 #official file
 #protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
+#protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
+#protected$playerid <- as.character(protected$playerid)
+
+protected <- read.csv(str_c('../',as.character(cyear),'LiveDraft.csv',sep=''),stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
+protected <- filter(protected,Team != 'Free Agent')
 
 
 #split into P,H tables
@@ -201,16 +205,16 @@ if (predUpdate==TRUE) {
 #AllP$pADP <- 1
 # Can I get ADP?
 # from https://nfc.shgn.com/adp/baseball
-#adp <- read.csv("../ADP.tsv",stringsAsFactors=FALSE,sep = "\t")
-#adp <- select(adp,Player,pADP=ADP)
-#adp$Player <- unlist(lapply(adp$Player,swapName))
+adp <- read.csv("../ADP.tsv",stringsAsFactors=FALSE,sep = "\t")
+adp <- select(adp,Player,pADP=ADP)
+adp$Player <- unlist(lapply(adp$Player,swapName))
 #test <- left_join(AllH,adp)
 #join into AllH, AllP
-#AllH <- left_join(AllH,adp)
-#AllP <- left_join(AllP,adp)
+AllH <- left_join(AllH,adp)
+AllP <- left_join(AllP,adp)
 
 #Add back in to lc
-#lc <- left_join(lc,adp,by=c('Player')) %>% mutate(around=ceiling(pADP/16)) %>% select(-pADP)
+lc <- left_join(lc,adp,by=c('Player')) %>% mutate(around=ceiling(pADP/16)) %>% select(-pADP)
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
@@ -532,7 +536,7 @@ writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
 addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
 setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
 
-saveWorkbook(draft,"../draftGuide.xlsx",overwrite = TRUE)
+saveWorkbook(draft,"../draftGuideUpdated.xlsx",overwrite = TRUE)
 
 # histograms
 # hist(rhitters$Value)

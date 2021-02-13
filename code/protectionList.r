@@ -25,22 +25,24 @@ source("./daflFunctions.r")
 year <- "2021"
 lastyear <- "2020"
 
-fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
+fd <- file.info(str_c("../atcH",year,".csv"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
   #system("./pullSteamer.sh")
-  system("bash ../scripts/pullSteamer.sh")
+  #system("bash ../scripts/pullSteamer.sh")
   system("bash ../scripts/pullMaster.sh")
-  #system("bash ./pullATC.sh")
+  system("bash ../scripts/pullATC.sh")
 }
 
 #Load steamer data
-hitters <- read.fg(str_c("../steamerH",year,".csv"))
+#hitters <- read.fg(str_c("../steamerH",year,".csv"))
+hitters <- read.fg(str_c("../atcH",year,".csv"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
-pitchers <- read.fg(str_c("../steamerP",year,".csv"))
+#pitchers <- read.fg(str_c("../steamerP",year,".csv"))
+pitchers <- read.fg(str_c("../atcP",year,".csv"))
 #pitchers <- read.fg("atcP2020.csv")
 pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
@@ -90,17 +92,6 @@ AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 AllH <- AllH %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP)) %>% as.data.frame()
 AllP <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP)) %>% as.data.frame()
 
-#Generate z-score dollars
-nlist <- preLPP(hitters,pitchers)
-thitters <- nlist[[1]]
-tpitchers <- nlist[[2]]
-
-# Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,thitters,by=c('playerid'))
-AllP <- left_join(AllP,tpitchers,by=c('playerid'))
-AllH$zDFL <- replace(AllH$zDFL,is.na(AllH$zDFL),0)
-AllP$zDFL <- replace(AllP$zDFL,is.na(AllP$zDFL),0)
-
 #merge with steamer
 rhitters <- inner_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
 rpitchers <- inner_join(rPitchers,AllP,by=c('playerid'),copy=FALSE)
@@ -129,38 +120,38 @@ rpitchers <- left_join(rpitchers,inj,by=c('Player'))
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pc <- mutate(pc,RPV = (SGP - aRPV(pc))/aRPV(pc))
 p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b,20))/aRPV(p1b,20))
 p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b))/aRPV(p2b))
 pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pss <- mutate(pss,RPV = (SGP - aRPV(pss))/aRPV(pss))
 p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b))/aRPV(p3b))
 pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh))/aRPV(pdh))
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,posEl,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 pof <- mutate(pof,RPV = (SGP - aRPV(pof,60))/aRPV(pof,60))
 pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
 
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 psp <- mutate(psp,RPV = (SGP - aRPV(psp,120))/aRPV(psp,120))
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl))/aRPV(pcl))
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,zDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr))/aRPV(pmr))
 
 
@@ -307,68 +298,67 @@ addStyle(protect, 'AllRosters',style = csMoneyColumn,rows = 2:200, cols = 7:8,gr
 addWorksheet(protect,'C')
 writeData(protect,'C',pc,headerStyle = headerStyle)
 setColWidths(protect, 'C', cols = 1:15, widths = "auto")
-addStyle(protect, 'C',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, 'C',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, 'C',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, 'C',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('1B',p1b,st,c(2,3,14,15))
 addWorksheet(protect,'1B')
 writeData(protect,'1B',p1b,headerStyle = headerStyle)
 setColWidths(protect, '1B', cols = 1:15, widths = "auto")
-addStyle(protect, '1B',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, '1B',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, '1B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, '1B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('2B',p2b,st,c(2,3,14,15))
 addWorksheet(protect,'2B')
 writeData(protect,'2B',p2b,headerStyle = headerStyle)
 setColWidths(protect, '2B', cols = 1:15, widths = "auto")
-addStyle(protect, '2B',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, '2B',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, '2B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, '2B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('SS',pss,st,c(2,3,14,15))
 addWorksheet(protect,'SS')
 writeData(protect,'SS',pss,headerStyle = headerStyle)
 setColWidths(protect, 'SS', cols = 1:15, widths = "auto")
-addStyle(protect, 'SS',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, 'SS',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, 'SS',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, 'SS',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 
 # tabs[[length(tabs)+1]] <- list('3B',p3b,st,c(2,3,14,15))
 addWorksheet(protect,'3B')
 writeData(protect,'3B',p3b,headerStyle = headerStyle)
 setColWidths(protect, '3B', cols = 1:15, widths = "auto")
-addStyle(protect, '3B',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, '3B',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, '3B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, '3B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('OF',pof,st,c(2,3,14,15))
 addWorksheet(protect,'OF')
 writeData(protect,'OF',pof,headerStyle = headerStyle)
 setColWidths(protect, 'OF', cols = 1:15, widths = "auto")
-addStyle(protect, 'OF',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, 'OF',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, 'OF',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, 'OF',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('DH',pdh,st,c(2,3,14,15))
 addWorksheet(protect,'DH')
 writeData(protect,'DH',pdh,headerStyle = headerStyle)
 setColWidths(protect, 'DH', cols = 1:15, widths = "auto")
-addStyle(protect, 'DH',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, 'DH',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, 'DH',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, 'DH',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
 # st <- list('4'=csMoneyColumn,'5'=csMoneyColumn,'6'=csRatioColumn)
 # tabs[[length(tabs)+1]] <- list('Other',pna,st,c(2,3,14,15))
 addWorksheet(protect,'Other')
 writeData(protect,'Other',pna,headerStyle = headerStyle)
 setColWidths(protect, 'Other', cols = 1:15, widths = "auto")
-addStyle(protect, 'Other',style = csMoneyColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(protect, 'Other',style = csRatioColumn,rows = 2:200, cols = c(7,15),gridExpand = TRUE)
+addStyle(protect, 'Other',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(protect, 'Other',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
 
-## Start here!
 
 # tabs[[length(tabs)+1]] <- list('SP',psp,st,c(2,3,14,15))
 addWorksheet(protect,'SP')
 writeData(protect,'SP',psp,headerStyle = headerStyle)
 setColWidths(protect, 'SP', cols = 1:15, widths = "auto")
-addStyle(protect, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4:5,gridExpand = TRUE)
-addStyle(protect, 'SP',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
+addStyle(protect, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(protect, 'SP',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
 
 
 
@@ -376,15 +366,15 @@ addStyle(protect, 'SP',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridEx
 addWorksheet(protect,'MR')
 writeData(protect,'MR',pmr,headerStyle = headerStyle)
 setColWidths(protect, 'MR', cols = 1:15, widths = "auto")
-addStyle(protect, 'MR',style = csMoneyColumn,rows = 2:200, cols = 4:5,gridExpand = TRUE)
-addStyle(protect, 'MR',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
+addStyle(protect, 'MR',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(protect, 'MR',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('CL',pcl,st,c(2,3,14,15))
 addWorksheet(protect,'CL')
 writeData(protect,'CL',pcl,headerStyle = headerStyle)
 setColWidths(protect, 'CL', cols = 1:15, widths = "auto")
-addStyle(protect, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4:5,gridExpand = TRUE)
-addStyle(protect, 'CL',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
+addStyle(protect, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(protect, 'CL',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
 
 # 
 # st <- list('6'=csMoneyColumn,'7'=csMoneyColumn,'8'=csMoneyColumn)
