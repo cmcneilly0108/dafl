@@ -1,0 +1,168 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Create new master file with the following fields:
+- playerid
+- Player
+- birth_year
+- cbs_name
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(stringr)
+library("lubridate")
+library(rvest)
+
+source('./daflFunctions.r')
+
+year <- '2021'
+
+getAge <- function(playerid) {
+  print(playerid)
+  page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
+  byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
+    str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+  byear
+}
+
+read.cbs2 <- function(fn) {
+  df <- read.csv(fn,skip=1,stringsAsFactors=FALSE, encoding="UTF-8")
+  df <- mutate(df, Pos = pullPos(Player))
+  df <- mutate(df, MLB = pullMLB(Player))
+  df$Player <- unlist(lapply(df$Player,stripName))
+  # Team abbreviations are not the same - find all discrepancies WAS->WSH
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
+  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
+
+  # Create Team column
+  #df <- mutate(df,Avail=str_replace(Avail,'\\.\\.\\.',''))
+  #df <- left_join(df,nicks,by=c('Avail'))
+  df$Team <- df$Avail
+  #df$Team <- str_replace(df$Team,'W','Free Agent')
+  df$Team <- ifelse(str_detect(df$Team,'W '),'Free Agent',df$Team)
+  df <- select(df,-Avail)
+  #addPlayerid(df)
+}
+
+```
+Start with previous mymaster (playerid,Player,birth_year,cbs_name)
+```{r}
+mymaster <- read.csv("../mymaster.csv",stringsAsFactors=FALSE) %>% select(-X)
+
+#cleanup any blank cbs_name
+mymaster <- mutate(mymaster,cbs_name = ifelse(cbs_name=='',Player,cbs_name))
+```
+
+
+
+Start with a fangraphs ATC prediction file
+Usually about 1400 players
+Get Player, Team, playerid from here
+Have to convert Team to MLB
+```{r}
+
+fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+colnames(fgh)[1] <- 'Player'
+fgh <- select(fgh,playerid,Player,Team)
+fgp <- read.csv(str_c('../atcP',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+colnames(fgp)[1] <- 'Player'
+fgp <- select(fgp,playerid,Player,Team)
+
+fgraphs <- bind_rows(fgh,fgp)
+
+mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
+fgraphs <- left_join(fgraphs,mlbmap)
+
+
+
+noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
+
+```
+For matches, update MLB for trades, signings
+```{r}
+small <- select(fgraphs,playerid,MLB)
+mymaster <- inner_join(mymaster,small,by=c('playerid'))
+mymaster <- mutate(mymaster,MLB=ifelse(is.na(MLB.y),MLB.x,MLB.y)) %>% select(-MLB.x,-MLB.y)
+
+```
+
+
+
+If name and team are identical, replace the id
+```{r}
+sameName <- inner_join(noidmatch,mymaster,by=c('Player','MLB'))
+repl <- select(sameName,playerid = playerid.y,newid = playerid.x)
+mymaster <- left_join(mymaster,repl)
+mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
+```
+
+If name is identical but team is different - update id AND MLB
+```{r}
+noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
+sameName <- inner_join(noidmatch,mymaster,by=c('Player'))
+
+repl <- select(sameName,playerid = playerid.y,newid = playerid.x,MLB = MLB.y, newMLB = MLB.x)
+mymaster <- left_join(mymaster,repl)
+mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
+mymaster <- mutate(mymaster,MLB = ifelse(is.na(newMLB),MLB,newMLB)) %>% select(-newMLB)
+```
+Add new rows
+
+```{r}
+noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid')) %>% mutate(birth_year=NA,cbs_name=Player,Pos='')
+addthem <- noidmatch %>% select(playerid,Player,birth_year,cbs_name,Pos,MLB)
+
+mymaster <- bind_rows(mymaster,addthem)
+
+
+```
+
+Try adding year of birth from fangraphs
+```{r}
+
+mymaster <- mymaster %>% rowwise() %>% 
+  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
+
+```
+
+
+
+What can I get from CBS?
+There are a lot more rows in CBS than in fangraphs
+```{r}
+cbsH <- read.cbs2('../AllHitters.csv')
+cbsH <- select(cbsH,Player,Pos,MLB)
+cbsP <- read.cbs2('../AllPitchers.csv')
+cbsP <- select(cbsP,Player,Pos,MLB)
+cbs <- bind_rows(cbsH,cbsP)
+
+my <- mutate(mymaster,Player=cbs_name)
+
+nonamecbs <- anti_join(cbs,my,by=c('Player'))
+```
+
+
+```{r}
+
+```
+
+
+
+Write out master file (playerid,Player,birth_year,cbs_name)
+```{r}
+
+
+
+
+# master <- read.csv("../master.csv",stringsAsFactors=FALSE, encoding="UTF-8")
+# master <- dplyr::rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
+# master <- mutate(master, birth_year = year(as.Date(birth_date, format="%m/%d/%Y")))
+# master$playerid <- ifelse(str_length(master$playerid)==0,master$mlb_id,master$playerid)
+# mymaster <- select(master,playerid,Player,birth_year,cbs_name,Pos,MLB)
+write.csv(mymaster,"../mymaster.csv")
+```
+

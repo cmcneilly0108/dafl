@@ -691,13 +691,15 @@ avgs <- l1[[2]]
 r3 <- l1[[3]]
 
 # Load Master file
-master <- read.csv("../master.csv",stringsAsFactors=FALSE, encoding="UTF-8")
-# Use fangraphs id as player_id
-master <- dplyr::rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
-#master <- mutate(master, birth_year = as.integer(str_sub(birth_date,1,4)))
-master <- mutate(master, birth_year = year(as.Date(birth_date, format="%m/%d/%Y")))
-# Try using mlb_id when fg_id is empty, which it sometimes is
-master$playerid <- ifelse(str_length(master$playerid)==0,master$mlb_id,master$playerid)
+# master <- read.csv("../master.csv",stringsAsFactors=FALSE, encoding="UTF-8")
+# # Use fangraphs id as player_id
+# master <- dplyr::rename(master,playerid=fg_id,Pos = mlb_pos,MLB=mlb_team,Player=mlb_name)
+# #master <- mutate(master, birth_year = as.integer(str_sub(birth_date,1,4)))
+# master <- mutate(master, birth_year = year(as.Date(birth_date, format="%m/%d/%Y")))
+# # Try using mlb_id when fg_id is empty, which it sometimes is
+# master$playerid <- ifelse(str_length(master$playerid)==0,master$mlb_id,master$playerid)
+master <- read.csv("../mymaster.csv",stringsAsFactors=FALSE, encoding="UTF-8")
+
 
 calcGoals <- function(p,h,targets,t) {
   lcht <- h %>% filter(Team == t) %>%
