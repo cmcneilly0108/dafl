@@ -51,11 +51,6 @@ pitchers$pSGP <- pitSGP(pitchers)
 #official file
 rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
 
-# sal2$nSalary <- ifelse(sal2$Contract==1,sal2$Salary,ifelse(sal2$Contract==2,sal2$Salary+5,sal2$Salary+10))
-# sal2$nContract <- sal2$Contract+1
-# froster <- select(sal2,-Salary,-Contract) %>% dplyr::rename(Salary=nSalary,Contract=nContract) %>%
-#   filter(Contract < 5)
-# write.csv(froster,'2015FinalRosters.csv')
 
 #split into P,H tables
 rHitters <- filter(rosters,Pos != 'P' & Pos != 'RP')
@@ -118,45 +113,10 @@ rhitters <- left_join(rhitters,inj,by=c('Player'))
 rpitchers <- left_join(rpitchers,inj,by=c('Player'))
 
 
-#Create separate tabs by position
-# pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# pc <- mutate(pc,RPV = (SGP - aRPV(pc))/aRPV(pc))
-# p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b,20))/aRPV(p1b,20))
-# p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b))/aRPV(p2b))
-# pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# pss <- mutate(pss,RPV = (SGP - aRPV(pss))/aRPV(pss))
-# p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b))/aRPV(p3b))
-# pdh <- AllH %>% filter(Pos == 'DH' | str_detect(posEl,'DH'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh))/aRPV(pdh))
-# pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,posEl,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# pof <- mutate(pof,RPV = (SGP - aRPV(pof,60))/aRPV(pof,60))
-# pna <- AllH %>% filter(is.na(Pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# 
-# 
-# psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
-# psp <- mutate(psp,RPV = (SGP - aRPV(psp,120))/aRPV(psp,120))
-# pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
-# pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl))/aRPV(pcl))
-# pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-#   select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
-# pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr))/aRPV(pmr))
 
 
-rpreds <- rbind(select(rhitters,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-            select(rpitchers,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
 
 #rpreds <- dplyr::rename(rpreds,Salary=Salary,Contract=Contract)
 
@@ -173,7 +133,12 @@ prosters2 <- prosters
 nvalue <- sum(prosters2$Value)
 print(nvalue)
 
-while ((nvalue > cvalue) & ct < 10) {
+#see if I can track only evaluated once
+pjoin <- prosters2 %>% ungroup() %>% mutate(rdOne = TRUE) %>% select(playerid,rdOne)
+rhitters <- left_join(rhitters,pjoin,by=c('playerid'))
+rpitchers <- left_join(rpitchers,pjoin,by=c('playerid'))
+
+while ((nvalue > cvalue) & ct < 30) {
   ct <- ct + 1
   cvalue <- nvalue
   nlist <- preLPP(hitters,pitchers,prosters2)
@@ -181,60 +146,23 @@ while ((nvalue > cvalue) & ct < 10) {
   ipitchers <- nlist[[2]]
   # update rhitters, rpitchers with new pDFL and Value scores
   rhitters <- left_join(rhitters,ihitters,by=c('playerid'))
-  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
+  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
+                     rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
   rpitchers <- left_join(rpitchers,ipitchers,by=c('playerid'))
-  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
-  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
+                      rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
   prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
     arrange(Team,-Value)
+  if (nrow(filter(prosters2,rdOne==TRUE))) {prosters2 <- arrange(prosters2,rdOne) %>% head(-10)} 
   nvalue <- sum(prosters2$Value)
   print(nvalue)
 }
 
-prosters <- select(prosters2,Player,Pos,Team,Salary,Contract,playerid,orank)
+prosters <- select(prosters2,playerid,Player,Pos,Team,Salary,Contract,orank)
 write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
-
-
-# ohi <- 0
-# opi <- 0
-# nhi <- 1
-# npi <- 1
-# ct <- 0
-# prosters2 <- prosters
-# while ((ohi != nhi | opi != npi) & ct < 8) {
-#   ct <- ct + 1
-#   inf <- calcInflation(prosters2)
-#   ohi <- nhi
-#   opi <- npi
-#   nhi <- inf[[1]]
-#   npi <- inf[[2]]
-#   rhitters2 <- rhitters
-#   rpitchers2 <- rpitchers
-#   rhitters2$pDFL <- (rhitters2$pDFL * nhi)
-#   rpitchers2$pDFL <- (rpitchers2$pDFL * npi)
-# 
-#   pmin <- min(rpitchers2$pDFL) - 1
-#   plost <- pmin * cpitchers
-#   rpitchers2$pDFL <- (rpitchers2$pDFL - pmin) * (pdollars/(pdollars - plost))
-#   hmin <- min(rhitters2$pDFL) - 1
-#   hlost <- hmin * chitters
-#   rhitters2$pDFL <- (rhitters2$pDFL - hmin) * (hdollars/(hdollars - hlost))
-# 
-#   rhitters2$Value <- rhitters2$pDFL - rhitters2$Salary
-#   rpitchers2$Value <- rpitchers2$pDFL - rpitchers2$Salary
-#   rpreds2 <- rbind(select(rhitters2,Team,Player,playerid,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-#                    select(rpitchers2,Team,Player,playerid,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
-#   #rpreds2$DollarRate <- rpreds2$pDFL/rpreds2$Salary
-#   prosters2 <- rpreds2 %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
-#     arrange(Team,-Value)
-#   print(nhi)
-#   print(npi)
-# }
-# rpreds <- rpreds2
-# prosters <- select(prosters2,Player,Pos,Team,Salary,Contract,playerid,orank)
-# write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
 
 

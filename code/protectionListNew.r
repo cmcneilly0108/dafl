@@ -155,8 +155,8 @@ rpitchers <- left_join(rpitchers,inj,by=c('Player'))
 # pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr))/aRPV(pmr))
 
 
-rpreds <- rbind(select(rhitters,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-            select(rpitchers,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
 
 #rpreds <- dplyr::rename(rpreds,Salary=Salary,Contract=Contract)
 
@@ -173,7 +173,12 @@ prosters2 <- prosters
 nvalue <- sum(prosters2$Value)
 print(nvalue)
 
-while ((nvalue > cvalue) & ct < 10) {
+#see if I can track only evaluated once
+pjoin <- prosters2 %>% ungroup() %>% mutate(rdOne = TRUE) %>% select(playerid,rdOne)
+rhitters <- left_join(rhitters,pjoin,by=c('playerid'))
+rpitchers <- left_join(rpitchers,pjoin,by=c('playerid'))
+
+while ((nvalue > cvalue) & ct < 30) {
   ct <- ct + 1
   cvalue <- nvalue
   nlist <- preLPP(hitters,pitchers,prosters2)
@@ -181,19 +186,22 @@ while ((nvalue > cvalue) & ct < 10) {
   ipitchers <- nlist[[2]]
   # update rhitters, rpitchers with new pDFL and Value scores
   rhitters <- left_join(rhitters,ihitters,by=c('playerid'))
-  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
+  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
+                     rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
   rpitchers <- left_join(rpitchers,ipitchers,by=c('playerid'))
-  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
-  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
+                      rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
   prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
     arrange(Team,-Value)
+  if (nrow(filter(prosters2,rdOne==TRUE))) {prosters2 <- arrange(prosters2,rdOne) %>% head(-10)} 
   nvalue <- sum(prosters2$Value)
   print(nvalue)
 }
 
-prosters <- select(prosters2,Player,Pos,Team,Salary,Contract,playerid,orank)
+prosters <- select(prosters2,Player,Pos,Team,Salary,Contract,orank)
 write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
 

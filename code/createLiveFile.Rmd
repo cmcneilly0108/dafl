@@ -1,0 +1,47 @@
+---
+title: "Create Live File"
+output: html_notebook
+---
+
+Steps
+- Load protection list
+- Load cbs files
+- Join
+- Write out results
+
+
+
+
+```{r}
+library("tidyr")
+
+source("./daflFunctions.r")
+
+year <- "2021"
+```
+
+
+```{r}
+
+protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
+protected$playerid <- as.character(protected$playerid)
+protected <- select(protected,-X,-orank)
+
+hitters <- read.fg(str_c("../atcH",year,".csv"))
+hitters <- hitters %>% mutate(Team = 'Free Agent',Salary = 0,Contract = 1) %>% select(Player,Pos,Team,Salary,Contract,playerid)
+hitters <- anti_join(hitters,protected,by=c('playerid'))
+
+pitchers <- read.fg(str_c("../atcP",year,".csv"))
+pitchers <- pitchers %>% mutate(Team = 'Free Agent',Salary = 0,Contract = 1) %>% select(Player,Pos,Team,Salary,Contract,playerid)
+pitchers <- anti_join(pitchers,protected,by=c('playerid'))
+
+Allplayers <- bind_rows(protected,hitters,pitchers)
+```
+
+
+```{r}
+
+write.csv(Allplayers,str_c("../",year,'LiveDraft.csv'))
+
+```
+

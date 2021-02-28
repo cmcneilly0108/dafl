@@ -166,3 +166,12 @@ Write out master file (playerid,Player,birth_year,cbs_name)
 write.csv(mymaster,"../mymaster.csv")
 ```
 
+Fix roster file
+```{r}
+#official file
+rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
+
+miss <- anti_join(rosters,master,by=c('playerid'))
+
+```
+
