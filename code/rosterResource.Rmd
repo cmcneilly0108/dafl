@@ -1,0 +1,53 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Create new master file with the following fields:
+- playerid
+- Player
+- birth_year
+- cbs_name
+
+BUG - Too many Ohtani's!  - Maybe de-dupe at the end?
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(stringr)
+library("lubridate")
+library(rvest)
+
+source('./daflFunctions.r')
+
+year <- '2021'
+
+getAge <- function(playerid) {
+  print(playerid)
+  page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
+  byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
+    str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+  print(byear)
+  byear
+}
+
+
+
+```
+Start by loading table into page
+```{r}
+bp <- "https://www.fangraphs.com/roster-resource/closer-depth-chart"
+page <- read_html(bp)
+
+
+```
+
+Next, try to pull out the right stuff
+```{r}
+result <- page %>% html_node(".closer-depth-charts")
+
+
+
+```
+

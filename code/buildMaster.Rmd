@@ -9,6 +9,8 @@ Create new master file with the following fields:
 - birth_year
 - cbs_name
 
+
+
 ```{r}
 
 library(tidyr)
@@ -16,16 +18,27 @@ library(dplyr)
 library(stringr)
 library("lubridate")
 library(rvest)
+#library(Lahman)
 
 source('./daflFunctions.r')
 
-year <- '2021'
+year <- '2022'
 
 getAge <- function(playerid) {
   print(playerid)
-  page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
-  byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
-    str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+  Sys.sleep(60)
+  byear <- NA
+  tryCatch(
+    {
+      page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
+      byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
+      str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+    },
+    error=function(error_message) {
+      print("some error")
+    }
+  )
+  print(byear)
   byear
 }
 
@@ -35,8 +48,12 @@ read.cbs2 <- function(fn) {
   df <- mutate(df, MLB = pullMLB(Player))
   df$Player <- unlist(lapply(df$Player,stripName))
   # Team abbreviations are not the same - find all discrepancies WAS->WSH
-  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
-  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSN')
+  df$MLB <- replace(df$MLB,df$MLB=='CWS','CHW')
+  df$MLB <- replace(df$MLB,df$MLB=='TB','TBR')
+  df$MLB <- replace(df$MLB,df$MLB=='KC','KCR')
+  df$MLB <- replace(df$MLB,df$MLB=='SD','SDP')
+  df$MLB <- replace(df$MLB,df$MLB=='SF','SFG')
 
   # Create Team column
   #df <- mutate(df,Avail=str_replace(Avail,'\\.\\.\\.',''))
@@ -65,19 +82,26 @@ Get Player, Team, playerid from here
 Have to convert Team to MLB
 ```{r}
 
-fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+#fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+fgh <- read.csv('../steamerHROS.csv',stringsAsFactors=FALSE, encoding="UTF-8")
+#fgh <- read.csv('../batxHROS.csv',stringsAsFactors=FALSE, encoding="UTF-8")
+
 colnames(fgh)[1] <- 'Player'
-fgh <- select(fgh,playerid,Player,Team)
-fgp <- read.csv(str_c('../atcP',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+fgh <- select(fgh,playerid,Player,MLB=Team)
+
+#fgp <- read.csv(str_c('../atcP',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+fgp <- read.csv('../steamerPROS.csv',stringsAsFactors=FALSE, encoding="UTF-8")
+
 colnames(fgp)[1] <- 'Player'
-fgp <- select(fgp,playerid,Player,Team)
+fgp <- select(fgp,playerid,Player,MLB=Team)
 
 fgraphs <- bind_rows(fgh,fgp)
 
-mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
-fgraphs <- left_join(fgraphs,mlbmap)
+# This is for ATC files
+#mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
+#fgraphs <- left_join(fgraphs,mlbmap)
 
-
+fgraphs <- filter(fgraphs,str_length(MLB)>0)
 
 noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
 
@@ -85,7 +109,7 @@ noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
 For matches, update MLB for trades, signings
 ```{r}
 small <- select(fgraphs,playerid,MLB)
-mymaster <- inner_join(mymaster,small,by=c('playerid'))
+mymaster <- left_join(mymaster,small,by=c('playerid'))
 mymaster <- mutate(mymaster,MLB=ifelse(is.na(MLB.y),MLB.x,MLB.y)) %>% select(-MLB.x,-MLB.y)
 
 ```
@@ -102,11 +126,11 @@ mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% 
 
 If name is identical but team is different - update id AND MLB
 ```{r}
-noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
-sameName <- inner_join(noidmatch,mymaster,by=c('Player'))
+noidmatch2 <- anti_join(fgraphs,mymaster,by=c('playerid'))
+sameName2 <- inner_join(noidmatch2,mymaster,by=c('Player'))
 
-repl <- select(sameName,playerid = playerid.y,newid = playerid.x,MLB = MLB.y, newMLB = MLB.x)
-mymaster <- left_join(mymaster,repl)
+repl2 <- select(sameName2,playerid = playerid.y,newid = playerid.x,MLB = MLB.y, newMLB = MLB.x)
+mymaster <- left_join(mymaster,repl2)
 mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
 mymaster <- mutate(mymaster,MLB = ifelse(is.na(newMLB),MLB,newMLB)) %>% select(-newMLB)
 ```
@@ -121,14 +145,6 @@ mymaster <- bind_rows(mymaster,addthem)
 
 ```
 
-Try adding year of birth from fangraphs
-```{r}
-
-mymaster <- mymaster %>% rowwise() %>% 
-  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
-
-```
-
 
 
 What can I get from CBS?
@@ -136,17 +152,27 @@ There are a lot more rows in CBS than in fangraphs
 ```{r}
 cbsH <- read.cbs2('../AllHitters.csv')
 cbsH <- select(cbsH,Player,Pos,MLB)
-cbsP <- read.cbs2('../AllPitchers.csv')
+cbsP <- read.cbs2('../AllPitchers01.csv')
 cbsP <- select(cbsP,Player,Pos,MLB)
 cbs <- bind_rows(cbsH,cbsP)
 
 my <- mutate(mymaster,Player=cbs_name)
 
 nonamecbs <- anti_join(cbs,my,by=c('Player'))
+
+# Need to create new rows - need playerid, Player, birth_date, cbs_name, Pos, MLB
+nonamecbs <- nonamecbs %>% mutate(playerid=str_c("cbs",Player,MLB),birth_year=NA,cbs_name=Player)
+nonamecbs <- select(nonamecbs,playerid,Player,birth_year,cbs_name,Pos,MLB)
+mymaster <- bind_rows(mymaster,nonamecbs)
 ```
 
 
+remove any duplicates
 ```{r}
+
+#mymaster <- unique(mymaster)
+
+mymaster <- mymaster %>% distinct(playerid, .keep_all = TRUE)
 
 ```
 
@@ -166,12 +192,149 @@ Write out master file (playerid,Player,birth_year,cbs_name)
 write.csv(mymaster,"../mymaster.csv")
 ```
 
+
+Summary statistics go here
+```{r}
+print(str_c("New ids from fangraphs = ",nrow(noidmatch)))
+print(str_c("Combine rows (player+mlb) = ",nrow(sameName)))
+print(str_c("Change MLB team (player only) = ",nrow(repl2)))
+print(str_c("New players added from fangraphs = ",nrow(addthem)))
+print(str_c("New players added from CBS = ",nrow(nonamecbs)))
+```
+
+
+Try adding year of birth from fangraphs
+Fangraphs has put a block in place
+```{r}
+
+#mymaster <- mymaster %>% rowwise() %>% 
+#  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
+
+noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
+nrow(noby)
+#noby <- noby %>% slice_sample(n=100)
+noby <- noby %>% rowwise() %>%
+  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
+
+m2 <- left_join(mymaster,noby)
+m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
+mymaster <- select(m2,-nby)
+write.csv(mymaster,"../mymaster.csv")
+```
+
+
+THIS IS THE END!
+
+Can I find candidate duplicates?
+Then I manually review and decide which ones to keep.
+So far - they all seem to be FG ids - real one and 'sa' one
+```{r}
+m2 <- mymaster %>% select(Player,MLB)
+dupes <- m2[duplicated(m2),]
+print(dupes)
+
+```
+
+
+
+
+Here is some code to use CBS data to fill in with blank position master records.
+NOTE: Fangraphs data does not include position data
+```{r}
+
+cbs2 <- rename(cbs,cbsPos = Pos)
+my <- mutate(mymaster,Player=cbs_name)
+
+forPos <- left_join(cbs2,my,by=c('Player','MLB'))
+forPos <- select(forPos,playerid,cbsPos)
+
+m2 <- left_join(mymaster,forPos)
+m2 <- mutate(m2,Pos=ifelse(!is.na(cbsPos),cbsPos,Pos))
+mymaster <- select(m2,-cbsPos)
+
+
+```
+
+
+After this is all about birth year and is either broken or limited
+
+
+Can we get Baseball Reference to work for us?
+We can download by year, different tables for hitting and pitching
+https://www.baseball-reference.com/leagues/MLB/1991-births.shtml
+
+NOTE:  This worked a little bit, but only for hitters, and one birthyear at a time
+```{r}
+byear <- '1990'
+page <- read_html(str_c("https://www.baseball-reference.com/leagues/MLB/",byear,"-births.shtml")) %>% 
+  html_nodes("table") 
+df <- page[[1]] %>% html_table(,header=TRUE,fill=TRUE)
+pl <- select(df,Player=Name,MLB=Tms) %>% separate_rows(MLB) %>% mutate(BRbirth_year=byear)
+
+m2 <- left_join(mymaster,pl,by=c('Player','MLB'))
+m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,BRbirth_year))
+mymaster <- select(m2,-BRbirth_year)
+
+noby <- filter(mymaster,is.na(birth_year))
+nrow(noby)
+
+```
+
+More birth year stuff - never got this working
+Lets see if we can get anything from Lahman database
+```{r}
+# people <- People %>% select(playerID,birthYear,nameGiven)
+# pitching <- Pitching %>% select(playerID,yearID,teamID) %>% filter(yearID >= 2018)
+# batting <- Batting %>% select(playerID,yearID,teamID) %>% filter(yearID >= 2018)
+# team <- Teams %>% select(teamID,teamIDBR) %>% unique()
+# 
+# yp <- bind_rows(pitching,batting)
+# lpl <- left_join(yp,people) %>% left_join(team) %>% 
+#   select(Player=nameGiven,MLB=teamIDBR,birthYear)
+# 
+# m2 <- inner_join(mymaster,lpl,by=c('Player'))
+# m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,birthYear))
+#mymaster <- select(m2,-nby)
+
+```
+
+THE BOARD!  I can get ~800 ages from there
+That added about 300 - probably run once a year
+```{r}
+# board <- read.csv('../fangraphs-the-board-data.csv',stringsAsFactors=FALSE, encoding="UTF-8")
+# board <- select(board,playerid=playerId,Age) %>% mutate(nby = 2021 - Age) %>% select(-Age)
+# 
+# noby <- filter(mymaster,is.na(birth_year))
+# nrow(noby)
+# 
+# m2 <- left_join(mymaster,board)
+# m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
+# mymaster <- select(m2,-nby)
+# 
+# 
+# noby <- filter(mymaster,is.na(birth_year))
+# nrow(noby)
+
+```
+
 Fix roster file
 ```{r}
 #official file
-rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
+#rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
 
-miss <- anti_join(rosters,master,by=c('playerid'))
+#miss <- anti_join(rosters,master,by=c('playerid'))
+#miss2 <- miss %>% mutate(birth_year=NA,cbs_name=Player) %>% 
+#  select(playerid,Player,birth_year,cbs_name,Pos,MLB)
+
+#mymaster <- bind_rows(mymaster,miss2)
+```
+
+Fix hittertrend file
+```{r}
+htrend <- read.csv("../code/hTrend.csv")
+h2 <- distinct(htrend)
+h2 <- mutate(h2,ndate=parse_date_time(date, orders = c('mdy', 'ymd')))
+#write.csv(h2,"../code/hTrend.csv")
 
 ```
 

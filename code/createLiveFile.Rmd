@@ -17,21 +17,24 @@ library("tidyr")
 
 source("./daflFunctions.r")
 
-year <- "2021"
+cyear <- "2021"
 ```
 
 
 ```{r}
 
-protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
+protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+#protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
-protected <- select(protected,-X,-orank)
+protected <- select(protected,-X)
 
-hitters <- read.fg(str_c("../atcH",year,".csv"))
+#hitters <- read.fg(str_c("../atcH",cyear,".csv"))
+hitters <- read.fg('../steamerHROS.csv')
 hitters <- hitters %>% mutate(Team = 'Free Agent',Salary = 0,Contract = 1) %>% select(Player,Pos,Team,Salary,Contract,playerid)
 hitters <- anti_join(hitters,protected,by=c('playerid'))
 
-pitchers <- read.fg(str_c("../atcP",year,".csv"))
+#pitchers <- read.fg(str_c("../atcP",cyear,".csv"))
+pitchers <- read.fg('../steamerPROS.csv')
 pitchers <- pitchers %>% mutate(Team = 'Free Agent',Salary = 0,Contract = 1) %>% select(Player,Pos,Team,Salary,Contract,playerid)
 pitchers <- anti_join(pitchers,protected,by=c('playerid'))
 
@@ -41,7 +44,7 @@ Allplayers <- bind_rows(protected,hitters,pitchers)
 
 ```{r}
 
-write.csv(Allplayers,str_c("../",year,'LiveDraft.csv'))
+write.csv(Allplayers,str_c("../",cyear,'LiveDraft.csv'))
 
 ```
 

@@ -3,11 +3,12 @@
 library(tidyr)
 library(stringr)
 source("./daflFunctions.r")
-year <- "2020"
+year <- "2021"
 ```
 Need to load 2 files - draft and protection
 2019 Draft Results file is incorrect!  Only has active players (17)
 ```{r}
+#prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
 prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
 prot$playerid <- as.character(prot$playerid)
 prot <- select(prot,Team,Player,Pos,Salary,Contract)
@@ -25,8 +26,12 @@ draft <- select(draft,Team,Player,Pos,Salary,Contract)
 players <- bind_rows(prot,draft)
 players <- mutate(players,hp = ifelse(Pos=='P','P','H'))
 ```
+```{r}
+players <- read.csv(str_c("../data/",year,"DraftResults2.csv"),stringsAsFactors=FALSE)
+players <- mutate(players,hp = ifelse(Pos=='P','P','H'))
+```
 
-
+2021 = 60/40
 2020 = 57/43
 2019 = 60/40
 2018 = 54/46
@@ -40,6 +45,9 @@ res <- mutate(res,share=n/total)
 res
 ```
 Now determine how many hitters vs pitchers on opening day rosters.
+
+hitter/pitcher
+2021 12.5/12.5
 ```{r}
 players %>% filter(Pos=='P') %>% nrow()/16
 players %>% filter(Pos!='P') %>% nrow()/16

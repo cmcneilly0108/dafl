@@ -1,11 +1,13 @@
 # # TBD
 # # Improve holds projections?
 # 
- hpratio <- .40
+# hpratio <- .35
+ hpratio <- .4
+ 
 # 
 # bullpen <- "http://www.fangraphs.com/fantasy/bullpen-report-april-25-2015/"
-# nicks <- read.csv("../data/nicknames.csv",stringsAsFactors=FALSE)
-# nicks <- mutate(nicks,Avail=str_sub(Team,1,6))
+nicks <- read.csv("../data/nicknames.csv",stringsAsFactors=FALSE)
+nicks <- mutate(nicks,Avail=str_sub(Team,1,6))
 
 getd <- function(c) {
   as.numeric(unlist(r3[r3$Category==c,'ad']))
@@ -13,19 +15,19 @@ getd <- function(c) {
 
 # Skipping 2020 data since it would through off the averages
 loadPast <- function() {
-  f1 <- read.csv("../data/fs2019.csv")
+  f1 <- read.csv("../data/fs2021.csv")
   res <- genDenoms(f1)
   eras <- f1$ERA
   avgs <- f1$AVG
+  f1 <- read.csv("../data/fs2019.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2018.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2017.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2016.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
@@ -147,7 +149,7 @@ tradeFrom <- function(n){
   # For trades file
   #from <- str_locate(n,'from ')
   #team <- str_sub(n,from+5,length(n))
-  team <- unlist(str_split(n,"From "))
+  team <- unlist(str_split(n,"- Traded from "))
   t2 <- team[length(team)]
 }
 
@@ -166,18 +168,19 @@ pullMLB <- function(n){
   p <- p[,2]
 }
 
-# pullTeam <- function(tn){
-#   tH <- filter(AllH,Team == tn)
-#   tH <- select(tH,-Team)
-#   tP <- filter(AllP,Team == tn)
-#   tP <- select(tP,-Team)
-#   tP <- tP %>% arrange(-hotscore) %>%
-#     select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,Injury,Expected.Return)
-#   tH <- tH %>% arrange(-hotscore) %>%
-#     select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
-#   list(tH,tP)
-# }
-# 
+pullTeam <- function(tn){
+  tH <- filter(AllH,Team == tn)
+  tH <- select(tH,-Team)
+  tP <- filter(AllP,Team == tn)
+  tP <- left_join(tP,rrc)
+  tP <- select(tP,-Team)
+  tP <- tP %>% arrange(-hotscore) %>%
+    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
+  tH <- tH %>% arrange(-hotscore) %>%
+    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
+  list(tH,tP)
+}
+
 # addSheet <- function(l,w) {
 #   df <- l[[2]]
 #   csTableColNames <- CellStyle(w) + Alignment(wrapText=TRUE, h="ALIGN_CENTER")
@@ -292,13 +295,14 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   nhitters <- 13
   npitchers <- 12
 
-  nteams <- 16
+  nteams <- 14
   tdollars <- nteams * (260 +dadj) * ratio
 
   # What happens when we lop of the last 5 spots
-  nhitters <- 10
-  npitchers <- 10
-  tdollars <- tdollars - 80
+  # I can't remember why I'm doing this?
+  #nhitters <- 10
+  #npitchers <- 10
+  #tdollars <- tdollars - 80
 
 
   pdollars <- round(tdollars*hpratio)
@@ -346,7 +350,7 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
 
     ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
                        zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
-    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
+    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+(1.0*zxH))
     ihitters <- arrange(ihitters,-zScore)
 
     ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
@@ -543,6 +547,7 @@ calcInflation <- function(prot) {
 read.fg <- function(fn) {
   m2 <- select(master,playerid,Pos,MLB,birth_year)
   df <- read.csv(fn,stringsAsFactors=FALSE, encoding="UTF-8")
+  df <- filter(df,str_length(Team) > 0)
   colnames(df) <- str_c('p',colnames(df))
   colnames(df)[1] <- 'Player'
   df <- dplyr::rename(df,playerid=pplayerid)
@@ -574,11 +579,16 @@ read.cbs <- function(fn) {
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE, encoding="UTF-8")
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
+  df <- filter(df,!is.na(MLB))
   df$Player <- unlist(lapply(df$Player,stripName))
   # Team abbreviations are not the same - find all discrepancies WAS->WSH
-  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSH')
-  df$MLB <- replace(df$MLB,df$MLB=='CHW','CWS')
-
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSN')
+  df$MLB <- replace(df$MLB,df$MLB=='CWS','CHW')
+  df$MLB <- replace(df$MLB,df$MLB=='TB','TBR')
+  df$MLB <- replace(df$MLB,df$MLB=='KC','KCR')
+  df$MLB <- replace(df$MLB,df$MLB=='SD','SDP')
+  df$MLB <- replace(df$MLB,df$MLB=='SF','SFG')
+  
   # Create Team column
   #df <- mutate(df,Avail=str_replace(Avail,'\\.\\.\\.',''))
   #df <- left_join(df,nicks,by=c('Avail'))
@@ -602,6 +612,8 @@ addPlayerid <- function(df) {
 
   final <- rbind(gfull,gname)
   final
+  # see if we can only join on team
+  #gfull
 }
 
 addPlayeridOnly <- function(df) {
@@ -664,8 +676,14 @@ predictHolds <- function(pitchers) {
   # f <- read_html('http://www.fangraphs.com/fantasy/category/bullpen-report/')
   # l <- xml_find_one(f,'//a[contains(@title,"Bullpen")]')
   # bp <- xml_attr(l,'href')
-  bp <- 'https://fantasy.fangraphs.com/bullpen-report-september-26-2019/'
-  crep <- getbpReport(bp)
+  #bp <- 'https://fantasy.fangraphs.com/bullpen-report-september-26-2019/'
+  #Get latest bullpen report
+  f <- read_html('http://www.fangraphs.com/fantasy/category/bullpen-report/')
+  #l <- xml_find_one(f,'//a[contains(@title,"Bullpen")]')
+  l <- xml_find_first(f,'//a[contains(@title,"Bullpen")]')
+  bp <- xml_attr(l,'href')
+  
+    crep <- getbpReport(bp)
 
   colnames(crep) <- c('Player','pRole')
   pitchers <- left_join(pitchers,crep,c('Player'))
@@ -780,143 +798,143 @@ hotScores <- function(toph,topp,tm=FALSE) {
   list(bhitters,bpitchers)
 }
 
-# 
-# # This hangs and never completes
-# zScores <- function(toph,topp) {
-#   toph <- filter(toph,pAB>0)
-#   topp <- filter(topp,pIP>0)
-#   mHR <- mean(toph$pHR)
-#   sdHR <- sd(toph$pHR)
-#   mR <- mean(toph$pR)
-#   sdR <- sd(toph$pR)
-#   mSB <- mean(toph$pSB)
-#   sdSB <- sd(toph$pSB)
-#   mRBI <- mean(toph$pRBI)
-#   sdRBI <- sd(toph$pRBI)
-# 
-#   mW <- mean(topp$pW)
-#   sdW <- sd(topp$pW)
-#   mSO <- mean(topp$pSO)
-#   sdSO <- sd(topp$pSO)
-#   mHLD <- mean(topp$pHLD)
-#   sdHLD <- sd(topp$pHLD)
-#   mSV <- mean(topp$pSV)
-#   sdSV <- sd(topp$pSV)
-# 
-#   mAvg <- mean(toph$pAVG)
-#   sdAvg <- sd(toph$pAVG)
-#   toph <- mutate(toph,xH = pH-(pAB * mAvg))
-#   mxH <- mean(toph$xH)
-#   sdxH <- sd(toph$xH)
-# 
-#   mERA <- mean(topp$pERA)
-#   sdERA <- sd(topp$pERA)
-#   topp <- mutate(topp,xER = (pIP * mERA/9)-(pIP * pERA/9))
-#   mxER <- mean(topp$xER)
-#   sdxER <- sd(topp$xER)
-# 
-#   toph <- mutate(toph,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
-#                  zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
-#   toph <- mutate(toph,zScore=zHR+zR+zRBI+zSB+zxH)
-#   toph <- arrange(toph,-zScore)
-# 
-# 
-#   topp <- mutate(topp,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
-#                  zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
-#   topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
-#   topp <- arrange(topp,-zScore)
-# 
-#   # Add the total thitter value to everyone
-#   #toph <- head(toph,thitters)
-#   toph$zScore <- toph$zScore - last(toph$zScore)
-#   # Add pitchers
-#   #topp <- head(topp,tpitchers)
-#   topp$zScore <- topp$zScore - last(topp$zScore)
-# 
-#   ih2 <- toph
-#   ip2 <- topp
-# 
-#   bhitters <- select(ih2,playerid,zScore)
-#   bpitchers <- select(ip2,playerid,zScore)
-# 
-#   list(bhitters,bpitchers)
-# }
-# 
-# zScoresST <- function(ihitters,ipitchers) {
-# 
-#   toph <- ihitters
-#   topp <- ipitchers
-#   mHR <- mean(toph$pHR)
-#   sdHR <- sd(toph$pHR)
-#   mR <- mean(toph$pR)
-#   sdR <- sd(toph$pR)
-#   mSB <- mean(toph$pSB)
-#   sdSB <- sd(toph$pSB)
-#   mRBI <- mean(toph$pRBI)
-#   sdRBI <- sd(toph$pRBI)
-# 
-#   mW <- mean(topp$pW)
-#   sdW <- sd(topp$pW)
-#   mSO <- mean(topp$pSO)
-#   sdSO <- sd(topp$pSO)
-#   mHLD <- mean(topp$pHLD)
-#   sdHLD <- sd(topp$pHLD)
-#   mSV <- mean(topp$pSV)
-#   sdSV <- sd(topp$pSV)
-# 
-#   mAvg <- mean(toph$pAVG)
-#   sdAvg <- sd(toph$pAVG)
-#   ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
-#   toph <- mutate(toph,xH = pH-(pAB * mAvg))
-#   mxH <- mean(toph$xH)
-#   sdxH <- sd(toph$xH)
-# 
-#   mERA <- mean(topp$pERA)
-#   sdERA <- sd(topp$pERA)
-#   ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
-#   topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
-#   mxER <- mean(topp$xER)
-#   sdxER <- sd(topp$xER)
-# 
-#   ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
-#                      zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
-#   ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
-#   ihitters <- arrange(ihitters,-zScore)
-# 
-#   ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
-#                       zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
-#   ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
-#   ipitchers <- arrange(ipitchers,-zScore)
-# 
-#   # Add the total thitter value to everyone
-#   #toph <- head(toph,thitters)
-#   #toph$zScore <- toph$zScore - last(toph$zScore)
-#   # Add pitchers
-#   #topp <- head(topp,tpitchers)
-#   #topp$zScore <- topp$zScore - last(topp$zScore)
-# 
-#   bhitters <- select(ihitters,playerid,zScore)
-#   bpitchers <- select(ipitchers,playerid,zScore)
-# 
-#   list(bhitters,bpitchers)
-# }
-# 
-# getSalary <- function() {
-#   # Add Salary, Contract to players
-#   s <- read.csv("salaryinfo.csv",header=FALSE,stringsAsFactors=FALSE, encoding="UTF-8")
-#   colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank','Extra')  
-#   
-#   sal <- select(s,-Rank,-Extra) %>%
-#     filter(!(Avail %in% c('Batters','Pitchers','Avail'))) %>%
-#     filter(!(Player %in% c('TOTALS')))
-#   sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
-#   sal$Team <- na.locf(sal$Team)
-#   sal <- mutate(sal, MLB = pullMLB(Player))
-#   sal$Player <- unlist(lapply(sal$Player,stripName))
-#   sal$Salary <- as.integer(sal$Salary)
-#   sal$Contract <- as.integer(sal$Contract)
-#   sal <- addPlayerid(sal) %>% select(playerid,Salary,Contract) %>% distinct()
-# }
+
+# This hangs and never completes
+zScores <- function(toph,topp) {
+  toph <- filter(toph,pAB>0)
+  topp <- filter(topp,pIP>0)
+  mHR <- mean(toph$pHR)
+  sdHR <- sd(toph$pHR)
+  mR <- mean(toph$pR)
+  sdR <- sd(toph$pR)
+  mSB <- mean(toph$pSB)
+  sdSB <- sd(toph$pSB)
+  mRBI <- mean(toph$pRBI)
+  sdRBI <- sd(toph$pRBI)
+
+  mW <- mean(topp$pW)
+  sdW <- sd(topp$pW)
+  mSO <- mean(topp$pSO)
+  sdSO <- sd(topp$pSO)
+  mHLD <- mean(topp$pHLD)
+  sdHLD <- sd(topp$pHLD)
+  mSV <- mean(topp$pSV)
+  sdSV <- sd(topp$pSV)
+
+  mAvg <- mean(toph$pAVG)
+  sdAvg <- sd(toph$pAVG)
+  toph <- mutate(toph,xH = pH-(pAB * mAvg))
+  mxH <- mean(toph$xH)
+  sdxH <- sd(toph$xH)
+
+  mERA <- mean(topp$pERA)
+  sdERA <- sd(topp$pERA)
+  topp <- mutate(topp,xER = (pIP * mERA/9)-(pIP * pERA/9))
+  mxER <- mean(topp$xER)
+  sdxER <- sd(topp$xER)
+
+  toph <- mutate(toph,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                 zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+  toph <- mutate(toph,zScore=zHR+zR+zRBI+zSB+zxH)
+  toph <- arrange(toph,-zScore)
+
+
+  topp <- mutate(topp,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                 zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+  topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  topp <- arrange(topp,-zScore)
+
+  # Add the total thitter value to everyone
+  #toph <- head(toph,thitters)
+  toph$zScore <- toph$zScore - last(toph$zScore)
+  # Add pitchers
+  #topp <- head(topp,tpitchers)
+  topp$zScore <- topp$zScore - last(topp$zScore)
+
+  ih2 <- toph
+  ip2 <- topp
+
+  bhitters <- select(ih2,playerid,zScore)
+  bpitchers <- select(ip2,playerid,zScore)
+
+  list(bhitters,bpitchers)
+}
+
+zScoresST <- function(ihitters,ipitchers) {
+
+  toph <- ihitters
+  topp <- ipitchers
+  mHR <- mean(toph$pHR)
+  sdHR <- sd(toph$pHR)
+  mR <- mean(toph$pR)
+  sdR <- sd(toph$pR)
+  mSB <- mean(toph$pSB)
+  sdSB <- sd(toph$pSB)
+  mRBI <- mean(toph$pRBI)
+  sdRBI <- sd(toph$pRBI)
+
+  mW <- mean(topp$pW)
+  sdW <- sd(topp$pW)
+  mSO <- mean(topp$pSO)
+  sdSO <- sd(topp$pSO)
+  mHLD <- mean(topp$pHLD)
+  sdHLD <- sd(topp$pHLD)
+  mSV <- mean(topp$pSV)
+  sdSV <- sd(topp$pSV)
+
+  mAvg <- mean(toph$pAVG)
+  sdAvg <- sd(toph$pAVG)
+  ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
+  toph <- mutate(toph,xH = pH-(pAB * mAvg))
+  mxH <- mean(toph$xH)
+  sdxH <- sd(toph$xH)
+
+  mERA <- mean(topp$pERA)
+  sdERA <- sd(topp$pERA)
+  ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
+  topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
+  mxER <- mean(topp$xER)
+  sdxER <- sd(topp$xER)
+
+  ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                     zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+  ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
+  ihitters <- arrange(ihitters,-zScore)
+
+  ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                      zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+  ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  ipitchers <- arrange(ipitchers,-zScore)
+
+  # Add the total thitter value to everyone
+  #toph <- head(toph,thitters)
+  #toph$zScore <- toph$zScore - last(toph$zScore)
+  # Add pitchers
+  #topp <- head(topp,tpitchers)
+  #topp$zScore <- topp$zScore - last(topp$zScore)
+
+  bhitters <- select(ihitters,playerid,zScore)
+  bpitchers <- select(ipitchers,playerid,zScore)
+
+  list(bhitters,bpitchers)
+}
+
+getSalary <- function() {
+  # Add Salary, Contract to players
+  s <- read.csv("../salaryinfo.csv",header=FALSE,stringsAsFactors=FALSE, encoding="UTF-8")
+  colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank','Extra')
+
+  sal <- select(s,-Rank,-Extra) %>%
+    filter(!(Avail %in% c('Batters','Pitchers','Avail'))) %>%
+    filter(!(Player %in% c('TOTALS')))
+  sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
+  sal$Team <- na.locf(sal$Team)
+  sal <- mutate(sal, MLB = pullMLB(Player))
+  sal$Player <- unlist(lapply(sal$Player,stripName))
+  sal$Salary <- as.integer(sal$Salary)
+  sal$Contract <- as.integer(sal$Contract)
+  sal <- addPlayerid(sal) %>% select(playerid,Salary,Contract) %>% distinct()
+}
 
 createProtection <- function(fn) {
   # Add Salary, Contract to players
@@ -941,72 +959,90 @@ createProtection <- function(fn) {
   sal <- addPlayeridOnly(sal)
 }
 
-# addSalary <- function(df) {
-#   left_join(df,sal,by=c('playerid')) 
-# }
-# 
-# 
-# getMLBstandings <- function() {
-#   df <- read_json("https://erikberg.com/mlb/standings.json",simplifyVector = TRUE)
-#   df2 <- df[2]
-#   df3 <- df2$standing
-#   df3 <- mutate(df3,Season=paste(won,lost,sep='-'))
-#   mlbmap <- read.csv("MLBmap.csv",stringsAsFactors = FALSE)
-#   df3 <- left_join(df3,mlbmap)
-#   stand <- df3 %>% select(MLB,Season,L10 = last_ten)
-# }
-# 
+addSalary <- function(df) {
+  left_join(df,sal,by=c('playerid'))
+}
+
+
+getMLBstandings <- function() {
+  df <- read_json("https://erikberg.com/mlb/standings.json",simplifyVector = TRUE)
+  df2 <- df[2]
+  df3 <- df2$standing
+  df3 <- mutate(df3,Season=paste(won,lost,sep='-'))
+  mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
+  df3 <- left_join(df3,mlbmap)
+  stand <- df3 %>% select(MLB,Season,L10 = last_ten)
+}
+
 # addMLBstandings <- function(df) {
 #   left_join(df,stand,by=c('MLB'))
 # }
 # 
 getInjuries <- function() {
-  url <- "http://www.cbssports.com/mlb/injuries/daily/"
-  #url <- "https://www.foxsports.com/mlb/injuries"
-  page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE)
+  #url <- "http://www.cbssports.com/mlb/injuries/"
+  url <- "https://scores.nbcsports.com/mlb/stats.asp?file=inj"
+  #url <- "https://sportsdata.usatoday.com/baseball/mlb/injuries"
+  page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE,fill=TRUE)
 
+  page[1] <- NULL
+  page <- Filter(function(x) dim(x)[1] > 0, page)
   inj <- bind_rows(page)
-  inj <- inj %>% select(-Team,-Position)
-  name <- str_remove_all(inj$Player,".+\\n") %>% str_trim()
+  colnames(inj) <- c('Injury','Player','Expected.Return')
+  #inj <- inj %>% select(-Team,-Position)
+  #name <- str_remove_all(inj$Player,".+\\n") %>% str_trim()
+  name <- gsub(",.*", "", inj$Player)
   inj$Player <- name
-  colnames(inj) <- c('Player','Injury','Expected.Return')
+  #colnames(inj) <- c('Player','Injury','Expected.Return')
   inj
 }
 
-# addInjuries <- function(df) {
-#   left_join(df,inj,by=c('Player'))
-# }
-# 
-# get2starts <- function() {
-#   url <- "https://www.cbssports.com/fantasy/baseball/two-start-pitchers"
-#   page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE,fill=TRUE)
-#   starts <- page[[1]]
-#   #colnames(starts) <- starts[1, ]
-#   starts <- starts[-1, ]
-#   starts$Team <- str_sub(starts$Player,start=-3)
-#   starts$Player <- str_sub(starts$Player,end=-4)
-#   starts$twostarts <- 'YES'
-#   names(starts) <- make.names(names(starts), unique=TRUE)
-#   select(starts,Player,twostarts)
-# }
-# 
-# add2starts <- function(df) {
-#   left_join(df,twostarts,by=c('Player'))
-# }
-# 
-# 
-# pvCat <- function(col,weight,myScore) {
-#   rate <- (mean(col)/aWeek)*weight
-#   df <- data_frame(Vals=col)
-#   df <- mutate(df,wVals = (Vals-myScore)/rate, rVals=as.numeric(rank(-Vals)))
-#   myr <- as.numeric(filter(df,Vals==myScore)$rVals)
-#   df <- mutate(df,pvpVals = ifelse(rVals<myr,
-#                                    ifelse(wVals < 1,1,1/wVals),0))
-#   df <- mutate(df,pvmVals = ifelse(rVals>myr,
-#                                    ifelse(wVals > -1,1,1/wVals),0))
-#   list(sum(df$pvpVals),sum(df$pvmVals)*-1)
-# }
-# 
+getInjuriesNEW <- function() {
+  url <- 'https://www.nbcsports.com/edge/baseball/mlb/injury-report'
+  page <- read_html(url) %>% html_nodes(".cols-8") %>% html_text()
+}
+
+
+
+addInjuries <- function(df) {
+  left_join(df,inj,by=c('Player'))
+}
+
+get2starts <- function() {
+  #url <- "https://www.cbssports.com/fantasy/baseball/two-start-pitchers"
+  url <- "https://www.fantasypros.com/mlb/two-start-pitchers.php"
+  page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE,fill=TRUE)
+  starts <- page[[1]]
+  # make first row the column headers
+  colnames(starts) <- starts[1, ]
+  colnames(starts) <- make.names(colnames(starts))
+  starts <- starts[-1, ]
+  
+  # extract Player and Team
+  starts$Player <- str_trim(str_extract(starts$Two.Start.Pitcher,'[^(]+'))
+  starts$Team <- str_extract(starts$Two.Start.Pitcher,  "(?<=\\().+?(?=\\))")
+  
+  starts$twostarts <- 'YES'
+  #names(starts) <- make.names(names(starts), unique=TRUE)
+  select(starts,Player,twostarts)
+}
+
+add2starts <- function(df) {
+  left_join(df,twostarts,by=c('Player'))
+}
+
+
+pvCat <- function(col,weight,myScore) {
+  rate <- (mean(col)/aWeek)*weight
+  df <- data_frame(Vals=col)
+  df <- mutate(df,wVals = (Vals-myScore)/rate, rVals=as.numeric(rank(-Vals)))
+  myr <- as.numeric(filter(df,Vals==myScore)$rVals)
+  df <- mutate(df,pvpVals = ifelse(rVals<myr,
+                                   ifelse(wVals < 1,1,1/wVals),0))
+  df <- mutate(df,pvmVals = ifelse(rVals>myr,
+                                   ifelse(wVals > -1,1,1/wVals),0))
+  list(sum(df$pvpVals),sum(df$pvmVals)*-1)
+}
+
 # firstRowHeaders <- function(df) {
 #   colnames(df) = df[1, ] # the first row will be the header
 #   colnames(df) <- make.names(colnames(df))
@@ -1036,8 +1072,8 @@ getbpReport <- function(bp) {
 
   #crep <- readHTMLTable(bp, header=T, which=15,stringsAsFactors=F)
   t <- data.frame(crep$Closer,10,stringsAsFactors=FALSE)
-  t2 <- data.frame(crep$First,5,stringsAsFactors=FALSE)
-  t3 <- data.frame(crep$Second,2,stringsAsFactors=FALSE)
+  t2 <- data.frame(crep$'First Up',5,stringsAsFactors=FALSE)
+  t3 <- data.frame(crep$'Second Up',2,stringsAsFactors=FALSE)
   colnames(t) <- c('Player','Score')
   colnames(t2) <- c('Player','Score')
   colnames(t3) <- c('Player','Score')
@@ -1112,11 +1148,34 @@ stripDates <- function(name) {
   s
 }
 
-# firstPos <- function (str) {
-#   #s <- str_split(str,',')[[1]][1]
-#   s <- str_sub(str,0,str_locate(str,',')[[1]]-1)
-#   s
-# }
-# 
+firstPos <- function (str) {
+  #s <- str_split(str,',')[[1]][1]
+  s <- str_sub(str,0,str_locate(str,',')[[1]]-1)
+  s
+}
+
 # 
 # calcLVG = (W+L+S+BS+HLD)/IP
+
+getInjuriesFG <- function() {
+  df <- read_json("../injuryReport.json",simplifyVector = TRUE)
+  df <- filter(df,status != 'Activated',is.na(returndate)) %>% mutate(Injury = str_c(status," - ",injurySurgery),
+                                                    Expected.Return = str_c(eligibledate," - ",latestUpdate))
+  df <- df %>% select(playerid=playerId,Injury,Expected.Return)
+}
+
+addInjuriesFG <- function(df) {
+  left_join(df,inj,by=c('playerid'))
+}
+
+getRRClosers <- function() {
+  df <- read_json("../Closers.json",simplifyVector = TRUE)
+  rr <- df[[1]]
+  rrc <- rr %>% select(playerid = playerId,Role,Tags)
+}
+
+getFGScouts <- function(fn) {
+  df <- read_json(fn,simplifyVector = TRUE)
+  rr <- df[[1]]
+  rrc <- rr %>% rename(Player = playerName,playerid = PlayerId)
+}

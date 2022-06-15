@@ -2,7 +2,7 @@
 #   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
 #   2019Accrued.csv
 # Trades file!
-#   http://dafl.baseball.cbssports.com/transactions/all/trades/?print_rows=9999
+#   https://dafl.baseball.cbssports.com/transactions/2021/all/trades
 #   2019trades.csv
 
 
@@ -34,7 +34,7 @@ cleanRosters <- function(pl) {
   players <- addPlayerid(players)
 }
 
-year <- "2020"
+year <- "2021"
 
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
@@ -82,7 +82,7 @@ prot <- prot %>% mutate(asrc='protect') %>% select(playerid,asrc)
 hitters <- left_join(hitters,prot)
 pitchers <- left_join(pitchers,prot)
 
-draft <- read.csv(str_c("../data/",year,"DraftRecap.csv"),stringsAsFactors=FALSE)
+draft <- read.csv(str_c("../data/",year,"DraftResults.csv"),stringsAsFactors=FALSE)
 draft <- draft %>% mutate(dft='draft') %>% select(Player,dft)
 hitters <- left_join(hitters,draft)
 pitchers <- left_join(pitchers,draft)
@@ -111,7 +111,7 @@ pitchers$asrc <- ifelse(is.na(pitchers$Traded),pitchers$asrc,'trade')
 
 # Lets add injuries!
 injured <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
-injured <- filter(injured,str_detect(Players,'Injured'))
+injured <- filter(injured,str_detect(Players,'IR'))
 numinj <- injured %>% count(Team) %>% rename(injured = n)
 #numinj <- numinj %>% mutate(irank = rank(injured))
 

@@ -5,6 +5,8 @@
 # For live draft, create CSV with all players and teams, free agents have Team = 'Free Agent'
 # Then update draftguide to remove those rows - line 149 is when protected are removed
 
+# BUG - Why isn't Ohtani showing up on hitters side?  No DH's are showing!
+
 library("openxlsx")
 library("stringr")
 library("dplyr")
@@ -17,8 +19,8 @@ library("rvest")
 library("tidyr")
 source("./daflFunctions.r")
 
-cyear <- 2021
-lastyear <- "2020"
+cyear <- 2022
+lastyear <- "2021"
 src <- 'atc'
 #src <- 'steamer'
 
@@ -26,19 +28,19 @@ src <- 'atc'
 
 #predUpdate <- FALSE
 predUpdate <- TRUE
-fd <- file.info(str_c("../steamerH",cyear,".csv"))$mtime
+fd <- file.info(str_c("../ATCH",cyear,".csv"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 14) {
-  system("./pullSteamer.sh")
-  system("./pullATC.sh")
+  system("bash ../scripts/pullSteamer.sh")
+  system("bash ../scripts/pullATC.sh")
   predUpdate <- TRUE
 }
 
 
 #official file
-#protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2021fakeprotected.csv",stringsAsFactors=FALSE)
+protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+#protected <- read.csv("../2022fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -57,7 +59,7 @@ if (src=='atc') {
   pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.csv',sep=''))
 }
 
-pitchers <- predictHolds(pitchers)
+#pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 hitters$pSGP <- hitSGP(hitters)
 
@@ -108,7 +110,7 @@ pstandings <- protClean %>% group_by(Team) %>%
             Earned = TotalValue - Spent,
             VPPlayer = TotalValue/Players,
             DPP = (260-sum(Salary))/(25-Players),
-            FullValue = TotalValue + 0.8*(260-sum(Salary)),
+            FullValue = TotalValue + 1.10*(260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
@@ -166,7 +168,8 @@ inj <- getInjuries()
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
 
-OFY <- filter(inj,str_detect(Expected.Return,fixed('out for the season',ignore_case=TRUE)))
+OFY <- filter(inj,str_detect(Expected.Return,fixed('60-day',ignore_case=TRUE)))
+#OFY <- filter(inj,str_detect(Expected.Return,fixed('out for the season',ignore_case=TRUE)))
 lc <- left_join(lc,inj,by=c('Player'))
 
 # New Pitches - From FanGraphs
@@ -232,7 +235,8 @@ p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrang
 p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b,nrow(filter(p3b,DFL>0))))/aRPV(p3b,nrow(filter(p3b,DFL>0))))
 p3b <- select(p3b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
-pdh <- AllH %>% filter(Pos == 'DH',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
+pdh <- AllH %>% filter((is.na(Pos) | Pos == 'DH' | Pos == 'P'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
+#pdh <- AllH %>% filter(Pos == 'DH',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh,nrow(filter(pdh,DFL>0))))/aRPV(pdh,nrow(filter(pdh,DFL>0))))
 pdh <- select(pdh,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 
@@ -274,7 +278,7 @@ pp <- prop %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
 # Create percent against goals worksheet
 # Step 1 - Create targets
 targets <- data.frame()
-targets <- rbind(targets,c(lastyear,pgoals('../data/fs2019.csv')))
+targets <- rbind(targets,c(lastyear,pgoals('../data/fs2021.csv')))
 colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 targets <- select(targets,-AVG,-ERA,-year)
 targets <- melt(targets)
@@ -328,23 +332,24 @@ ppp <- group_by(protected,Position) %>% summarize(Count=length(Position))
 currentSummary <- pstandings %>% mutate(PlayersLeft = 25 - Players,DollarsLeft = 260 - Spent) %>%
   select(Team,DollarsLeft,ExpValue = FullValue,zScore,PlayersLeft)
 #htots <- rhitters %>% count(Team) %>% mutate(Hneeded = 13 - n) %>% select(-n)
-htots <- rhitters %>% group_by(Team) %>% summarise(needed = 13 - n(),salleft=(260*.6)-sum(Salary))
+htots <- rhitters %>% group_by(Team) %>% summarise(needed = 13 - n(),salleft=(260*(1-hpratio))-sum(Salary))
 htots$group <- 'hitting'
 #ptots <- rpitchers %>% count(Team) %>% mutate(Pneeded = 12 - n) %>% select(-n)
-ptots <- rpitchers %>% group_by(Team) %>% summarise(needed = 12 - n(),salleft=(260*.4)-sum(Salary))
+ptots <- rpitchers %>% group_by(Team) %>% summarise(needed = 12 - n(),salleft=(260*hpratio)-sum(Salary))
 ptots$group <- 'pitching'
 #currentSummary <- inner_join(currentSummary,htots)
 #currentSummary <- inner_join(currentSummary,ptots)
-currentSummary <- bind_rows(htots,ptots) %>% arrange(Team) %>% select(Team,group,needed,salleft)
+currentSummary <- bind_rows(htots,ptots) %>% arrange(group,-salleft) %>% select(Team,group,needed,salleft)
 
-hitterTotal <- 16*13
-pitcherTotal <- 16*12
+hitterTotal <- 14*13
+pitcherTotal <- 14*12
 hitterTaken <- nrow(rhitters)
 pitcherTaken <- nrow(rpitchers)
 hitterSpent <- sum(rhitters$Salary)
 pitcherSpent <- sum(rpitchers$Salary)
-hitterMoneyTotal <- 16*(260*.6)
-pitcherMoneyTotal <- 16*(260*.4)
+hitterMoneyTotal <- 14*(260*(1-hpratio))
+pitcherMoneyTotal <- 14*(260*hpratio)
+rhitters$pDFL <- rhitters$pDFL %>% replace_na(0)
 hpdfl <- sum(rhitters$pDFL)
 ppdfl <- sum(rpitchers$pDFL)
 hlv <- (filter(rhitters,pDFL < 2) %>% nrow())/hitterTotal
@@ -359,11 +364,14 @@ psr <- pitcherSpent/pitcherMoneyTotal
 hvr <- hpdfl/hitterMoneyTotal
 pvr <- ppdfl/pitcherMoneyTotal
 
-protectSummary <- data.frame(type=c("hitter","pitcher"),pnum=c(hpr,ppr),pspent=c(hsr,psr),
-                             pdfl=c(hpdfl,ppdfl),valueRatio=c(hvr,pvr))
+hnleft <- hitterTotal - hitterTaken
+pnleft <- pitcherTotal - pitcherTaken
+
+protectSummary <- data.frame(type=c("hitter","pitcher"),playersProt=c(hpr,ppr),dollarsSpent=c(hsr,psr),
+                             ToFill=c(hnleft,pnleft),valueTaken=c(hvr,pvr))
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pDFL > 16) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pSB > 16) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
@@ -545,3 +553,146 @@ hist(AP2$pDFL)
 AH2 <- filter(AllH,pDFL > 0)
 hist(AH2$pDFL)
 
+
+# create scenarios
+# Step 1 - create random lineup
+#    fill out dataframe
+
+blanklineup <- data_frame(posid=c('C','1B','2B','SS','3B','OF1','OF2','OF3','U'),
+                          pos=c('C','1B','2B','SS','3B','OF','OF','OF','U'),
+                          playerid=NA,psalary=1,pHR=0,pRBI=0,pR=0,pSB=0)
+blanklineup$playerid <- as.character(blanklineup$playerid)
+poslist <- data_frame(posid=c('C','1B','2B','SS','3B','OF1','OF2','OF3','U'),
+                      pos=c('C','1B','2B','SS','3B','OF','OF','OF','U'))
+
+pickplayer <- function(pposid,ppos,maxSalary) {
+  #m2sal <- ifelse((maxSalary>40),40,maxSalary)
+  #rplayer <- AllH %>% filter(Pos == ppos | str_detect(posEl,ppos),pSGP > 0,pDFL <= m2sal) %>% sample_n(size=1)
+  rplayer <- AllH %>% filter(Pos == ppos | str_detect(posEl,ppos),pSGP > 0,pDFL <= maxSalary) %>% sample_n(size=1)
+  psalary <- round(rplayer$pDFL)
+  psalary <- ifelse(psalary < 1,1,psalary)
+  data_frame(posid=pposid,pos=ppos,lock=0,playerid=rplayer$playerid,psalary,pHR=rplayer$pHR,
+             pRBI=rplayer$pRBI,pR=rplayer$pR,pSB=rplayer$pSB)
+}
+
+randomLineup <- function(odf,sal) {
+  edf <- odf[is.na(odf$playerid),]
+  fdf <- odf[!is.na(odf$playerid),]
+  if (nrow(edf) == 0) {
+    odf
+  } else {
+    rint <- sample.int(nrow(edf), 1)
+    pickpos <- edf[rint,]
+    # remove row from new_df
+    smaller_df <- edf[-rint,]
+    # call randomLineup on smaller df
+    returned_df <- randomLineup(smaller_df,sal-1 - sum(fdf$psalary))
+    # get back df and add new row back in
+    mbid <- sal - sum(returned_df$psalary) - sum(fdf$psalary)
+    #print(mbid)
+    npid <- pickplayer(pickpos$posid,pickpos$pos,mbid)
+    # still have to add back in non-NAs from first call
+    rbind(fdf,returned_df,npid)
+  }
+}
+
+rosterScore <- function(roster) {
+  hrs <- (sum(roster[,5]))/targets[targets$statistic=='HR',]$goal
+  hrs <- ifelse((hrs>1),1,hrs)
+  rbis <- (sum(roster[,6]))/targets[targets$statistic=='RBI',]$goal
+  rbis <- ifelse((rbis>1),1,rbis)
+  rs <- (sum(roster[,7]))/targets[targets$statistic=='R',]$goal
+  rs <- ifelse((rs>1),1,rs)
+  sbs <- (sum(roster[,8]))/targets[targets$statistic=='SB',]$goal
+  sbs <- ifelse((sbs>1),1,sbs)
+  totalscore <- (hrs+rbis+rs+sbs)/4
+  totalscore
+}
+
+generateGeneration <- function(slist,msal) {
+  topr <- slist[[1]]
+  toplock <- filter(topr,lock==1)
+  topnolock <- filter(topr,lock ==0)
+  # mate with next 4 - TBD
+  
+  # mutate - remove 3,2,1 players
+  ct<- 1
+  nk <- nrow(topnolock) - 3
+  while (ct <= 10) {
+    cr <- sample_n(topnolock,nk) %>% rbind(toplock)
+    cr <- left_join(poslist,cr,by = c("posid", "pos"))
+    cr <- randomLineup(cr,msal)
+    slist <- append(slist,list(cr))
+    ct <- ct + 1
+  }
+  
+  ct<- 1
+  nk <- nrow(topnolock) - 2
+    while (ct <= 10) {
+    cr <- sample_n(topnolock,nk) %>% rbind(toplock)
+    cr <- left_join(poslist,cr,by = c("posid", "pos"))
+    cr <- randomLineup(cr,msal)
+    slist <- append(slist,list(cr))
+    ct <- ct + 1
+  }
+  
+  ct<- 1
+  nk <- nrow(topnolock) - 1
+  while (ct <= 10) {
+    cr <- sample_n(topnolock,nk) %>% rbind(toplock)
+    cr <- left_join(poslist,cr,by = c("posid", "pos"))
+    cr <- randomLineup(cr,msal)
+    slist <- append(slist,list(cr))
+    ct <- ct + 1
+  }
+  
+  wht <- lapply(slist,rosterScore)
+  new_vector2 <- unlist(wht, use.names = FALSE)
+  which.max(new_vector2)
+  print(max(new_vector2))
+  slist
+}
+
+# mcricks <- read.csv("../forecastCricks.csv")
+# mcricks <- filter(mcricks,posid!="OF2")
+# cr <- left_join(poslist,mcricks,by = c("posid", "pos"))
+# mPay <- 166 - sum(mcricks$psalary)
+# #cr <- randomLineup(cr,mPay)
+# 
+# #maxPay <- 166
+# counter <- 1
+# rosters <- list()
+# 
+# while (counter <= 30) {
+#   #nr <- randomLineup(blanklineup,maxPay)
+#   nr <- randomLineup(cr,maxPay)
+#   rosters <- append(rosters,list(nr))
+#   counter <- counter + 1
+# }
+# 
+# wht <- lapply(rosters,rosterScore)
+# new_vector <- unlist(wht, use.names = FALSE)
+# #which.max(new_vector)
+# print(max(new_vector))
+# 
+# #create new set of 30
+# nextr <- list()
+# 
+# # add in best
+# nextr <- append(nextr,list(rosters[[which.max(new_vector)]]))
+# 
+# ctr <- 1
+# while (ctr <= 50) {
+#   nround <- list()
+#   nround <- generateGeneration(nextr,maxPay)
+#   # BUG - genGen doubles my protected list - didn't double SS
+#   ctr <- ctr + 1
+#   nextr <- list()
+#   wht <- lapply(nround,rosterScore)
+#   new_vector <- unlist(wht, use.names = FALSE)
+#   nextr <- append(nextr,list(nround[[which.max(new_vector)]]))
+# }
+# 
+# myteam <- nround[[which.max(new_vector)]]
+# mt4 <- left_join(myteam,AllH)
+# sum(mt2$psalary)

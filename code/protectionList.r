@@ -8,7 +8,7 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-
+# BUG - Diego Castillo
 
 library("openxlsx")
 library("stringr")
@@ -21,15 +21,15 @@ library("rvest")
 
 source("./daflFunctions.r")
 
-year <- "2021"
-lastyear <- "2020"
+year <- "2022"
+lastyear <- "2021"
 
-fd <- file.info(str_c("../atcH",year,".csv"))$mtime
+fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
   #system("./pullSteamer.sh")
-  #system("bash ../scripts/pullSteamer.sh")
+  system("bash ../scripts/pullSteamer.sh")
   #system("bash ../scripts/pullMaster.sh")
   system("bash ../scripts/pullATC.sh")
 }
@@ -55,7 +55,7 @@ rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
 rHitters <- filter(rosters,Pos != 'P' & Pos != 'RP')
 rPitchers <- filter(rosters,Pos == 'P' | Pos == 'RP')
 
-nteams <- 16
+nteams <- 14
 tdollars <- nteams * 260
 pdollars <- round(tdollars*0.36)
 hdollars <- tdollars - pdollars
@@ -137,7 +137,9 @@ pjoin <- prosters2 %>% ungroup() %>% mutate(rdOne = TRUE) %>% select(playerid,rd
 rhitters <- left_join(rhitters,pjoin,by=c('playerid'))
 rpitchers <- left_join(rpitchers,pjoin,by=c('playerid'))
 
-while ((nvalue > cvalue) & ct < 30) {
+
+
+while ((nvalue > (cvalue+1)) & ct < 20) {
   ct <- ct + 1
   cvalue <- nvalue
   nlist <- preLPP(hitters,pitchers,prosters2)
@@ -183,7 +185,7 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
             TotalValue = sum(pDFL),
             MoneyEarned = TotalValue - Spent,
             VPPlayer = TotalValue/NumProtected,
-            PostDraftEst = TotalValue + 0.8 * (260-sum(Salary)),
+            PostDraftEst = TotalValue + 1.05 * (260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-PostDraftEst)
 totals$zScore <- as.numeric(scale(totals$PostDraftEst))
@@ -296,28 +298,28 @@ addWorksheet(protect,'C')
 writeData(protect,'C',pc,headerStyle = headerStyle)
 setColWidths(protect, 'C', cols = 1:15, widths = "auto")
 addStyle(protect, 'C',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, 'C',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, 'C',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('1B',p1b,st,c(2,3,14,15))
 addWorksheet(protect,'1B')
 writeData(protect,'1B',p1b,headerStyle = headerStyle)
 setColWidths(protect, '1B', cols = 1:15, widths = "auto")
 addStyle(protect, '1B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, '1B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, '1B',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('2B',p2b,st,c(2,3,14,15))
 addWorksheet(protect,'2B')
 writeData(protect,'2B',p2b,headerStyle = headerStyle)
 setColWidths(protect, '2B', cols = 1:15, widths = "auto")
 addStyle(protect, '2B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, '2B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, '2B',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('SS',pss,st,c(2,3,14,15))
 addWorksheet(protect,'SS')
 writeData(protect,'SS',pss,headerStyle = headerStyle)
 setColWidths(protect, 'SS', cols = 1:15, widths = "auto")
 addStyle(protect, 'SS',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, 'SS',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, 'SS',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 
 # tabs[[length(tabs)+1]] <- list('3B',p3b,st,c(2,3,14,15))
@@ -325,21 +327,21 @@ addWorksheet(protect,'3B')
 writeData(protect,'3B',p3b,headerStyle = headerStyle)
 setColWidths(protect, '3B', cols = 1:15, widths = "auto")
 addStyle(protect, '3B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, '3B',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, '3B',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('OF',pof,st,c(2,3,14,15))
 addWorksheet(protect,'OF')
 writeData(protect,'OF',pof,headerStyle = headerStyle)
 setColWidths(protect, 'OF', cols = 1:15, widths = "auto")
 addStyle(protect, 'OF',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, 'OF',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, 'OF',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('DH',pdh,st,c(2,3,14,15))
 addWorksheet(protect,'DH')
 writeData(protect,'DH',pdh,headerStyle = headerStyle)
 setColWidths(protect, 'DH', cols = 1:15, widths = "auto")
 addStyle(protect, 'DH',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, 'DH',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, 'DH',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 # st <- list('4'=csMoneyColumn,'5'=csMoneyColumn,'6'=csRatioColumn)
 # tabs[[length(tabs)+1]] <- list('Other',pna,st,c(2,3,14,15))
@@ -347,7 +349,7 @@ addWorksheet(protect,'Other')
 writeData(protect,'Other',pna,headerStyle = headerStyle)
 setColWidths(protect, 'Other', cols = 1:15, widths = "auto")
 addStyle(protect, 'Other',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(protect, 'Other',style = csRatioColumn,rows = 2:200, cols = c(7,14),gridExpand = TRUE)
+addStyle(protect, 'Other',style = csRatioColumn,rows = 2:200, cols = c(6,14),gridExpand = TRUE)
 
 
 # tabs[[length(tabs)+1]] <- list('SP',psp,st,c(2,3,14,15))
@@ -355,7 +357,7 @@ addWorksheet(protect,'SP')
 writeData(protect,'SP',psp,headerStyle = headerStyle)
 setColWidths(protect, 'SP', cols = 1:15, widths = "auto")
 addStyle(protect, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
-addStyle(protect, 'SP',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
+addStyle(protect, 'SP',style = csRatioColumn,rows = 2:200, cols = c(5,13),gridExpand = TRUE)
 
 
 
@@ -364,14 +366,14 @@ addWorksheet(protect,'MR')
 writeData(protect,'MR',pmr,headerStyle = headerStyle)
 setColWidths(protect, 'MR', cols = 1:15, widths = "auto")
 addStyle(protect, 'MR',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
-addStyle(protect, 'MR',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
+addStyle(protect, 'MR',style = csRatioColumn,rows = 2:200, cols = c(5,13),gridExpand = TRUE)
 
 # tabs[[length(tabs)+1]] <- list('CL',pcl,st,c(2,3,14,15))
 addWorksheet(protect,'CL')
 writeData(protect,'CL',pcl,headerStyle = headerStyle)
 setColWidths(protect, 'CL', cols = 1:15, widths = "auto")
 addStyle(protect, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
-addStyle(protect, 'CL',style = csRatioColumn,rows = 2:200, cols = c(6,13),gridExpand = TRUE)
+addStyle(protect, 'CL',style = csRatioColumn,rows = 2:200, cols = c(5,13),gridExpand = TRUE)
 
 # 
 # st <- list('6'=csMoneyColumn,'7'=csMoneyColumn,'8'=csMoneyColumn)

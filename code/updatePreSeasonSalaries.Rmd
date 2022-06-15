@@ -24,8 +24,8 @@ library("dplyr")
 
 source("./daflFunctions.r")
 
-year <- "2021"
-last <- "2020"
+year <- "2022"
+last <- "2021"
 ```
 
 Step 1:  Load in last year's final roster file
@@ -109,4 +109,3 @@ tysalaries <- select(tysalaries,Player,Pos,Team,Salary,Contract,MLB,playerid)
 write.csv(tysalaries,str_c("../",year,'Rosters.csv'))
 
 ```
-
