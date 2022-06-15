@@ -1,0 +1,13 @@
+
+2020salaryinfo.csv
+2020Accrued.csv
+2020DraftResults.csv
+*.xlsx
+*.csv
+*.json
+*.jpg
+*.pdf
+*.xls
+*.ods
+scrape.html
+scripts/pullSteamerr.sh
