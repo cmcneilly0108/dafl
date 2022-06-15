@@ -627,9 +627,9 @@ needsOF <- inner_join(needsOF,st) %>% select(-Avail,-Short)
 # Let's play with htrend file
 htrend <- read.csv("hTrend.csv")
 htrend$date <- mdy(htrend$date)
-ggplot(data=htrend, aes(x=date, y=hotscore, group=Player)) +
-  geom_line(aes(color=Player))+
-  geom_point(aes(color=Player))
+#ggplot(data=htrend, aes(x=date, y=hotscore, group=Player)) +
+#  geom_line(aes(color=Player))+
+#  geom_point(aes(color=Player))
 
 # Recently injured
 newHurt <- AllH %>% mutate(idate=as_date(Injury,format="%m/%d")) %>% filter(!is.na(Injury) & idate > today()-7 & Team != "Free Agent") %>%
