@@ -1179,3 +1179,4 @@ getFGScouts <- function(fn) {
   rr <- df[[1]]
   rrc <- rr %>% rename(Player = playerName,playerid = PlayerId)
 }
+
