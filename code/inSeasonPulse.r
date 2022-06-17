@@ -365,7 +365,7 @@ TopLeft <- filter(FAH,Pos %in% c('3B','2B'),pDFL>0) %>% arrange(Pos,-pDFL,-pSGP)
   select(Player,Pos,Age,pDFL,pSGP, Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
 
 # Category Targets
-
+# How did I decide on the weights???
 
 res <- pvCat(cstand$HR,0.2,as.numeric(filter(cstand,Team=='Cricket')$HR))
 pvResults <- data.frame(category='HR',pvp = res[[1]],pvm = res[[2]])
@@ -646,3 +646,6 @@ newSlump2 <- AllP %>% filter(pDFL > 8 & hotscore < 3 & Team != "Free Agent") %>%
 newSlump <- bind_rows(newSlump,newSlump2) %>% arrange(Team)
 
 problems <- bind_rows(newHurt, newSlump) %>% arrange(Team)
+
+#Combing pvp, pvm with points
+catSummary <- left_join(myscores,pvResults)

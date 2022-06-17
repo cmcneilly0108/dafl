@@ -1030,7 +1030,7 @@ add2starts <- function(df) {
   left_join(df,twostarts,by=c('Player'))
 }
 
-
+# What on earth is this calculation???
 pvCat <- function(col,weight,myScore) {
   rate <- (mean(col)/aWeek)*weight
   df <- data_frame(Vals=col)

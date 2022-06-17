@@ -2,12 +2,15 @@
 
 shinyUI(
   navbarPage(
-    theme = bs_theme(version = 4, bootswatch = "slate"),
+#    theme = bs_theme(version = 4, bootswatch = "slate"),
+    # “cerulean”, “cosmo”, “cyborg”, “darkly”, “flatly”, “journal”, “litera”, “lumen”, “lux”, “materia”, “minty”, 
+    # “pulse”, “sandstone”, “simplex”, “sketchy”, “slate”, “solar”, “spacelab”, “superhero”, “united”, “yeti”
+    theme = bs_theme(bootswatch = "flatly"),
     "DAFL Evaluator, v1.1",
     tabPanel("Talent View",
              mainPanel(
                h2("Rest of Season Prediction"),
-               dataTableOutput("RTot")
+               DT::dataTableOutput("RTot")
              )),
     tabPanel(
       "Hotness by Team",
@@ -20,31 +23,10 @@ shinyUI(
           tabsetPanel(
             type = 'tabs',
             #          tabPanel('Hitters',htmlOutput("TeamH")),
-            tabPanel('Hitters', dataTableOutput("TeamH")),
-            tabPanel('Pitchers', dataTableOutput("TeamP"))
+            tabPanel('Hitters', DT::dataTableOutput("TeamH")),
+            tabPanel('Pitchers', DT::dataTableOutput("TeamP"))
           )
         )
-      )
-    ),
-    tabPanel(
-      "Positional Surplus",
-      sidebarLayout(
-        sidebarPanel(
-          selectizeInput(
-            'e2',
-            'Select Position',
-            choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
-          ),
-          sliderInput(
-            "pd",
-            "pDFL",
-            min = 0,
-            max = 20,
-            value = 5
-          ),
-          width = 2
-        ),
-        mainPanel(dataTableOutput("tprofile"))
       )
     ),
     tabPanel("Ranked Players",
@@ -77,10 +59,37 @@ shinyUI(
       plotlyOutput("lcgraph")
       
     ),
+    tabPanel("Category Status",
+             mainPanel(
+               h2("Points by Category"),
+               DT::dataTableOutput("catSummary")
+             )
+    ),
+    tabPanel(
+      "Positional Surplus",
+      sidebarLayout(
+        sidebarPanel(
+          selectizeInput(
+            'e2',
+            'Select Position',
+            choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
+          ),
+          sliderInput(
+            "pd",
+            "pDFL",
+            min = 0,
+            max = 20,
+            value = 5
+          ),
+          width = 2
+        ),
+        mainPanel(DT::dataTableOutput("tprofile"))
+      )
+    ),
     tabPanel("Opportunities",
              mainPanel(
                h2("Injured or Sucky"),
-               dataTableOutput("problems")
+               DT::dataTableOutput("problems")
              ))
     #   tabPanel("by Statistic",
     #            sidebarLayout(
