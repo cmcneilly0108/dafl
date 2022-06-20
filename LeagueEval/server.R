@@ -73,7 +73,7 @@ shinyServer(function(input, output,session) {
   topPos <- reactive({
     ifelse(input$e3 %in% c('SP','MR','CL'),
            ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>% 
-             select(Player,Pos,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
+             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
            ff <- AllH %>% filter(str_detect(posEl,input$e3)) %>%
              select(Player,Pos,Age,pDFL,Team,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
              arrange(-pDFL)
@@ -83,6 +83,11 @@ shinyServer(function(input, output,session) {
   })
   output$topPlayers <- DT::renderDataTable({topPos()})
 
+  # RRClosers - rrcResults
+  dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20)) %>% 
+    formatRound(c('pSGP','hotscore','LVG'),2) %>% formatCurrency('pDFL')
+  output$rrcResults <- DT::renderDataTable({ dtrrcResults })
+  
   output$lcgraph <- renderPlotly({
     plot_ly(htrend, x = ~date, y = ~hotscore)  %>%
       filter(Player %in% input$choice) %>%

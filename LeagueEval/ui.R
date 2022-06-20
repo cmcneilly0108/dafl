@@ -38,6 +38,12 @@ shinyUI(
                ), width = 1),
                mainPanel(dataTableOutput("topPlayers"))
              )),
+    tabPanel("Closer Detail",
+             mainPanel(
+               h2("Roster Resource"),
+               DT::dataTableOutput("rrcResults")
+             )
+    ),
     tabPanel("LC Trends",
              mainPanel(
                tabsetPanel(
