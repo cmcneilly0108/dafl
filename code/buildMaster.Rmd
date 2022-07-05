@@ -333,8 +333,8 @@ Fix hittertrend file
 ```{r}
 htrend <- read.csv("../code/hTrend.csv")
 h2 <- distinct(htrend)
-h2 <- mutate(h2,ndate=parse_date_time(date, orders = c('mdy', 'ymd')))
-#write.csv(h2,"../code/hTrend.csv")
+h2 <- mutate(h2,date=parse_date_time(date, orders = c('mdy', 'ymd')))
+write.csv(h2,"../code/hTrend.csv",row.names = FALSE)
 
 ```
 

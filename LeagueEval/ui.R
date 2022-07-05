@@ -8,10 +8,12 @@ shinyUI(
     theme = bs_theme(bootswatch = "flatly"),
     "DAFL Evaluator, v1.1",
     tabPanel("Talent View",
-             mainPanel(
-               h2("Rest of Season Prediction"),
-               DT::dataTableOutput("RTot")
-             )),
+             tabsetPanel(
+               type = 'tabs',
+               tabPanel("Rest of Season Prediction",DT::dataTableOutput("RTot")),
+               tabPanel("Starters Only",DT::dataTableOutput("RTotTop"))
+             )
+    ),
     tabPanel(
       "Hotness by Team",
       sidebarLayout(
@@ -36,7 +38,7 @@ shinyUI(
                  'Select Position',
                  choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
                ), width = 1),
-               mainPanel(dataTableOutput("topPlayers"))
+               mainPanel(DT::dataTableOutput("topPlayers"))
              )),
     tabPanel("Closer Detail",
              mainPanel(

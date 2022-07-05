@@ -649,3 +649,14 @@ problems <- bind_rows(newHurt, newSlump) %>% arrange(Team)
 
 #Combing pvp, pvm with points
 catSummary <- left_join(myscores,pvResults)
+
+# See if top 17 changes to strength of team predictions
+
+RH <- filter(AllH,Team != 'Free Agent') %>% group_by(Team) %>% filter(rank(-pDFL) <= 9) %>% summarize(hDFL = sum(pDFL))
+RP <- filter(AllP,Team != 'Free Agent') %>% group_by(Team) %>% filter(rank(-pDFL) <= 8)%>% summarize(piDFL = sum(pDFL))
+RTotTop <- inner_join(RH,RP,by=c('Team')) %>%
+  mutate(tDFL = hDFL + piDFL,hRank = rank(-hDFL),pRank = rank(-piDFL)) %>%
+  inner_join(st,by=c('Team')) %>%
+  select(Team,hDFL,hRank,piDFL,pRank,tDFL,Actual) %>% arrange(-tDFL)
+
+RTotTop$zScore <- as.numeric(scale(RTotTop$tDFL))

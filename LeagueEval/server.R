@@ -9,7 +9,7 @@ source("./inSeasonPulse.r")
 teams <- sort(unique(RTot$Team))
 
 htrend <- read.csv("./hTrend.csv")
-htrend$date <- mdy(htrend$date)
+htrend$date <- ymd(htrend$date)
 
 
 shinyServer(function(input, output,session) {
@@ -37,6 +37,10 @@ shinyServer(function(input, output,session) {
     formatCurrency(c('hDFL', 'piDFL','tDFL')) %>% formatRound('zScore',2)
   output$RTot <- DT::renderDataTable({ dtRTot })
 
+  dtRTotTop <- datatable(RTotTop,options = list(pageLength = 20)) %>% 
+    formatCurrency(c('hDFL', 'piDFL','tDFL')) %>% formatRound('zScore',2)
+  output$RTotTop <- DT::renderDataTable({ dtRTotTop })
+  
   dtproblems <- datatable(problems,options = list(pageLength = 20)) %>% 
     formatRound('hotscore',2) %>% formatRound('Age',0) %>% formatCurrency('pDFL')
   output$problems <- DT::renderDataTable({ dtproblems },
@@ -48,12 +52,13 @@ shinyServer(function(input, output,session) {
   
   tprof <- reactive({
     ifelse(input$e2 %in% c('SP','MR','CL'),df<-AllP,df<-AllH)
-    f <- df %>% filter(Pos == input$e2,pDFL > input$pd) %>% group_by(Team) %>% summarize(nGood = length(Team))
+#    f <- df %>% filter(Pos == input$e2,pDFL > input$pd) %>% group_by(Team) %>% summarize(nGood = length(Team))
     f2 <- df %>% filter(Pos == input$e2) %>% group_by(Team) %>% summarize(nTotal = length(Team))
     ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
   })
   output$tprofile <- DT::renderDataTable({tprof()},
                                          options = list(pageLength = 20))
+  
   uh <- reactive({
     unHit <- arrange(AllH,-diffscore) %>% 
       filter(!(Team %in% c('Free Agent','Liquor Crickets')),diffscore > 0,hotscore > input$hsc,pDFL > input$upd, Salary > input$sal) %>% 
@@ -69,20 +74,21 @@ shinyServer(function(input, output,session) {
   output$undP <- DT::renderDataTable({up()},
                                      options = list(pageLength = 20))
 
-  # Top By Position
+#  Top By Position
   topPos <- reactive({
     ifelse(input$e3 %in% c('SP','MR','CL'),
-           ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>% 
+           ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
              select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
            ff <- AllH %>% filter(str_detect(posEl,input$e3)) %>%
              select(Player,Pos,Age,pDFL,Team,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
              arrange(-pDFL)
     )
-    res <- datatable(ff,options = list(pageLength = 20)) %>% formatCurrency('pDFL') %>% 
+    res <- datatable(ff,options = list(pageLength = 20)) %>% formatCurrency('pDFL') %>%
       formatRound(c('pSGP','hotscore'),2) %>% formatRound('Age',0)
   })
+  #output$topPlayers <- DT::renderDataTable({ dtRTot })
   output$topPlayers <- DT::renderDataTable({topPos()})
-
+  
   # RRClosers - rrcResults
   dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20)) %>% 
     formatRound(c('pSGP','hotscore','LVG'),2) %>% formatCurrency('pDFL')
