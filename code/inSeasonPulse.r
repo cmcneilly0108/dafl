@@ -14,7 +14,6 @@ library("xml2")
 library("rvest")
 library("jsonlite")
 
-
 source("./daflFunctions.r")
 
 ### Set variables ###
@@ -660,3 +659,11 @@ RTotTop <- inner_join(RH,RP,by=c('Team')) %>%
   select(Team,hDFL,hRank,piDFL,pRank,tDFL,Actual) %>% arrange(-tDFL)
 
 RTotTop$zScore <- as.numeric(scale(RTotTop$tDFL))
+
+# High pDFL players on shitty teams
+# Find bottom half teams, top 10% of players
+
+bottom <- RTot %>% filter(Actual > 7) %>% select(Team)
+candH <- AllH %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
+candP <- AllP %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
+candTrades <- bind_rows(candH,candP) %>% arrange(Team,-pDFL)

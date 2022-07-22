@@ -1,4 +1,9 @@
+
 # 1st Tool - pullTeam
+library("plotly")
+library("bslib")
+library("DT")
+
 
 shinyUI(
   navbarPage(
@@ -94,9 +99,14 @@ shinyUI(
         mainPanel(DT::dataTableOutput("tprofile"))
       )
     ),
-    tabPanel("Opportunities",
+    tabPanel("Dumpers",
              mainPanel(
-               h2("Injured or Sucky"),
+               h2("Who Could Be Dumping"),
+               DT::dataTableOutput("cTrades")
+             )),
+    tabPanel("Desperate",
+             mainPanel(
+               h2("Who Could Be Desperate"),
                DT::dataTableOutput("problems")
              ))
     #   tabPanel("by Statistic",

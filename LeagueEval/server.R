@@ -1,6 +1,3 @@
-library("plotly")
-library("bslib")
-library("DT")
 
 setwd("../code/")
 source("./inSeasonPulse.r")
@@ -8,11 +5,11 @@ source("./inSeasonPulse.r")
 
 teams <- sort(unique(RTot$Team))
 
-htrend <- read.csv("./hTrend.csv")
-htrend$date <- ymd(htrend$date)
-
 
 shinyServer(function(input, output,session) {
+  htrend <- read.csv("./hTrend.csv")
+  htrend$date <- ymd(htrend$date)
+  
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
 
@@ -52,7 +49,7 @@ shinyServer(function(input, output,session) {
   
   tprof <- reactive({
     ifelse(input$e2 %in% c('SP','MR','CL'),df<-AllP,df<-AllH)
-#    f <- df %>% filter(Pos == input$e2,pDFL > input$pd) %>% group_by(Team) %>% summarize(nGood = length(Team))
+    f <- df %>% filter(Pos == input$e2,pDFL > input$pd) %>% group_by(Team) %>% summarize(nGood = length(Team))
     f2 <- df %>% filter(Pos == input$e2) %>% group_by(Team) %>% summarize(nTotal = length(Team))
     ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
   })
@@ -103,5 +100,9 @@ shinyServer(function(input, output,session) {
   output$g1 <- renderPlot(print(g1),res=120)
   output$g2 <- renderPlot(print(g2),res=120)
   output$g3 <- renderPlot(print(g3),res=120)
+
+  dtcTrades <- datatable(candTrades,options = list(pageLength = 20)) %>% 
+    formatCurrency(c('pDFL'))
+  output$cTrades <- DT::renderDataTable({ dtcTrades })
   
 })

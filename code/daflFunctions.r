@@ -551,6 +551,7 @@ read.fg <- function(fn) {
   colnames(df) <- str_c('p',colnames(df))
   colnames(df)[1] <- 'Player'
   df <- dplyr::rename(df,playerid=pplayerid)
+  df <- df %>% mutate(playerid = as.character(playerid))
   df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
   df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
   df <- mutate(df,Age=year(Sys.time())-birth_year)
