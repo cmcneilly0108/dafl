@@ -4,7 +4,8 @@
 # Trades file!
 #   https://dafl.baseball.cbssports.com/transactions/2021/all/trades
 #   2019trades.csv
-
+# Week 1 rosters
+#   https://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:p/salary%20info/
 
 library("openxlsx")
 library("stringr")
@@ -14,6 +15,7 @@ library("ggplot2")
 library("reshape2")
 library("tidyr")
 library("splitstackshape")
+library("zoo")
 
 source("./daflFunctions.r")
 
@@ -34,7 +36,24 @@ cleanRosters <- function(pl) {
   players <- addPlayerid(players)
 }
 
-year <- "2021"
+getWeek1 <- function(fn) {
+  # Add Salary, Contract to players
+  s <- read.csv(fn,header=FALSE,stringsAsFactors=FALSE, encoding="UTF-8")
+  colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank','Extra')
+  
+  sal <- select(s,-Rank,-Extra) %>%
+    filter(!(Avail %in% c('Batters','Pitchers','Avail'))) %>%
+    filter(!(Player %in% c('TOTALS')))
+  sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
+  sal$Team <- na.locf(sal$Team)
+  sal <- mutate(sal, MLB = pullMLB(Player))
+  sal$Player <- unlist(lapply(sal$Player,stripName))
+  sal$Salary <- as.integer(sal$Salary)
+  sal$Contract <- as.integer(sal$Contract)
+  sal <- addPlayerid(sal) %>% select(playerid,Team) %>% distinct()
+}
+
+year <- "2022"
 
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
@@ -58,7 +77,7 @@ op <- r[[2]]
 
 # convert to DFL
 tz <- sum(oh$zScore) + sum(op$zScore)
-td <- 300*16
+td <- 300*14
 tratio <- td/tz
 oh$DFL <- oh$zScore * tratio
 op$DFL <- op$zScore * tratio
@@ -78,14 +97,15 @@ RTot <- inner_join(RH,RP,by=c('Team')) %>%
 # Load DraftRecap file - 'draft'
 # Everything else - 'faab'
 prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
-prot <- prot %>% mutate(asrc='protect') %>% select(playerid,asrc)
-hitters <- left_join(hitters,prot)
-pitchers <- left_join(pitchers,prot)
+prot <- prot %>% mutate(asrc='protect') %>% select(playerid,Team,asrc)
+hitters <- left_join(hitters,prot,by=c('playerid','Team'))
+pitchers <- left_join(pitchers,prot,by=c('playerid','Team'))
 
-draft <- read.csv(str_c("../data/",year,"DraftResults.csv"),stringsAsFactors=FALSE)
-draft <- draft %>% mutate(dft='draft') %>% select(Player,dft)
-hitters <- left_join(hitters,draft)
-pitchers <- left_join(pitchers,draft)
+#draft <- read.csv(str_c("../data/",year,"DraftResults.csv"),stringsAsFactors=FALSE)
+draft <- getWeek1(str_c("../data/",year,"DraftResults.csv"))
+draft <- draft %>% mutate(dft='draft') %>% select(playerid,Team,dft)
+hitters <- left_join(hitters,draft,by=c('playerid','Team'))
+pitchers <- left_join(pitchers,draft,by=c('playerid','Team'))
 
 
 hitters$asrc <- coalesce(hitters$asrc,hitters$dft,"faab")

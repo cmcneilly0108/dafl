@@ -5,7 +5,7 @@
 # For live draft, create CSV with all players and teams, free agents have Team = 'Free Agent'
 # Then update draftguide to remove those rows - line 149 is when protected are removed
 
-# BUG - Why isn't Ohtani showing up on hitters side?  No DH's are showing!
+# BUG - Justin Steele is protected but still showing up
 
 library("openxlsx")
 library("stringr")
@@ -17,10 +17,11 @@ library("lubridate")
 library("xml2")
 library("rvest")
 library("tidyr")
+library("jsonlite")
 source("./daflFunctions.r")
 
-cyear <- 2022
-lastyear <- "2021"
+cyear <- 2023
+lastyear <- "2022"
 src <- 'atc'
 #src <- 'steamer'
 
@@ -28,7 +29,7 @@ src <- 'atc'
 
 #predUpdate <- FALSE
 predUpdate <- TRUE
-fd <- file.info(str_c("../ATCH",cyear,".csv"))$mtime
+fd <- file.info(str_c("../atcH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 14) {
@@ -40,7 +41,7 @@ if (dt > 14) {
 
 #official file
 protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-#protected <- read.csv("../2022fakeprotected.csv",stringsAsFactors=FALSE)
+#protected <- read.csv("../2023fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -51,8 +52,8 @@ rPitchers <- filter(protected,Pos == 'P' |Pos == 'SP' | Pos == 'MR' | Pos == 'CL
 hitters <- NULL
 pitchers <- NULL
 if (src=='atc') {
-  hitters <- read.fg(str_c('../atcH',as.character(cyear),'.csv',sep=''))
-  pitchers <- read.fg(str_c('../atcP',as.character(cyear),'.csv',sep=''))
+  hitters <- read.fg(str_c('../atcH',as.character(cyear),'.json',sep=''))
+  pitchers <- read.fg(str_c('../atcP',as.character(cyear),'.json',sep=''))
 } else {
   #Load steamer projection data
   hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.csv',sep=''))
@@ -91,10 +92,10 @@ rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
 
 # 1.  Separate by pos, assign rank
 AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
-hrank <- AllH %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP))
+hrank <- AllH %>% group_by(Pos) %>% mutate(orank = rank(-pDFL))
 hrank <- select(hrank,playerid,orank)
 AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
-prank <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP))
+prank <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL))
 prank <- select(prank,playerid,orank)
 
 protClean <- rbind(select(rhitters,Team,Player,Contract,Salary,pDFL,Age,Pos,playerid),
@@ -110,7 +111,7 @@ pstandings <- protClean %>% group_by(Team) %>%
             Earned = TotalValue - Spent,
             VPPlayer = TotalValue/Players,
             DPP = (260-sum(Salary))/(25-Players),
-            FullValue = TotalValue + 1.10*(260-sum(Salary)),
+            FullValue = TotalValue + 0.75*(260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
@@ -172,18 +173,18 @@ OFY <- filter(inj,str_detect(Expected.Return,fixed('60-day',ignore_case=TRUE)))
 #OFY <- filter(inj,str_detect(Expected.Return,fixed('out for the season',ignore_case=TRUE)))
 lc <- left_join(lc,inj,by=c('Player'))
 
-# New Pitches - From FanGraphs
+# New Pitches - From FanGraphs - hasn't been updated since 2020
 #BUG - strip (date)
-r <- read_html("https://www.fangraphs.com/fantasy/2020-new-pitch-tracker/")
-r2 <- html_node(r,".fullpostentry") %>% html_nodes("li") %>% html_text()
-#r3 <- str_match(r2,".+\\) (.+) – (.+)")
-r3 <- str_match(r2,"(.+) – (.+)")
-#r3 <- str_match(r2,"(.+) - (.+)")
-npitch <- as.data.frame(na.omit(r3),stringsAsFactors = FALSE) %>%
-  select(-V1) %>% dplyr::rename(Player=V2,Pitch=V3)
-npitch$Player <- stripDates(npitch$Player)
+# r <- read_html("https://www.fangraphs.com/fantasy/2020-new-pitch-tracker/")
+# r2 <- html_node(r,".fullpostentry") %>% html_nodes("li") %>% html_text()
+# #r3 <- str_match(r2,".+\\) (.+) – (.+)")
+# r3 <- str_match(r2,"(.+) – (.+)")
+# #r3 <- str_match(r2,"(.+) - (.+)")
+# npitch <- as.data.frame(na.omit(r3),stringsAsFactors = FALSE) %>%
+#   select(-V1) %>% dplyr::rename(Player=V2,Pitch=V3)
+# npitch$Player <- stripDates(npitch$Player)
 
-AllP <- left_join(AllP,npitch,by=c('Player'))
+#AllP <- left_join(AllP,npitch,by=c('Player'))
 
 oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
 oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
@@ -252,15 +253,15 @@ pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %
 
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 psp <- mutate(psp,RPV = (SGP - aRPV(psp,nrow(filter(psp,DFL>0))))/aRPV(psp,nrow(filter(psp,DFL>0))))
-psp <- select(psp,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+psp <- select(psp,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl,nrow(filter(pcl,DFL>0))))/aRPV(pcl,nrow(filter(pcl,DFL>0))))
-pcl <- select(pcl,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+pcl <- select(pcl,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr,nrow(filter(pmr,DFL>0))))/aRPV(pmr,nrow(filter(pmr,DFL>0))))
-pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 # New prospect list
 url <- 'https://www.rotochamp.com/baseball/TopProspects.aspx'

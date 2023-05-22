@@ -1,7 +1,7 @@
 
-setwd("../")
+setwd("../code/")
 source("./protectionList.r")
-setwd("./LeagueEval")
+setwd("../LeagueEval")
 
 teams <- sort(unique(as.character(totals$Team)))
 

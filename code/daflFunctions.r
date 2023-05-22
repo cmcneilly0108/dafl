@@ -15,19 +15,19 @@ getd <- function(c) {
 
 # Skipping 2020 data since it would through off the averages
 loadPast <- function() {
-  f1 <- read.csv("../data/fs2021.csv")
+  f1 <- read.csv("../data/fs2022.csv")
   res <- genDenoms(f1)
   eras <- f1$ERA
   avgs <- f1$AVG
+  f1 <- read.csv("../data/fs2021.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2019.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2018.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2017.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
@@ -175,7 +175,7 @@ pullTeam <- function(tn){
   tP <- left_join(tP,rrc)
   tP <- select(tP,-Team)
   tP <- tP %>% arrange(-hotscore) %>%
-    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
+    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
   tH <- tH %>% arrange(-hotscore) %>%
     select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
   list(tH,tP)
@@ -391,104 +391,104 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   list(bhitters,bpitchers)
 }
 
-# dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
-#   #Used by docii.r
-#   
-# 
-#   nhitters <- 10
-#   npitchers <- 10
-#   
-#   nteams <- 10
-#   tdollars <- 1400
-#   
-#   
-#   pdollars <- round(tdollars*0.5)
-#   hdollars <- tdollars - pdollars
-#   
-#   thitters <- (nhitters * nteams)
-#   tpitchers <- (npitchers * nteams)
-#   ct <- 0
-#   
-#   while (ct < 6) {
-#     toph <- head(ihitters,thitters)
-#     topp <- head(ipitchers,tpitchers)
-#     mHR <- mean(toph$pHR,na.rm = TRUE)
-#     sdHR <- sd(toph$pHR,na.rm = TRUE)
-#     mR <- mean(toph$pR,na.rm = TRUE)
-#     sdR <- sd(toph$pR,na.rm = TRUE)
-#     mSB <- mean(toph$pSB,na.rm = TRUE)
-#     sdSB <- sd(toph$pSB,na.rm = TRUE)
-#     mRBI <- mean(toph$pRBI,na.rm = TRUE)
-#     sdRBI <- sd(toph$pRBI,na.rm = TRUE)
-#     
-#     mW <- mean(topp$pW,na.rm = TRUE)
-#     sdW <- sd(topp$pW,na.rm = TRUE)
-#     mSO <- mean(topp$pSO,na.rm = TRUE)
-#     sdSO <- sd(topp$pSO,na.rm = TRUE)
-#     mHLD <- mean(topp$pHLD,na.rm = TRUE)
-#     sdHLD <- sd(topp$pHLD,na.rm = TRUE)
-#     sdHLD <- ifelse(sdHLD==0,1,sdHLD)
-#     mSV <- mean(topp$pSV,na.rm = TRUE)
-#     sdSV <- sd(topp$pSV,na.rm = TRUE)
-#     
-#     mAvg <- mean(toph$pAVG,na.rm = TRUE)
-#     sdAvg <- sd(toph$pAVG,na.rm = TRUE)
-#     ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
-#     toph <- mutate(toph,xH = pH-(pAB * mAvg))
-#     mxH <- mean(toph$xH,na.rm = TRUE)
-#     sdxH <- sd(toph$xH,na.rm = TRUE)
-#     
-#     mERA <- mean(topp$pERA,na.rm = TRUE)
-#     sdERA <- sd(topp$pERA,na.rm = TRUE)
-#     ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
-#     topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
-#     mxER <- mean(topp$xER,na.rm = TRUE)
-#     sdxER <- sd(topp$xER,na.rm = TRUE)
-#     
-#     ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
-#                        zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
-# #    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
-#     ihitters <- mutate(ihitters,zScore=zHR+zRBI+zSB+zxH)
-#     ihitters <- arrange(ihitters,-zScore)
-#     
-#     ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
-#                         zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
-# #    ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.5*zHLD)+zSV+zxER)
-#     ipitchers <- mutate(ipitchers,zScore=zW+zSO+zSV+zxER)
-#     ipitchers <- arrange(ipitchers,-zScore)
-#     
-#     ct <- ct + 1
-#   }
-#   # Add the total thitter value to everyone
-#   ihitters <- head(ihitters,thitters)
-#   ihitters$zScore <- ihitters$zScore - last(ihitters$zScore)
-#   # Add pitchers
-#   ipitchers <- head(ipitchers,tpitchers)
-#   ipitchers$zScore <- ipitchers$zScore - last(ipitchers$zScore)
-#   
-#   # remove protected players
-#   if (nrow(prot)>0) {
-#     ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
-#     ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
-#     tpitchers <- tpitchers - nrow(prot[prot$Pos %in% c('SP','MR','CL'),])
-#     thitters <- thitters - nrow(prot[!(prot$Pos %in% c('SP','MR','CL')),])
-#     pdollars <- pdollars - sum(prot[prot$Pos %in% c('SP','MR','CL'),'Salary'])
-#     hdollars <- hdollars - sum(prot[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
-#   } else {
-#     ih2 <- ihitters
-#     ip2 <- ipitchers
-#   }
-#   # Calculate DFL
-#   tvalue <- sum(ih2$zScore)
-#   ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
-#   tvalue <- sum(ip2$zScore)
-#   ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
-#   
-#   bhitters <- select(ih2,playerid,zDFL)
-#   bpitchers <- select(ip2,playerid,zDFL)
-#   
-#   list(bhitters,bpitchers)
-# }
+dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
+  #Used by docii.r
+
+
+  nhitters <- 10
+  npitchers <- 10
+
+  nteams <- 10
+  tdollars <- 1400
+
+
+  pdollars <- round(tdollars*0.5)
+  hdollars <- tdollars - pdollars
+
+  thitters <- (nhitters * nteams)
+  tpitchers <- (npitchers * nteams)
+  ct <- 0
+
+  while (ct < 6) {
+    toph <- head(ihitters,thitters)
+    topp <- head(ipitchers,tpitchers)
+    mHR <- mean(toph$pHR,na.rm = TRUE)
+    sdHR <- sd(toph$pHR,na.rm = TRUE)
+    mR <- mean(toph$pR,na.rm = TRUE)
+    sdR <- sd(toph$pR,na.rm = TRUE)
+    mSB <- mean(toph$pSB,na.rm = TRUE)
+    sdSB <- sd(toph$pSB,na.rm = TRUE)
+    mRBI <- mean(toph$pRBI,na.rm = TRUE)
+    sdRBI <- sd(toph$pRBI,na.rm = TRUE)
+
+    mW <- mean(topp$pW,na.rm = TRUE)
+    sdW <- sd(topp$pW,na.rm = TRUE)
+    mSO <- mean(topp$pSO,na.rm = TRUE)
+    sdSO <- sd(topp$pSO,na.rm = TRUE)
+    mHLD <- mean(topp$pHLD,na.rm = TRUE)
+    sdHLD <- sd(topp$pHLD,na.rm = TRUE)
+    sdHLD <- ifelse(sdHLD==0,1,sdHLD)
+    mSV <- mean(topp$pSV,na.rm = TRUE)
+    sdSV <- sd(topp$pSV,na.rm = TRUE)
+
+    mAvg <- mean(toph$pAVG,na.rm = TRUE)
+    sdAvg <- sd(toph$pAVG,na.rm = TRUE)
+    ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
+    toph <- mutate(toph,xH = pH-(pAB * mAvg))
+    mxH <- mean(toph$xH,na.rm = TRUE)
+    sdxH <- sd(toph$xH,na.rm = TRUE)
+
+    mERA <- mean(topp$pERA,na.rm = TRUE)
+    sdERA <- sd(topp$pERA,na.rm = TRUE)
+    ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
+    topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
+    mxER <- mean(topp$xER,na.rm = TRUE)
+    sdxER <- sd(topp$xER,na.rm = TRUE)
+
+    ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                       zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+#    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
+    ihitters <- mutate(ihitters,zScore=zHR+zRBI+zSB+zxH)
+    ihitters <- arrange(ihitters,-zScore)
+
+    ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                        zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+#    ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.5*zHLD)+zSV+zxER)
+    ipitchers <- mutate(ipitchers,zScore=zW+zSO+zSV+zxER)
+    ipitchers <- arrange(ipitchers,-zScore)
+
+    ct <- ct + 1
+  }
+  # Add the total thitter value to everyone
+  ihitters <- head(ihitters,thitters)
+  ihitters$zScore <- ihitters$zScore - last(ihitters$zScore)
+  # Add pitchers
+  ipitchers <- head(ipitchers,tpitchers)
+  ipitchers$zScore <- ipitchers$zScore - last(ipitchers$zScore)
+
+  # remove protected players
+  if (nrow(prot)>0) {
+    ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
+    ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
+    tpitchers <- tpitchers - nrow(prot[prot$Pos %in% c('SP','MR','CL'),])
+    thitters <- thitters - nrow(prot[!(prot$Pos %in% c('SP','MR','CL')),])
+    pdollars <- pdollars - sum(prot[prot$Pos %in% c('SP','MR','CL'),'Salary'])
+    hdollars <- hdollars - sum(prot[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
+  } else {
+    ih2 <- ihitters
+    ip2 <- ipitchers
+  }
+  # Calculate DFL
+  tvalue <- sum(ih2$zScore)
+  ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
+  tvalue <- sum(ip2$zScore)
+  ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
+
+  bhitters <- select(ih2,playerid,zDFL)
+  bpitchers <- select(ip2,playerid,zDFL)
+
+  list(bhitters,bpitchers)
+}
 # 
 # postDollars <- function(ihitters,ipitchers) {
 #   # GENERATE DFL dollar values for all players
@@ -546,8 +546,34 @@ calcInflation <- function(prot) {
 
 read.fg <- function(fn) {
   m2 <- select(master,playerid,Pos,MLB,birth_year)
+  #df <- read.csv(fn,stringsAsFactors=FALSE, encoding="UTF-8")
+  df <- read_json(fn,simplifyVector = TRUE)
+  # Should we be removing blank teams?  Free agents are removed, but maybe it breaks something else?
+  #df <- filter(df,str_length(Team) > 0)
+  if ("playerids" %in% colnames(df)) {
+    df <- df %>% rename(playerid=playerids)
+  } else {
+    df <- df %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+  }
+
+  colnames(df) <- str_c('p',colnames(df))
+  df <- dplyr::rename(df,playerid=pplayerid)
+  df <- dplyr::rename(df,Player=pPlayerName)
+  df <- df %>% mutate(playerid = as.character(playerid))
+  df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
+  df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
+  df <- mutate(df,Age=year(Sys.time())-birth_year)
+  dfh <- anti_join(df,m2,by=c('playerid'),copy=FALSE)
+  df$playerid <- ifelse(df$playerid %in% dfh$playerid,str_c(df$Player,df$pTeam),df$playerid)
+  df
+}
+
+read.fgOLD <- function(fn) {
+  m2 <- select(master,playerid,Pos,MLB,birth_year)
   df <- read.csv(fn,stringsAsFactors=FALSE, encoding="UTF-8")
-  df <- filter(df,str_length(Team) > 0)
+  #df <- read_json(fn,simplifyVector = TRUE)
+  # Should we be removing blank teams?  Free agents are removed, but maybe it breaks something else?
+  #df <- filter(df,str_length(Team) > 0)
   colnames(df) <- str_c('p',colnames(df))
   colnames(df)[1] <- 'Player'
   df <- dplyr::rename(df,playerid=pplayerid)
@@ -966,14 +992,29 @@ addSalary <- function(df) {
 
 
 getMLBstandings <- function() {
-  df <- read_json("https://erikberg.com/mlb/standings.json",simplifyVector = TRUE)
-  df2 <- df[2]
-  df3 <- df2$standing
-  df3 <- mutate(df3,Season=paste(won,lost,sep='-'))
+  page <- read_html("https://www.fangraphs.com/depthcharts.aspx?position=Standings") %>% 
+    html_nodes("table") %>% html_table()
+  df <- page[[12]] %>% slice(-1) %>% select(X1:X4)
+  names(df) <- df %>% slice(1) %>% unlist()
+  df <- df %>% slice(-1)
+
+  df <- mutate(df,Season=paste(W,L,sep='-'))
   mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
-  df3 <- left_join(df3,mlbmap)
-  stand <- df3 %>% select(MLB,Season,L10 = last_ten)
+  df <- left_join(df,mlbmap) %>% mutate(L10 = '0-0')
+  stand <- df %>% select(MLB,Season,L10)
 }
+
+# getMLBstandings <- function() {
+#   df <- read_json("https://erikberg.com/mlb/standings.json",simplifyVector = TRUE)
+#   #df <- read_json("https://www.mlb.com/standings",simplifyVector = TRUE)
+#   df2 <- df[2]
+#   df3 <- df2$standing
+#   df3 <- mutate(df3,Season=paste(won,lost,sep='-'))
+#   mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
+#   df3 <- left_join(df3,mlbmap)
+#   stand <- df3 %>% select(MLB,Season,L10 = last_ten)
+# }
+
 
 # addMLBstandings <- function(df) {
 #   left_join(df,stand,by=c('MLB'))
@@ -998,8 +1039,7 @@ getInjuries <- function() {
 }
 
 getInjuriesNEW <- function() {
-  url <- 'https://www.nbcsports.com/edge/baseball/mlb/injury-report'
-  page <- read_html(url) %>% html_nodes(".cols-8") %>% html_text()
+  
 }
 
 
@@ -1155,11 +1195,16 @@ firstPos <- function (str) {
   s
 }
 
+firstPosSlash <- function (str) {
+  #s <- str_split(str,'/')[[1]][1]
+  s <- str_sub(str,0,str_locate(str,'/')[[1]]-1)
+  s
+}
 # 
 # calcLVG = (W+L+S+BS+HLD)/IP
 
 getInjuriesFG <- function() {
-  df <- read_json("../injuryReport.json",simplifyVector = TRUE)
+  df <- read_json("../InjuryReport.json",simplifyVector = TRUE)
   df <- filter(df,status != 'Activated',is.na(returndate)) %>% mutate(Injury = str_c(status," - ",injurySurgery),
                                                     Expected.Return = str_c(eligibledate," - ",latestUpdate))
   df <- df %>% select(playerid=playerId,Injury,Expected.Return)

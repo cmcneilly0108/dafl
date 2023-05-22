@@ -9,6 +9,7 @@ teams <- sort(unique(RTot$Team))
 shinyServer(function(input, output,session) {
   htrend <- read.csv("./hTrend.csv")
   htrend$date <- ymd(htrend$date)
+  htrend$hotscore <- as.numeric(htrend$hotscore)
   
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
@@ -75,7 +76,7 @@ shinyServer(function(input, output,session) {
   topPos <- reactive({
     ifelse(input$e3 %in% c('SP','MR','CL'),
            ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
-             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
+             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
            ff <- AllH %>% filter(str_detect(posEl,input$e3)) %>%
              select(Player,Pos,Age,pDFL,Team,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
              arrange(-pDFL)

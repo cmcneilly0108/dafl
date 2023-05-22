@@ -25,7 +25,7 @@ fd <- file.info("dociH.csv")$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 8) {
-  system("bash ./doci.sh")
+  system("bash ../scrips/doci.sh")
 }
 
 

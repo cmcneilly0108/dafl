@@ -8,7 +8,7 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# BUG - Diego Castillo
+# BUG - Oxy - Harris and Julio Rodriguez not showing up
 
 library("openxlsx")
 library("stringr")
@@ -18,11 +18,12 @@ library("zoo")
 library("xml2")
 library("dplyr")
 library("rvest")
+library("jsonlite")
 
 source("./daflFunctions.r")
 
-year <- "2022"
-lastyear <- "2021"
+year <- "2023"
+lastyear <- "2022"
 
 fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
 cd <- Sys.time()
@@ -36,14 +37,14 @@ if (dt > 20) {
 
 #Load steamer data
 #hitters <- read.fg(str_c("../steamerH",year,".csv"))
-hitters <- read.fg(str_c("../atcH",year,".csv"))
+hitters <- read.fg(str_c("../atcH",year,".json"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
 #pitchers <- read.fg(str_c("../steamerP",year,".csv"))
-pitchers <- read.fg(str_c("../atcP",year,".csv"))
+pitchers <- read.fg(str_c("../atcP",year,".json"))
 #pitchers <- read.fg("atcP2020.csv")
-pitchers <- predictHolds(pitchers)
+#pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 
 
@@ -57,10 +58,10 @@ rPitchers <- filter(rosters,Pos == 'P' | Pos == 'RP')
 
 nteams <- 14
 tdollars <- nteams * 260
-pdollars <- round(tdollars*0.36)
+pdollars <- round(tdollars*0.4)
 hdollars <- tdollars - pdollars
-nhitters <- 12
-npitchers <- 13
+nhitters <- 13
+npitchers <- 12
 chitters <- (nhitters * nteams)
 cpitchers <- (npitchers * nteams)
 
@@ -83,8 +84,11 @@ AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 # Standardize positions, calculate rank
 AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
-AllH <- AllH %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP)) %>% as.data.frame()
-AllP <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL,-pSGP)) %>% as.data.frame()
+AllH <- AllH %>% group_by(Pos) %>% dplyr::mutate(orank = rank(-pDFL)) %>% as.data.frame()
+AllP <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL)) %>% as.data.frame()
+
+#th <- filter(AllH,Pos=="1B")
+#t2 <- th %>% mutate(orank = rank(-pDFL,-pSGP))
 
 #merge with steamer
 rhitters <- inner_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
@@ -105,6 +109,9 @@ AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 # Injuries data
 inj <- getInjuries()
+
+#fake out until injuries get updated
+inj <- data_frame(Player="temp",Injury="",Expected.Return="")
 
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
@@ -472,3 +479,8 @@ st <- filter(rpreds,Team == 'Soft Tossers') %>% arrange(-Value)
 hh <- filter(rpreds,Team == "Hogan's Heroes") %>% arrange(-Value)
 ss <- filter(rpreds,Team == "Sad Sacks") %>% arrange(-Value)
 nh <- filter(rpreds,Team == "Nacho Helmet") %>% arrange(-Value)
+
+# find and fix roster file problems
+
+#rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
+#r1 <- rosters %>% filter(str_detect(playerid,"cbs"))

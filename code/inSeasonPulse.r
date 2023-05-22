@@ -1,5 +1,4 @@
-# Bad injury news
-# Where is Steven Kwan?
+# Where is 
 
 
 library("openxlsx")
@@ -19,14 +18,15 @@ source("./daflFunctions.r")
 ### Set variables ###
 
 
-aWeek <- as.integer((as.integer(today() - as.Date("2022-04-05"))+1)/7) + 1
+aWeek <- as.integer((as.integer(today() - as.Date("2023-03-31"))+1)/7) + 1
 tWeeks <-30
 
 
 # Update data files
-fd <- file.info("../steamerHROS.csv")$mtime
+fd <- file.info("../steamerHROS.json")$mtime
 cd <- Sys.time()
-dt <- difftime(cd, fd, units = "hours")
+dt <- as.integer(difftime(cd, fd, units = "hours"))
+#dt <- 9
 if (dt > 12) {
   system("bash ../scripts/pullSteamerROS.sh")
   system("bash ../scripts/pullBatXROS.sh")
@@ -43,8 +43,10 @@ if (dt > 12) {
 
 # Salaries
 sal <- getSalary()
+
+# times out 8/15
 stand <- getMLBstandings()
-inj <- getInjuries()
+inj <- getInjuriesFG()
 twostarts <- get2starts()
 
 #Get latest bullpen report
@@ -114,10 +116,10 @@ dev.off()
 #pitchers <- read.fg("steamerP2020.csv")
 # Once Season Starts
 
-pitchers <- read.fg("../steamerPROS.csv")
-#hitters <- read.fg("../steamerHROS.csv")
-#pitchers <- read.fg("../batxPROS.csv")
-hitters <- read.fg("../batxHROS.csv")
+pitchers <- read.fg("../steamerPROS.json")
+#hitters <- read.fg("../steamerHROS.json")
+#pitchers <- read.fg("../batxPROS.json")
+hitters <- read.fg("../batxHROS.json")
 
 
 hitters$Pos <- replace(hitters$Pos,is.na(hitters$Pos),'DH')
@@ -129,6 +131,7 @@ pitchers <- select(pitchers,-Player,-MLB,-Pos)
 
 #Load CBS Data
 Allhitters <- read.cbs("../AllHitters.csv")
+#Allhitters <- distinct(Allhitters,playerid, .keep_all = TRUE)
 # Allhitters - has 2 rows for ID=13145
 # hitters - has 2 rows for ID=13145
 AllH <- inner_join(Allhitters,hitters,by=c('playerid'),copy=FALSE)
@@ -136,7 +139,7 @@ AllH <- inner_join(Allhitters,hitters,by=c('playerid'),copy=FALSE)
 Allpitchers <- read.cbs("../AllPitchers01.csv") %>% rename(INN = INNs)
 Allpitchers2 <- read.cbs("../AllPitchers02.csv") %>% select(playerid,HD)
 #Allpitchers <- left_join(Allpitchers,Allpitchers2,by=c("playerid"))
-Allpitchers$HD <- Allpitchers2$HD
+#Allpitchers$HD <- Allpitchers2$HD
 Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
 
 # Create 2week leverage stat - lvg = (w+l+sv+bs+hld)/IP - or G
@@ -156,6 +159,9 @@ ytdp2 <- select(ytdp,playerid,HD) %>% rename(yHLD = HD)
 #Allpitchers <- left_join(Allpitchers,Allpitchers2,by=c("playerid"))
 ytdh <- read.cbs("../AllHYTD.csv") 
 
+# clean up duplicates
+AllpitchersD <- distinct(Allpitchers,playerid, .keep_all = TRUE)
+pitchers <- distinct(pitchers,playerid, .keep_all = TRUE)
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
 AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE)
@@ -236,9 +242,9 @@ AllP <- left_join(AllP,op3,by=c('playerid'))
 #AllP <- mutate(AllP,diffscore = pScore - ytdscore)
 
 #inj <- getInjuries()
-AllH <- AllH %>% addInjuries() %>% addSalary()
+AllH <- AllH %>% addInjuriesFG() %>% addSalary()
 #AllP <- AllP %>% addInjuries() %>% addSalary() %>% addMLBstandings() %>% add2starts()
-AllP <- AllP %>% addInjuries() %>% addSalary() %>% add2starts()
+AllP <- AllP %>% addInjuriesFG() %>% addSalary() %>% add2starts()
 #AllP <- AllP %>% addInjuries() %>% addSalary()
 
 # Need to join stand
@@ -255,7 +261,17 @@ AllP <- left_join(AllP,stand,by=c('MLB'))
 # pes <- rename(pes,mlb_id=player_id)
 # AllP <- left_join(AllP,pes,by="mlb_id") %>% 
 #   mutate(est_ops = est_slg + est_woba, ops_delta = est_ops - slg - woba)
-  
+
+
+# Get stuff+ data
+fn <- "https://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13,d&page=1_1000"
+page <- read_html(fn) %>% html_nodes("table") %>% html_table()
+df <- page[[7]]
+df <- df %>% slice(-1) %>% select(-X1)
+names(df) <- df %>% slice(1) %>% unlist()
+df <- df %>% slice(-(1:2))
+stuff <- df %>% select(Player=Name,MLB=Team,`Stuff+`)
+AllP <- left_join(AllP,stuff)
 
 
 #Other team/pos messes things up
@@ -288,14 +304,14 @@ FAP <- select(FAP,-Team)
 rrc <- getRRClosers()
 rrcAvail <- inner_join(rrc,FAP,by=c('playerid'))
 rrcResults <- arrange(rrcAvail,-pDFL) %>%
-  select(Player,Pos,pDFL,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,pK.9,pBB.9,pGS,W,K,S,HD,ERA,hotscore,LVG,MLB, Season, L10,Injury,Expected.Return)
+  select(Player,Pos,pDFL,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,pGS,W,K,S,HD,ERA,hotscore,LVG,MLB, Season, L10,Injury,Expected.Return)
 
 
 # change filter conditions here, check if BPReport is working, see if I'm only downloading 2 weeks
 #allHolds2 <- FAP %>% filter(pHLD>0,pK.9 > 9,pDFL > 0) %>%
 allHolds2 <- FAP %>% filter(pHLD>0,pDFL > 0) %>%
   arrange(-pDFL) %>%
-  select(Player,Pos,pDFL,pSGP, MLB, Season, L10, Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pBB.9,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
+  select(Player,Pos,pDFL,pSGP, MLB, Season, L10, Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,`pBB/9`,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
 
 
 
@@ -346,10 +362,10 @@ FAH$ops_delta <- 0
 
 # Create worksheets
 allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pGS > 0) %>%
-  select(Player,Pos,Age,pDFL,est_ops,ops_delta,pSGP,Rank,pW,pSO,pERA,pK.9,pFIP,pGS,W,K,S,HD,ERA,hotscore,twostarts,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,`Stuff+`,ops_delta,pSGP,Rank,pW,pSO,pERA,`pK/9`,pFIP,pGS,W,K,S,HD,ERA,hotscore,twostarts,Injury,Expected.Return)
 
 allClosers <- FAP %>% arrange(-pSV,-S,-pDFL) %>% filter(pSV>0) %>%
-  select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
+  select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
 
 TopFAH <- group_by(FAH,Pos) %>% arrange(Pos,-pDFL,-pSGP) %>% filter(rank(-pSGP) <= 14) %>%
   select(Player,Pos,Age,pDFL,est_ops,ops_delta,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
@@ -482,7 +498,7 @@ setColWidths(wkly, 'Top Hitters', cols = 1:25, widths = "auto")
 addWorksheet(wkly,'SP')
 writeData(wkly,'SP',allsp,headerStyle = headerStyle)
 addStyle(wkly, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
-addStyle(wkly, 'SP',style = csRatioColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+#addStyle(wkly, 'SP',style = csRatioColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(wkly, 'SP',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
 addStyle(wkly, 'SP',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
 addStyle(wkly, 'SP',style = csRatioColumn,rows = 2:200, cols = 20,gridExpand = TRUE)
@@ -549,9 +565,9 @@ saveWorkbook(wkly,"../weeklyUpdate.xlsx",overwrite = TRUE)
 # ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
 #
 f <- AllP %>% filter(pSV > 10) %>% group_by(Team) %>% summarize(nGood = length(Team)) %>% arrange(-nGood)
-svRP <- AllP %>% filter(pSV > 10) %>% select(Player,Team,Salary,Contract,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
+svRP <- AllP %>% filter(pSV > 10) %>% select(Player,Team,Salary,Contract,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 #
-svSP <- AllP %>% filter(pGS > 8, pDFL > 15) %>% select(Player,Team,Salary,Contract,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
+svSP <- AllP %>% filter(pGS > 8, pDFL > 15) %>% select(Player,Team,Salary,Contract,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,Injury,Expected.Return)
 
 # #Find out what a team has that I can use
 res <- pullTeam('Neon Tetras')[[1]]
@@ -567,12 +583,12 @@ write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append 
 
 #Load some team
 #someteam <- pullTeam("But Justice")
-#someteam <- pullTeam("Butterflies & Daisies")
+someteam <- pullTeam("Butterflies & Daisies")
 #someteam <- pullTeam("clowndog & banjo")
 #someteam <- pullTeam("Crap Shooters")
 #someteam <- pullTeam("Dancing Homers")
 #someteam <- pullTeam("East Lansing Laughing LLamas")
-someteam <- pullTeam("Heinous Fuckery")
+#someteam <- pullTeam("Heinous Fuckery")
 #someteam <- pullTeam("Hogan's Heroes")
 #someteam <- pullTeam("Pearl Harbor")
 #someteam <- pullTeam("Nacho Helmet")
@@ -585,7 +601,7 @@ sh <- someteam[[1]]
 sp <- someteam[[2]]
 
 takenP <- AllP %>% filter(Team != 'Free Agent') %>% arrange(-hotscore) %>%
-  select(Player,Team,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,pK.9,pFIP,W,K,HD,S,ERA,hotscore,Injury,Expected.Return)
+  select(Player,Team,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,hotscore,Injury,Expected.Return)
 takenH <- AllH %>% filter(Team != 'Free Agent') %>% arrange(-hotscore) %>%
   select(Player,Team,Pos,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
 
@@ -614,9 +630,9 @@ aof <- AllH %>% filter(str_detect(posEl,"OF")) %>%
   select(Player,Pos,Age,pDFL,Team,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
   arrange(-pDFL)
 acl <- AllP %>% arrange(-pSV,-S,-pDFL) %>% filter(pSV>0) %>%
-  select(Player,Pos,pDFL,Team,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
+  select(Player,Pos,pDFL,Team,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
 asp <- AllP %>% arrange(-pDFL) %>% filter(pDFL>15,pW>5,Salary>15) %>%
-  select(Player,Pos,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,pK.9,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
+  select(Player,Pos,pDFL,Team,Salary,Contract,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
 
 # Who needs an OF?
 needsOF <- aof %>% filter(pDFL > 7) %>% group_by(Team) %>% 
@@ -667,3 +683,5 @@ bottom <- RTot %>% filter(Actual > 7) %>% select(Team)
 candH <- AllH %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
 candP <- AllP %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
 candTrades <- bind_rows(candH,candP) %>% arrange(Team,-pDFL)
+
+

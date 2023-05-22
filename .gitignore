@@ -11,3 +11,4 @@
 *.ods
 scrape.html
 scripts/pullSteamerr.sh
+*.html
