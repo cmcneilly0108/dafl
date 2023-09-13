@@ -103,14 +103,16 @@ Have to convert Team to MLB
 
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
+
 fgh <- read_json('../steamerH2023.csv',simplifyVector = TRUE)
 if ("playerids" %in% colnames(fgh)) {
   fgh <- fgh %>% rename(playerid=playerids)
 } else {
   fgh <- fgh %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
 }
-
 fgh <- select(fgh,playerid,Player=PlayerName,MLB=Team)
+
+#fgh <- select(fgh,playerid,Player,MLB=Team)
 
 fgp <- read_json('../steamerP2023.csv',simplifyVector = TRUE)
 if ("playerids" %in% colnames(fgp)) {
@@ -132,6 +134,33 @@ fgraphs <- filter(fgraphs,str_length(MLB)>0)
 noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
 
 ```
+Add the prospects!!!
+```{r}
+
+#fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
+#fgh <- read.fg('../steamerH2023.csv')
+fgh <- getFGScouts("../fangraphs-the-board-dataH.json")
+fgh <- select(fgh,playerid,Player,MLB=Team)
+
+fgp <- getFGScouts("../fangraphs-the-board-dataP.json")
+fgp <- select(fgp,playerid,Player,MLB=Team)
+
+fgraphsp <- bind_rows(fgh,fgp)
+
+# This is for ATC files
+#mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
+#fgraphs <- left_join(fgraphs,mlbmap)
+```
+
+
+```{r}
+#fgraphsp <- filter(fgraphsp,str_length(MLB)>0)
+
+noidmatch <- anti_join(fgraphsp,mymaster,by=c('playerid'))
+
+```
+
+
 For matches, update MLB for trades, signings
 ```{r}
 small <- select(fgraphs,playerid,MLB)
@@ -237,17 +266,32 @@ Fangraphs has put a block in place
 
 #mymaster <- mymaster %>% rowwise() %>% 
 #  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
-
+ct <- 1
 noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
 nrow(noby)
-#noby <- noby %>% slice_sample(n=100)
-noby <- noby %>% rowwise() %>%
-  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
 
-m2 <- left_join(mymaster,noby)
-m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
-mymaster <- select(m2,-nby)
-write.csv(mymaster,"../mymaster.csv")
+while ((ct < 10) & (nrow(noby) > 0)) {
+  ct <- ct + 1
+  noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
+  print(nrow(noby))
+  noby <- noby %>% slice_sample(n=10)
+  noby <- noby %>% rowwise() %>%
+    mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
+  
+  m2 <- left_join(mymaster,noby)
+  m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
+  mymaster <- select(m2,-nby)
+  write.csv(mymaster,"../mymaster.csv")
+  
+}
+#noby <- noby %>% slice_sample(n=100)
+# noby <- noby %>% rowwise() %>%
+#   mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
+# 
+# m2 <- left_join(mymaster,noby)
+# m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
+# mymaster <- select(m2,-nby)
+# write.csv(mymaster,"../mymaster.csv")
 ```
 Try adding position from fangraphs
 Fangraphs has put a block in place

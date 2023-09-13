@@ -11,7 +11,7 @@ shinyUI(
     # “cerulean”, “cosmo”, “cyborg”, “darkly”, “flatly”, “journal”, “litera”, “lumen”, “lux”, “materia”, “minty”, 
     # “pulse”, “sandstone”, “simplex”, “sketchy”, “slate”, “solar”, “spacelab”, “superhero”, “united”, “yeti”
     theme = bs_theme(bootswatch = "flatly"),
-    "DAFL Evaluator, v1.1",
+    "DAFL Evaluator, v1.2",
     tabPanel("Talent View",
              tabsetPanel(
                type = 'tabs',
@@ -98,6 +98,16 @@ shinyUI(
         ),
         mainPanel(DT::dataTableOutput("tprofile"))
       )
+    ),
+    tabPanel(
+      "Prospects",
+        mainPanel(
+          tabsetPanel(
+            type = 'tabs',
+            tabPanel('Hitters', DT::dataTableOutput("ProHit")),
+            tabPanel('Pitchers', DT::dataTableOutput("ProPit"))
+          )
+        )
     ),
     tabPanel("Dumpers",
              mainPanel(

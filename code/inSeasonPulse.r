@@ -1,4 +1,5 @@
-# Where is 
+# Early prospects - have cbs record but no fangraphs row in projections
+#   BAT has smaller file, try bigger projection system
 
 
 library("openxlsx")
@@ -27,7 +28,7 @@ fd <- file.info("../steamerHROS.json")$mtime
 cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
 #dt <- 9
-if (dt > 12) {
+if (dt > 10) {
   system("bash ../scripts/pullSteamerROS.sh")
   system("bash ../scripts/pullBatXROS.sh")
   system("bash ../scripts/pullSteamer.sh")
@@ -128,7 +129,6 @@ hitters <- select(hitters,-Player,-MLB,-Pos)
 
 pitchers <- select(pitchers,-Player,-MLB,-Pos)
 
-
 #Load CBS Data
 Allhitters <- read.cbs("../AllHitters.csv")
 #Allhitters <- distinct(Allhitters,playerid, .keep_all = TRUE)
@@ -140,7 +140,9 @@ Allpitchers <- read.cbs("../AllPitchers01.csv") %>% rename(INN = INNs)
 Allpitchers2 <- read.cbs("../AllPitchers02.csv") %>% select(playerid,HD)
 #Allpitchers <- left_join(Allpitchers,Allpitchers2,by=c("playerid"))
 #Allpitchers$HD <- Allpitchers2$HD
-Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
+#Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(HD>0,'MR','SP'))))
+#Allpitchers$Pos <- with(Allpitchers,ifelse(Pos=='SP','SP',ifelse(S>HD,'CL',ifelse(GS/APP>.5,'SP','MR'))))
+Allpitchers$Pos <- with(Allpitchers,ifelse(S>HD,'CL',ifelse(GS/APP>.3,'SP','MR')))
 
 # Create 2week leverage stat - lvg = (w+l+sv+bs+hld)/IP - or G
 Allpitchers <- mutate(Allpitchers,LVG = (W+L+S+BS+HD)/APP)
@@ -264,13 +266,15 @@ AllP <- left_join(AllP,stand,by=c('MLB'))
 
 
 # Get stuff+ data
-fn <- "https://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13,d&page=1_1000"
+#fn <- "https://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13,d&page=1_1000"
+#fn <- "https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13%2Cd&page=1_1000&pagenum=1&pageitems=2000000000"
+fn <- "https://www.fangraphs.com/leaders-legacy.aspx?pos=all&stats=pit&lg=all&qual=30&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&page=1_1000"
 page <- read_html(fn) %>% html_nodes("table") %>% html_table()
 df <- page[[7]]
 df <- df %>% slice(-1) %>% select(-X1)
 names(df) <- df %>% slice(1) %>% unlist()
 df <- df %>% slice(-(1:2))
-stuff <- df %>% select(Player=Name,MLB=Team,`Stuff+`)
+stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
 AllP <- left_join(AllP,stuff)
 
 
@@ -338,14 +342,25 @@ hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
 #pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors = FALSE) %>%
 #  rename(Player = Name,playerid = playerId)
 pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
-proh <- inner_join(FAH,hplist,by=c('playerid'))
-prospectH <- select(proh,Player=Player.x,MLB=Team,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
-  arrange(desc(FV),desc(DFL))
-prop <- inner_join(FAP,pplist,by=c('playerid'))
-prospectP <- select(prop,Player=Player.x,MLB=Team,Current.Level=mlevel,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
-  arrange(desc(FV),desc(DFL))
+#proh <- inner_join(FAH,hplist,by=c('playerid'))
+proh <- right_join(Allhitters,hplist,by=c('playerid'))
+#df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
 
+#prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+#  arrange(desc(FV),desc(DFL))
+prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+  arrange(desc(FV))
+prop <- right_join(Allpitchers,pplist,by=c('playerid'))
+prospectP <- select(prop,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Age,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
+  arrange(desc(FV))
 
+# which prospects are taken?
+proth <- left_join(hplist,AllH,by=c('playerid'),na_matches="never") 
+aprospectH <- select(proth,Player=Player.x,MLB=Team.x,Team=Team.y,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+  arrange(desc(FV),desc(DFL))
+protp <- left_join(pplist,AllP,by=c('playerid'),na_matches="never") 
+aprospectP <- select(protp,Player=Player.x,MLB=Team.x,Team=Team.y,,Current.Level=mlevel,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
+  arrange(desc(FV),desc(DFL))
 
 
 #Load Current Roster
@@ -362,7 +377,7 @@ FAH$ops_delta <- 0
 
 # Create worksheets
 allsp <- FAP %>% arrange(-pDFL,-pSGP) %>% filter(pGS > 0) %>%
-  select(Player,Pos,Age,pDFL,`Stuff+`,ops_delta,pSGP,Rank,pW,pSO,pERA,`pK/9`,pFIP,pGS,W,K,S,HD,ERA,hotscore,twostarts,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,`Pitching+`,ops_delta,pSGP,Rank,pW,pSO,pERA,`pK/9`,pFIP,pGS,W,K,S,HD,ERA,hotscore,twostarts,Injury,Expected.Return)
 
 allClosers <- FAP %>% arrange(-pSV,-S,-pDFL) %>% filter(pSV>0) %>%
   select(Player,Pos,pDFL,pSGP,Rank,pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return)
@@ -582,8 +597,8 @@ write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append 
 
 
 #Load some team
-#someteam <- pullTeam("But Justice")
-someteam <- pullTeam("Butterflies & Daisies")
+someteam <- pullTeam("But Justice")
+#someteam <- pullTeam("Butterflies & Daisies")
 #someteam <- pullTeam("clowndog & banjo")
 #someteam <- pullTeam("Crap Shooters")
 #someteam <- pullTeam("Dancing Homers")
@@ -684,4 +699,15 @@ candH <- AllH %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, 
 candP <- AllP %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
 candTrades <- bind_rows(candH,candP) %>% arrange(Team,-pDFL)
 
-
+youngStuds <- AllH %>% filter(Salary< 10, Age < 26) %>% 
+  select(Player,Pos,Age,pDFL,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>% 
+  arrange(-hotscore)
+# 
+# fn <- "https://www.fangraphs.com/prospects/the-board/2023-in-season-prospect-list/summary?filter=scoutgrade%7Cf%7CFV%7Cgt%7C50%7C50&pos=pit"
+# fn <- "https://www.fangraphs.com/prospects/the-board/2023-in-season-prospect-list/summary?filter=scoutgrade%7Cf%7CFV%7Cgt%7C50%7C50&pos=bat"
+# page <- read_html(fn) %>% html_nodes("table") %>% html_table()
+# df <- page[[6]]
+# df <- df %>% slice(-1) %>% select(-X1)
+# names(df) <- df %>% slice(1) %>% unlist()
+# df <- df %>% slice(-(1:2))
+# stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)

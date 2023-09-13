@@ -175,9 +175,9 @@ pullTeam <- function(tn){
   tP <- left_join(tP,rrc)
   tP <- select(tP,-Team)
   tP <- tP %>% arrange(-hotscore) %>%
-    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
+    select(Player,Pos,Age,pDFL,pSGP,Rank,Salary,Contract,'Pitching+',pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
   tH <- tH %>% arrange(-hotscore) %>%
-    select(Player,Pos,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
+    select(Player,Pos,Age,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
   list(tH,tP)
 }
 
