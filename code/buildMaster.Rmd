@@ -274,7 +274,8 @@ while ((ct < 10) & (nrow(noby) > 0)) {
   ct <- ct + 1
   noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
   print(nrow(noby))
-  noby <- noby %>% slice_sample(n=10)
+  ssize <- ifelse(nrow(noby)>10,10,nrow(noby))
+  noby <- noby %>% slice_sample(n=ssize)
   noby <- noby %>% rowwise() %>%
     mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
   

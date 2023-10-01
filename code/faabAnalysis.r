@@ -1,8 +1,12 @@
+# Bugs
+#   - topFAABers - what even is this?
+#   - injury columns - bring this back or remove it
+
 # Create accrued file
 #   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
 #   2019Accrued.csv
 # Trades file!
-#   https://dafl.baseball.cbssports.com/transactions/2021/all/trades
+#   https://dafl.baseball.cbssports.com/transactions/2023/all/trades
 #   2019trades.csv
 # Week 1 rosters
 #   https://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:p/salary%20info/
@@ -53,7 +57,7 @@ getWeek1 <- function(fn) {
   sal <- addPlayerid(sal) %>% select(playerid,Team) %>% distinct()
 }
 
-year <- "2022"
+year <- "2023"
 
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
@@ -97,9 +101,24 @@ RTot <- inner_join(RH,RP,by=c('Team')) %>%
 # Load DraftRecap file - 'draft'
 # Everything else - 'faab'
 prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
-prot <- prot %>% mutate(asrc='protect') %>% select(playerid,Team,asrc)
-hitters <- left_join(hitters,prot,by=c('playerid','Team'))
-pitchers <- left_join(pitchers,prot,by=c('playerid','Team'))
+protFull <- prot %>% mutate(asrc='protect')
+protThin <- protFull %>% select(playerid,Team,asrc)
+hitters <- left_join(hitters,protThin,by=c('playerid','Team'))
+pitchers <- left_join(pitchers,protThin,by=c('playerid','Team'))
+# then do anti-join with larger prot file - doesn't work - hitter/pitcher split
+# fill rest with blanks
+# row bind
+#hitters <- anti_join(protFullhitters,prot,by=c('playerid','Team'))
+#pitchers <- full_join(pitchers,prot,by=c('playerid','Team'))
+protFP <- protFull %>% filter(Pos =="P")
+protFH <- protFull %>% filter(Pos !="P")
+protFP <- anti_join(protFP,pitchers,by=c('playerid','Team'))
+protFH <- anti_join(protFH,hitters,by=c('playerid','Team'))
+protFHres <- protFH %>% mutate(Salary=as.character(Salary),Contract=as.character(Contract),AB=0,H=0,R=0,RBI=0,SB=0,AVG=0,zScore=0,DFL=0) %>% select(Player,Pos,Salary,Contract,AB,H,R,RBI,SB,Team,playerid,AVG,zScore,DFL,asrc)
+hitters <- bind_rows(hitters,protFHres)
+protFPres <- protFP %>% mutate(Salary=as.character(Salary),Contract=as.character(Contract),ER=0,INN=0,W=0,S=0,K=0,HD=0,ERA=0,zScore=0,DFL=0) %>% select(Player,Pos,Salary,Contract,ER,INN,W,S,K,HD,Team,playerid,ERA,zScore,DFL,asrc)
+pitchers <- bind_rows(pitchers,protFPres)
+
 
 #draft <- read.csv(str_c("../data/",year,"DraftResults.csv"),stringsAsFactors=FALSE)
 draft <- getWeek1(str_c("../data/",year,"DraftResults.csv"))
@@ -126,11 +145,15 @@ trades$fTeam <- unlist(lapply(trades$Players,tradeFrom))
 trades <- select(trades,Team,Player,Traded=Effective,fTeam)
 hitters <- left_join(hitters,trades,by=c('Team','Player'))
 pitchers <- left_join(pitchers,trades,by=c('Team','Player'))
-hitters$asrc <- ifelse(is.na(hitters$Traded),hitters$asrc,'trade')
+
+# Try not overwriting protect/draft for traded away players
+#hitters$asrc <- ifelse(is.na(hitters$Traded),hitters$asrc,'trade')
+#pitchers$asrc <- ifelse(is.na(pitchers$Traded),pitchers$asrc,'trade')
+hitters$asrc <- ifelse((!is.na(hitters$Traded) & hitters$asrc=="faab"),'trade',hitters$asrc)
 pitchers$asrc <- ifelse(is.na(pitchers$Traded),pitchers$asrc,'trade')
 
 # Lets add injuries!
-injured <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
+injured <- read.csv(str_c("../",year,"all.csv"),stringsAsFactors=FALSE)
 injured <- filter(injured,str_detect(Players,'IR'))
 numinj <- injured %>% count(Team) %>% rename(injured = n)
 #numinj <- numinj %>% mutate(irank = rank(injured))
@@ -180,9 +203,9 @@ seasonResults <- left_join(seasonResults,fstand)
 
 seasonResults <- seasonResults %>% replace_na(list(tradeValue=0))
 seasonResults <- mutate(seasonResults,overall = draft_DFL+faab_DFL+protect_DFL+trade_DFL,
-                        drank = rank(-draft_DFL), pratio = protect_DFL/protect_Sal,
-                        dratio = draft_DFL/draft_Sal,
-                        frank = rank(-faab_DFL),prank = rank(-protect_DFL),trank = rank(-tradeValue)) %>%
+                        pratio = protect_DFL/protect_Sal,
+                        dratio = draft_DFL/draft_Sal, drank = rank(-dratio),
+                        frank = rank(-faab_DFL),prank = rank(-pratio),trank = rank(-tradeValue)) %>%
   select(Team,Actual,overall,protect_DFL,prank,protect_Sal,pratio,draft_DFL,drank,draft_Sal,dratio,faab_DFL,frank,trade_DFL,trank,tradeValue) %>% arrange(-overall)
 
 # add injured data -  mutate(irank = rank(injured))
@@ -230,3 +253,4 @@ setColWidths(review, 'topFAABers', cols = 1:25, widths = "auto")
 saveWorkbook(review,str_c("../",year,"seasonReview.xlsx"),overwrite = TRUE)
 
 
+hitters %>% filter(Team=="Liquor Crickets",asrc=='protect')

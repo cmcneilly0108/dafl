@@ -274,7 +274,8 @@ df <- page[[7]]
 df <- df %>% slice(-1) %>% select(-X1)
 names(df) <- df %>% slice(1) %>% unlist()
 df <- df %>% slice(-(1:2))
-stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
+#stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
+stuff <- df %>% select(Player=Name,`Pitching+`)
 AllP <- left_join(AllP,stuff)
 
 
@@ -575,7 +576,7 @@ saveWorkbook(wkly,"../weeklyUpdate.xlsx",overwrite = TRUE)
 #ad hoc queries
 
 # # For a position, who has surplus?
- f <- AllH %>% filter(Pos == 'OF',pDFL > 8) %>% group_by(Team) %>% summarize(nGood = length(Team))
+ f <- AllH %>% filter(Contract < 3,pDFL > 8) %>% group_by(Team) %>% summarize(nGood = length(Team))
 # f2 <- AllH %>% filter(Pos == '2B') %>% group_by(Team) %>% summarize(nTotal = length(Team))
 # ff <- left_join(f2,f,by=c('Team')) %>% arrange(-nGood,-nTotal)
 #
