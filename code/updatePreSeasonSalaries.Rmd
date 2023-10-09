@@ -5,10 +5,10 @@ output: html_notebook
 
 Files to create first:
 - 20xxsalaryinfo.csv - copy and rename salaryinfo.csv
-- 20xxTransactions.csv - http://dafl.baseball.cbssports.com/transactions/2019/all/all_but_lineup
-- 20xxProtectionLists.csv - ???
+- 20xxTransactions.csv - http://dafl.baseball.cbssports.com/transactions/2023/all/all_but_lineup
+- 20xxProtectionLists.csv - should be there from faabAnalysis update
 - 20xxsalaryOverrides.csv - 
-- 20xxRosters.csv - make sure to change the year of the output file first
+
 
 
 
@@ -24,8 +24,8 @@ library("dplyr")
 
 source("./daflFunctions.r")
 
-year <- "2023"
-last <- "2022"
+year <- "2024"
+last <- "2023"
 ```
 
 Step 1:  Load in last year's final roster file

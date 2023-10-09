@@ -143,6 +143,11 @@ trades$Player <- unlist(lapply(trades$Players,swapName3))
 
 trades$fTeam <- unlist(lapply(trades$Players,tradeFrom))
 trades <- select(trades,Team,Player,Traded=Effective,fTeam)
+
+# Filter again to remove Benched and Moved rows
+trades <- filter(trades,!str_detect(fTeam,'Benched'))
+trades <- filter(trades,!str_detect(fTeam,'Moved'))
+
 hitters <- left_join(hitters,trades,by=c('Team','Player'))
 pitchers <- left_join(pitchers,trades,by=c('Team','Player'))
 
@@ -220,7 +225,22 @@ tfp <- pitchers %>% filter(asrc=="faab") %>% select(Player,Pos,Team,DFL)
 topfaab <- bind_rows(tfh,tfp) %>% arrange(-DFL)
 
 
+# Create averages data points
+avpratio <- mean(seasonResults$pratio)
+avdratio <- mean(seasonResults$dratio)
+avfaab <- mean(seasonResults$faab_DFL)
+avtrade <- mean(seasonResults$trade_DFL)
 
+# Create protection ratio against preseason predicted numbers
+fcast <- read.xlsx(str_c("../",year,"draftGuide.xlsx"),1)
+fcast <- select(fcast,Team,projectedValue=TotalValue)
+s2 <- left_join(seasonResults,fcast) %>% mutate(projRatio = protect_DFL/projectedValue)
+avprotect <- mean(s2$projRatio)
+
+
+aggStats <- tibble(Statistic=list("Protection Ratio","Prot Projection Ratio","Draft Ratio","FAAB Value","Trade Value"),
+                   Value=list(avpratio,avprotect,avdratio,avfaab,avtrade))
+aggStats$Value <- as.numeric(aggStats$Value)
 
 
 #Create xlsx with tabbed data
@@ -248,9 +268,17 @@ writeData(review,'topFAABers',topfaab,headerStyle = headerStyle)
 addStyle(review, 'topFAABers',style = csMoneyColumn,rows = 2:250, cols = 4,gridExpand = TRUE)
 setColWidths(review, 'topFAABers', cols = 1:25, widths = "auto")
 
-
+addWorksheet(review,'Summary Stats')
+writeData(review,'Summary Stats',aggStats,headerStyle = headerStyle)
+addStyle(review, 'Summary Stats',style = csRatioColumn,rows = 2:20, cols = 2,gridExpand = TRUE)
+setColWidths(review, 'Summary Stats', cols = 1, widths = "auto")
 
 saveWorkbook(review,str_c("../",year,"seasonReview.xlsx"),overwrite = TRUE)
 
 
 hitters %>% filter(Team=="Liquor Crickets",asrc=='protect')
+ncph <- filter(hitters,Team=="Natural Catching Position")
+ncpp <- filter(pitchers,Team=="Natural Catching Position")
+
+nhh <- filter(hitters,Team=="Nacho Helmet")
+nhp <- filter(pitchers,Team=="Nacho Helmet")

@@ -2,13 +2,13 @@
 #    updatePreSeasonSalaries.Rmd
 # Files to update each year
 #    - Position Eligibility - line 110 - from cbs dafl
+#    - cannot do this until CBS resets the league - need following year elig
 # http://dafl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:OF:U/2021:p/PosElig/
 #    - update loadPast with latest year
 # fs2019.csv
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# BUG - Oxy - Harris and Julio Rodriguez not showing up
 
 library("openxlsx")
 library("stringr")
@@ -22,8 +22,8 @@ library("jsonlite")
 
 source("./daflFunctions.r")
 
-year <- "2023"
-lastyear <- "2022"
+year <- "2024"
+lastyear <- "2023"
 
 fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
 cd <- Sys.time()

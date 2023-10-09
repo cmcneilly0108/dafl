@@ -111,7 +111,7 @@ pstandings <- protClean %>% group_by(Team) %>%
             Earned = TotalValue - Spent,
             VPPlayer = TotalValue/Players,
             DPP = (260-sum(Salary))/(25-Players),
-            FullValue = TotalValue + 0.75*(260-sum(Salary)),
+            FullValue = TotalValue + 0.8*(260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
