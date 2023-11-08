@@ -9,6 +9,7 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
+# loop seems to end too soon - before it's optimized
 
 library("openxlsx")
 library("stringr")
@@ -25,24 +26,26 @@ source("./daflFunctions.r")
 year <- "2024"
 lastyear <- "2023"
 
-fd <- file.info(str_c("../steamerH",year,".csv"))$mtime
+fd <- file.info(str_c("../steamerH",year,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
   #system("./pullSteamer.sh")
   system("bash ../scripts/pullSteamer.sh")
   #system("bash ../scripts/pullMaster.sh")
-  system("bash ../scripts/pullATC.sh")
+  #system("bash ../scripts/pullATC.sh")
 }
 
 #Load steamer data
 #hitters <- read.fg(str_c("../steamerH",year,".csv"))
-hitters <- read.fg(str_c("../atcH",year,".json"))
+hitters <- read.fg(str_c("../steamerH",year,".json"))
+#hitters <- read.fg(str_c("../atcH",year,".json"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
 #pitchers <- read.fg(str_c("../steamerP",year,".csv"))
-pitchers <- read.fg(str_c("../atcP",year,".json"))
+#pitchers <- read.fg(str_c("../atcP",year,".json"))
+pitchers <- read.fg(str_c("../steamerP",year,".json"))
 #pitchers <- read.fg("atcP2020.csv")
 #pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
@@ -143,10 +146,12 @@ print(nvalue)
 pjoin <- prosters2 %>% ungroup() %>% mutate(rdOne = TRUE) %>% select(playerid,rdOne)
 rhitters <- left_join(rhitters,pjoin,by=c('playerid'))
 rpitchers <- left_join(rpitchers,pjoin,by=c('playerid'))
+ctrdOne <- 100
 
 
-
-while ((nvalue > (cvalue+1)) & ct < 20) {
+#while ((nvalue > (cvalue+1)) & ct < 20) {
+#while (((nvalue < cvalue) | (ctrdOne > 0)) & ct < 20) {
+while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+1)) & ct < 20)) {
   ct <- ct + 1
   cvalue <- nvalue
   nlist <- preLPP(hitters,pitchers,prosters2)
@@ -166,6 +171,9 @@ while ((nvalue > (cvalue+1)) & ct < 20) {
     arrange(Team,-Value)
   if (nrow(filter(prosters2,rdOne==TRUE))) {prosters2 <- arrange(prosters2,rdOne) %>% head(-10)} 
   nvalue <- sum(prosters2$Value)
+  ctrdOne <- nrow(filter(prosters2,rdOne==TRUE))
+  print(ct)
+  print(cvalue)
   print(nvalue)
 }
 
@@ -173,6 +181,8 @@ prosters <- select(prosters2,playerid,Player,Pos,Team,Salary,Contract,orank)
 write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
 
+#Create valueRatio
+rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
 
 lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value) %>% 
   select(Player,Pos,Team,Salary,Contract,playerid,orank)
@@ -185,14 +195,14 @@ lcp <- filter(rpreds,Team == 'Liquor Crickets',Value > 1) %>% arrange(-Value) %>
 lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
 
 
-# Logic - filter to players that either have a valueRate > 1.3 or totalValue > 5, sort by Value descending
+# Logic - filter to players that either have a valueRate > 1.5 or totalValue > 5, sort by Value descending
 totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
   dplyr::summarize(NumProtected = length(Team),
             Spent = sum(Salary),
             TotalValue = sum(pDFL),
             MoneyEarned = TotalValue - Spent,
             VPPlayer = TotalValue/NumProtected,
-            PostDraftEst = TotalValue + 1.05 * (260-sum(Salary)),
+            PostDraftEst = TotalValue + 0.85 * (260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-PostDraftEst)
 totals$zScore <- as.numeric(scale(totals$PostDraftEst))
@@ -249,14 +259,14 @@ fairpriced <- bind_rows(t1,t2) %>% arrange(orank)
 
 # Create Trends tab
 targets <- data.frame()
+targets <- rbind(targets,c(2023,pgoals('../data/fs2023.csv')))
+targets <- rbind(targets,c(2022,pgoals('../data/fs2022.csv')))
+targets <- rbind(targets,c(2021,pgoals('../data/fs2021.csv')))
 targets <- rbind(targets,c(2019,pgoals('../data/fs2019.csv')))
 targets <- rbind(targets,c(2018,pgoals('../data/fs2018.csv')))
 targets <- rbind(targets,c(2017,pgoals('../data/fs2017.csv')))
 targets <- rbind(targets,c(2016,pgoals('../data/fs2016.csv')))
 targets <- rbind(targets,c(2015,pgoals('../data/fs2015.csv')))
-targets <- rbind(targets,c(2014,pgoals('../data/fs2014.csv')))
-targets <- rbind(targets,c(2013,pgoals('../data/fs2013.csv')))
-targets <- rbind(targets,c(2012,pgoals('../data/fs2012.csv')))
 colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 
 
@@ -484,3 +494,4 @@ nh <- filter(rpreds,Team == "Nacho Helmet") %>% arrange(-Value)
 
 #rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
 #r1 <- rosters %>% filter(str_detect(playerid,"cbs"))
+

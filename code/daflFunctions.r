@@ -15,19 +15,19 @@ getd <- function(c) {
 
 # Skipping 2020 data since it would through off the averages
 loadPast <- function() {
-  f1 <- read.csv("../data/fs2022.csv")
+  f1 <- read.csv("../data/fs2023.csv")
   res <- genDenoms(f1)
   eras <- f1$ERA
   avgs <- f1$AVG
+  f1 <- read.csv("../data/fs2022.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2021.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2019.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2018.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)

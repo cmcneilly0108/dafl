@@ -11,7 +11,7 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.0",
       sidebarPanel(
         selectizeInput(
           'e1', 'Select Team', choices=NULL)
-      ),
+        ,width=2),
       mainPanel(
         h2(textOutput("tname")),
         tabsetPanel(type='tabs',          
@@ -27,14 +27,16 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.0",
   tabPanel("Best Pitchers",
            verticalLayout(
              sliderInput("pdp", "Min Value", min=0, max=20, value=7),
-             sliderInput("pdfl", "Min DFL", min=0, max=100, value=10),
+             sliderInput("ratp", "Min Value Ratio", min=0, max=7, value=1.5, step=0.5),
+             sliderInput("pdfl", "Min DFL", min=0, max=30, value=10),
              dataTableOutput("bp")
            )
   ),
   tabPanel("Best Hitters",
            verticalLayout(
              sliderInput("pdh", "Min Value", min=0, max=40, value=20),
-             sliderInput("hdfl", "Min DFL", min=0, max=100, value=10),
+             sliderInput("rath", "Min Value Ratio", min=0, max=7, value=1.5, step=0.5),
+             sliderInput("hdfl", "Min DFL", min=0, max=30, value=10),
              dataTableOutput("bh")
            )
   )
