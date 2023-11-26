@@ -9,7 +9,9 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# loop seems to end too soon - before it's optimized
+# Can I get ADPs in here?  pADP exists but no values yet (11/8)
+# Need 2024 position eligibility
+# Need 2024 injury status
 
 library("openxlsx")
 library("stringr")
@@ -151,7 +153,7 @@ ctrdOne <- 100
 
 #while ((nvalue > (cvalue+1)) & ct < 20) {
 #while (((nvalue < cvalue) | (ctrdOne > 0)) & ct < 20) {
-while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+1)) & ct < 20)) {
+while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20)) {
   ct <- ct + 1
   cvalue <- nvalue
   nlist <- preLPP(hitters,pitchers,prosters2)
@@ -180,11 +182,16 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+1)) & ct < 20)) 
 prosters <- select(prosters2,playerid,Player,Pos,Team,Salary,Contract,orank)
 write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
-
 #Create valueRatio
 rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
+rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*0.85))
 
-lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value) %>% 
+#cleanup rpreds for chatbot
+f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue)
+write.csv(f2,"../rpreds.csv")
+
+
+lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue) %>% 
   select(Player,Pos,Team,Salary,Contract,playerid,orank)
 #prosters <- select(prosters,-playerid)
 rpreds <- select(rpreds,-playerid)

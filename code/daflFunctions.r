@@ -38,17 +38,17 @@ loadPast <- function() {
 
 pgoals <- function(f) {
   f1 <- read.csv(f, encoding="UTF-8")
-  avg <- f1$AVG[[match(13,rank(f1$AVG,ties.method='random'))]]
-  hr <- f1$HR[[match(13,rank(f1$HR,ties.method='random'))]]
-  rbi <- f1$RBI[[match(13,rank(f1$RBI,ties.method='random'))]]
-  r <- f1$R[[match(13,rank(f1$R,ties.method='random'))]]
-  sb <- f1$SB[[match(13,rank(f1$SB,ties.method='random'))]]
+  avg <- f1$AVG[[match(11,rank(f1$AVG,ties.method='random'))]]
+  hr <- f1$HR[[match(11,rank(f1$HR,ties.method='random'))]]
+  rbi <- f1$RBI[[match(11,rank(f1$RBI,ties.method='random'))]]
+  r <- f1$R[[match(11,rank(f1$R,ties.method='random'))]]
+  sb <- f1$SB[[match(11,rank(f1$SB,ties.method='random'))]]
 
-  w <- f1$W[[match(13,rank(f1$W,ties.method='random'))]]
-  k <- f1$K[[match(13,rank(f1$K,ties.method='random'))]]
-  sv <- f1$SV[[match(13,rank(f1$SV,ties.method='random'))]]
-  hld <- f1$HLD[[match(13,rank(f1$HLD,ties.method='random'))]]
-  era <- f1$ERA[[match(13,rank(-f1$ERA,ties.method='random'))]]
+  w <- f1$W[[match(11,rank(f1$W,ties.method='random'))]]
+  k <- f1$K[[match(11,rank(f1$K,ties.method='random'))]]
+  sv <- f1$SV[[match(11,rank(f1$SV,ties.method='random'))]]
+  hld <- f1$HLD[[match(11,rank(f1$HLD,ties.method='random'))]]
+  era <- f1$ERA[[match(11,rank(-f1$ERA,ties.method='random'))]]
 
   list(hr,rbi,r,sb,avg,w,k,sv,hld,era)
 }

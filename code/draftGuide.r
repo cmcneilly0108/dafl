@@ -20,16 +20,16 @@ library("tidyr")
 library("jsonlite")
 source("./daflFunctions.r")
 
-cyear <- 2023
-lastyear <- "2022"
-src <- 'atc'
-#src <- 'steamer'
+cyear <- 2024
+lastyear <- "2023"
+#src <- 'atc'
+src <- 'steamer'
 
 #positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
 
-#predUpdate <- FALSE
-predUpdate <- TRUE
-fd <- file.info(str_c("../atcH",cyear,".json"))$mtime
+predUpdate <- FALSE
+#predUpdate <- TRUE
+fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 14) {
@@ -40,8 +40,8 @@ if (dt > 14) {
 
 
 #official file
-protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-#protected <- read.csv("../2023fakeprotected.csv",stringsAsFactors=FALSE)
+#protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -56,8 +56,10 @@ if (src=='atc') {
   pitchers <- read.fg(str_c('../atcP',as.character(cyear),'.json',sep=''))
 } else {
   #Load steamer projection data
-  hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.csv',sep=''))
-  pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.csv',sep=''))
+  #hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.csv',sep=''))
+  #pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.csv',sep=''))
+  hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.json',sep=''))
+  pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.json',sep=''))
 }
 
 #pitchers <- predictHolds(pitchers)
@@ -111,7 +113,7 @@ pstandings <- protClean %>% group_by(Team) %>%
             Earned = TotalValue - Spent,
             VPPlayer = TotalValue/Players,
             DPP = (260-sum(Salary))/(25-Players),
-            FullValue = TotalValue + 0.8*(260-sum(Salary)),
+            FullValue = TotalValue + 0.85*(260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
@@ -148,12 +150,6 @@ pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 # Add column into AllH
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
-# Remove protected players
-#AllH <- anti_join(AllH,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
-#AllP <- anti_join(AllP,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
-# Remove protected players
-AllH <- anti_join(AllH,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
-AllP <- anti_join(AllP,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
 
 
 lc <- left_join(lc,pedf,by=c('playerid')) %>% select(Player,Age,posEl,Salary,Contract,pDFL)
@@ -161,13 +157,25 @@ protected <- left_join(protected,pedf,by=c('playerid'))
 protected$posEl <- replace_na(protected$posEl,'P')
 
 # Add back in orank
-AllH <- inner_join(AllH,hrank,by=c('playerid','Pos'))
-AllP <- inner_join(AllP,prank,by=c('playerid','Pos'))
+AllH <- inner_join(AllH,hrank,by=c('playerid','Pos'),multiple="first")
+AllP <- inner_join(AllP,prank,by=c('playerid','Pos'),multiple="first")
 
 # Injuries data
 inj <- getInjuries()
+
+#fake out until injuries get updated
+inj <- data_frame(Player="temp",Injury="",Expected.Return="")
+
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
+
+# Remove protected players
+#AllH <- anti_join(AllH,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
+#AllP <- anti_join(AllP,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
+# Remove protected players
+AllH <- anti_join(AllH,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
+AllP <- anti_join(AllP,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
+
 
 OFY <- filter(inj,str_detect(Expected.Return,fixed('60-day',ignore_case=TRUE)))
 #OFY <- filter(inj,str_detect(Expected.Return,fixed('out for the season',ignore_case=TRUE)))
@@ -186,18 +194,14 @@ lc <- left_join(lc,inj,by=c('Player'))
 
 #AllP <- left_join(AllP,npitch,by=c('Player'))
 
-oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
-oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
-oAllH <- select(oAllH,playerid,oDFL=pDFL)
-oAllP <- select(oAllP,playerid,oDFL=pDFL)
-oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
+# oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
+# oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
+# oAllH <- select(oAllH,playerid,oDFL=pDFL)
+# oAllP <- select(oAllP,playerid,oDFL=pDFL)
+# oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+# oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+# change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
 
-if (predUpdate==TRUE) {
-  write.csv(AllH,'../AllHPrev.csv')
-  write.csv(AllP,'../AllPPrev.csv')
-}
 
 #Add bogus pADP column until its filled for realz.
 #AllH$pADP <- 1
@@ -214,6 +218,42 @@ if (predUpdate==TRUE) {
 
 #Add back in to lc
 #lc <- left_join(lc,adp,by=c('Player')) %>% mutate(around=ceiling(pADP/16)) %>% select(-pADP)
+# New prospect list
+# url <- 'https://www.rotochamp.com/baseball/TopProspects.aspx'
+# page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE)
+# prospects <- page[[1]]
+# prospects <- select(prospects,Player,rookRank='Composite Rank',MLB=Team,Pos=POS,Age)
+# proh <- inner_join(AllH,prospects,by=c('Player'))
+# prop <- inner_join(AllP,prospects,by=c('Player'))
+# hp <- proh %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
+#   select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+# pp <- prop %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
+#   select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+
+#prospects from FanGraphs
+hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
+pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
+proh <- right_join(AllH,hplist,by=c('playerid'))
+proh <- proh %>% filter(cFV > 45)
+prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=Age.x,DFL=pDFL,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+  arrange(desc(FV))
+prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
+prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
+  arrange(desc(FV))
+
+
+if (predUpdate==TRUE) {
+  oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
+  oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
+  oAllH <- select(oAllH,playerid,oDFL=pDFL)
+  oAllP <- select(oAllP,playerid,oDFL=pDFL)
+  oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+  oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+  change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
+  
+  write.csv(AllH,'../AllHPrev.csv')
+  write.csv(AllP,'../AllPPrev.csv')
+}
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
@@ -263,23 +303,12 @@ pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::r
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr,nrow(filter(pmr,DFL>0))))/aRPV(pmr,nrow(filter(pmr,DFL>0))))
 pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
-# New prospect list
-url <- 'https://www.rotochamp.com/baseball/TopProspects.aspx'
-page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE)
-prospects <- page[[1]]
-prospects <- select(prospects,Player,rookRank='Composite Rank',MLB=Team,Pos=POS,Age)
-proh <- inner_join(AllH,prospects,by=c('Player'))
-prop <- inner_join(AllP,prospects,by=c('Player'))
-hp <- proh %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-  select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-pp <- prop %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-  select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 
 # Create percent against goals worksheet
 # Step 1 - Create targets
 targets <- data.frame()
-targets <- rbind(targets,c(lastyear,pgoals('../data/fs2021.csv')))
+targets <- rbind(targets,c(lastyear,pgoals('../data/fs2023.csv')))
 colnames(targets) <- c('year','HR','RBI','R','SB','AVG','W','K','SV','HLD','ERA')
 targets <- select(targets,-AVG,-ERA,-year)
 targets <- melt(targets)
@@ -372,7 +401,7 @@ protectSummary <- data.frame(type=c("hitter","pitcher"),playersProt=c(hpr,ppr),d
                              ToFill=c(hnleft,pnleft),valueTaken=c(hvr,pvr))
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pSB > 16) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pDFL > 35) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
@@ -503,16 +532,16 @@ setColWidths(draft, 'CL', cols = 1:20, widths = "auto")
 # st <- list('5'=csMoneyColumn,'6'=csRatioColumn)
 # tabs[[length(tabs)+1]] <- list('HitProspect',hp,st,c(2,14))
 addWorksheet(draft,'HitProspect')
-writeData(draft,'HitProspect',hp,headerStyle = headerStyle)
+writeData(draft,'HitProspect',prospectH,headerStyle = headerStyle)
 addStyle(draft, 'HitProspect',style = csMoneyColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
-addStyle(draft, 'HitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
+#addStyle(draft, 'HitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
 setColWidths(draft, 'HitProspect', cols = 1:20, widths = "auto")
 
 # tabs[[length(tabs)+1]] <- list('PitProspect',pp,st,c(2,14))
 addWorksheet(draft,'PitProspect')
-writeData(draft,'PitProspect',pp,headerStyle = headerStyle)
-addStyle(draft, 'PitProspect',style = csMoneyColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
-addStyle(draft, 'PitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
+writeData(draft,'PitProspect',prospectP,headerStyle = headerStyle)
+addStyle(draft, 'PitProspect',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+#addStyle(draft, 'PitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
 setColWidths(draft, 'PitProspect', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'OutForYear')
@@ -535,10 +564,12 @@ setColWidths(draft, 'TopHitters', cols = 1:20, widths = "auto")
 # 
 # st <- list('2'=csMoneyColumn,'3'=csMoneyColumn)
 # tabs[[length(tabs)+1]] <- list('Recent Changes',change,st,c(2))
-addWorksheet(draft,'Recent Changes')
-writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
-addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
-setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
+if (predUpdate==TRUE) {
+  addWorksheet(draft,'Recent Changes')
+  writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
+  addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
+  setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
+}
 
 saveWorkbook(draft,"../draftGuide.xlsx",overwrite = TRUE)
 
@@ -697,3 +728,4 @@ generateGeneration <- function(slist,msal) {
 # myteam <- nround[[which.max(new_vector)]]
 # mt4 <- left_join(myteam,AllH)
 # sum(mt2$psalary)
+pfix <- pedf %>% filter(str_starts(playerid,"cbs"))
