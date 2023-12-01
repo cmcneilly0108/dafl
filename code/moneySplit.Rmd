@@ -3,34 +3,54 @@
 library(tidyr)
 library(stringr)
 source("./daflFunctions.r")
-year <- "2021"
+year <- "2023"
 ```
 Need to load 2 files - draft and protection
 2019 Draft Results file is incorrect!  Only has active players (17)
 ```{r}
-#prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
-prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
-prot$playerid <- as.character(prot$playerid)
-prot <- select(prot,Team,Player,Pos,Salary,Contract)
+getWeek1 <- function(fn) {
+  # Add Salary, Contract to players
+  s <- read.csv(fn,header=FALSE,stringsAsFactors=FALSE, encoding="UTF-8")
+  colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank')
+  
+  sal <- select(s,-Rank) %>%
+    filter(!(Avail %in% c('Batters','Pitchers','Avail'))) %>%
+    filter(!(Player %in% c('TOTALS')))
+  sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
+  sal$Team <- na.locf(sal$Team)
+  sal <- mutate(sal, MLB = pullMLB(Player))
+  sal$Player <- unlist(lapply(sal$Player,stripName))
+  sal$Salary <- as.integer(sal$Salary)
+  sal$Contract <- as.integer(sal$Contract)
+  sal <- addPlayerid(sal) %>% select(playerid,Team,Player,Pos,Salary,Contract) %>% distinct()
+}
 
-draft <- read.csv(str_c("../data/",year,"DraftRecap.csv"),stringsAsFactors=FALSE)
+#prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
+# prot <- read.csv(str_c("../data/",year,"ProtectionLists.csv"),stringsAsFactors=FALSE)
+# prot$playerid <- as.character(prot$playerid)
+# prot <- select(prot,Team,Player,Pos,Salary,Contract)
+
+draft <- getWeek1(str_c("../data/",year,"DraftResults.csv"))
+#draft <- read.csv(str_c("../data/",year,"DraftRecap.csv"),stringsAsFactors=FALSE)
 #draft <- addPlayeridOnly(draft)
-m2 <- select(master,-Player) %>% dplyr::rename(Player=cbs_name)
-m2 <- select(m2,Player,MLB,playerid,Pos)
-# Merge with team
-draft <- left_join(draft, m2,by=c('Player'))
-draft$playerid <- ifelse(is.na(draft$playerid),draft$Player,draft$playerid)
-draft$playerid <- ifelse(str_length(draft$playerid)==0,draft$Player,draft$playerid)
+# m2 <- select(master,-Player) %>% dplyr::rename(Player=cbs_name)
+# m2 <- select(m2,Player,MLB,playerid,Pos)
+# # Merge with team
+# draft <- left_join(draft, m2,by=c('Player'))
+# draft$playerid <- ifelse(is.na(draft$playerid),draft$Player,draft$playerid)
+# draft$playerid <- ifelse(str_length(draft$playerid)==0,draft$Player,draft$playerid)
 draft <- select(draft,Team,Player,Pos,Salary,Contract)
 
-players <- bind_rows(prot,draft)
-players <- mutate(players,hp = ifelse(Pos=='P','P','H'))
+#players <- bind_rows(prot,draft)
+players <- mutate(draft,hp = ifelse(Pos=='P','P','H'))
 ```
 ```{r}
-players <- read.csv(str_c("../data/",year,"DraftResults2.csv"),stringsAsFactors=FALSE)
+#players <- read.csv(str_c("../data/",year,"DraftResults2.csv"),stringsAsFactors=FALSE)
 players <- mutate(players,hp = ifelse(Pos=='P','P','H'))
 ```
 
+2023 = 61/39
+2022 = 62/38
 2021 = 60/40
 2020 = 57/43
 2019 = 60/40
@@ -47,12 +67,15 @@ res
 Now determine how many hitters vs pitchers on opening day rosters.
 
 hitter/pitcher
+2023 12.3/12.7
+2022 12.5/12.5
 2021 12.5/12.5
-```{r}
-players %>% filter(Pos=='P') %>% nrow()/16
-players %>% filter(Pos!='P') %>% nrow()/16
-```
 2018 = 12/13
+```{r}
+players %>% filter(Pos=='P') %>% nrow()/14
+players %>% filter(Pos!='P') %>% nrow()/14
+```
+
 
 
 2019

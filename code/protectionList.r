@@ -27,6 +27,7 @@ source("./daflFunctions.r")
 
 year <- "2024"
 lastyear <- "2023"
+auctionROI <- 0.89
 
 fd <- file.info(str_c("../steamerH",year,".json"))$mtime
 cd <- Sys.time()
@@ -63,7 +64,7 @@ rPitchers <- filter(rosters,Pos == 'P' | Pos == 'RP')
 
 nteams <- 14
 tdollars <- nteams * 260
-pdollars <- round(tdollars*0.4)
+pdollars <- round(tdollars*0.38)
 hdollars <- tdollars - pdollars
 nhitters <- 13
 npitchers <- 12
@@ -169,8 +170,9 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20
   rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
                   select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
-  prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
-    arrange(Team,-Value)
+  rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
+  prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 0) %>%
+    arrange(Team,-netValue)
   if (nrow(filter(prosters2,rdOne==TRUE))) {prosters2 <- arrange(prosters2,rdOne) %>% head(-10)} 
   nvalue <- sum(prosters2$Value)
   ctrdOne <- nrow(filter(prosters2,rdOne==TRUE))
@@ -184,7 +186,7 @@ write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
 #Create valueRatio
 rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
-rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*0.85))
+rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 
 #cleanup rpreds for chatbot
 f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue)
@@ -197,9 +199,9 @@ lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue) %>%
 rpreds <- select(rpreds,-playerid)
 
 #lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
-lcp <- filter(rpreds,Team == 'Liquor Crickets',Value > 1) %>% arrange(-Value) %>%
-  filter(rank(-Value) < 13)
-lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
+lcp <- filter(rpreds,Team == 'Liquor Crickets',Value > 1) %>% arrange(-netValue) %>%
+  filter(rank(-netValue) < 13)
+lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue)
 
 
 # Logic - filter to players that either have a valueRate > 1.5 or totalValue > 5, sort by Value descending
@@ -209,7 +211,7 @@ totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
             TotalValue = sum(pDFL),
             MoneyEarned = TotalValue - Spent,
             VPPlayer = TotalValue/NumProtected,
-            PostDraftEst = TotalValue + 0.85 * (260-sum(Salary)),
+            PostDraftEst = TotalValue + auctionROI * (260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-PostDraftEst)
 totals$zScore <- as.numeric(scale(totals$PostDraftEst))

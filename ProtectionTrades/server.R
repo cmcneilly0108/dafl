@@ -33,13 +33,13 @@ shinyServer(function(input, output,session) {
   output$Players <- renderDataTable({ pullPlayers(input$e1) })
   output$THitters <- renderDataTable({ aggHitters(input$e1) })
   output$TPitchers <- renderDataTable({ aggPitchers(input$e1) })
-  bh <- reactive({ as.data.frame(rpreds) %>% filter(valueRatio > input$rath, Value>input$pdh,
+  bh <- reactive({ as.data.frame(rpreds) %>% filter(valueRatio > input$rath, netValue>input$netVh,
                                                     pDFL>input$hdfl,Pos!='SP',Pos!='CL') %>% 
-                     arrange(-Value) %>% select(Player,Team,Pos:Expected.Return) })
+                     arrange(-Value) %>% select(Player,Team,Pos:netValue) })
   bp <- reactive({ as.data.frame(rpreds) %>% filter((Pos=='SP' | Pos=='CL'),
-                                                    valueRatio > input$ratp,Value>input$pdp,
+                                                    valueRatio > input$ratp,netValue>input$netVp,
                                                     pDFL>input$pdfl) %>% 
-                     arrange(-Value) %>% select(Player,Team,Pos:Expected.Return) })
+                     arrange(-Value) %>% select(Player,Team,Pos:netValue) })
   
   
   

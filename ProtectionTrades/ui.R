@@ -26,7 +26,7 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.0",
   ),
   tabPanel("Best Pitchers",
            verticalLayout(
-             sliderInput("pdp", "Min Value", min=0, max=20, value=7),
+             sliderInput("netVp", "Min Net Value", min=0, max=20, value=7),
              sliderInput("ratp", "Min Value Ratio", min=0, max=7, value=1.5, step=0.5),
              sliderInput("pdfl", "Min DFL", min=0, max=30, value=10),
              dataTableOutput("bp")
@@ -34,7 +34,7 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.0",
   ),
   tabPanel("Best Hitters",
            verticalLayout(
-             sliderInput("pdh", "Min Value", min=0, max=40, value=20),
+             sliderInput("netVh", "Min Net Value", min=0, max=40, value=20),
              sliderInput("rath", "Min Value Ratio", min=0, max=7, value=1.5, step=0.5),
              sliderInput("hdfl", "Min DFL", min=0, max=30, value=10),
              dataTableOutput("bh")

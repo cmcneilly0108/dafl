@@ -10,6 +10,7 @@
 #   2019trades.csv
 # Week 1 rosters
 #   https://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:p/salary%20info/
+#   !!!Need to manually fix Avail column!!!
 
 library("openxlsx")
 library("stringr")
@@ -43,9 +44,9 @@ cleanRosters <- function(pl) {
 getWeek1 <- function(fn) {
   # Add Salary, Contract to players
   s <- read.csv(fn,header=FALSE,stringsAsFactors=FALSE, encoding="UTF-8")
-  colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank','Extra')
+  colnames(s) <- c('Avail','Player','Pos','Salary','Contract','Rank')
   
-  sal <- select(s,-Rank,-Extra) %>%
+  sal <- select(s,-Rank) %>%
     filter(!(Avail %in% c('Batters','Pitchers','Avail'))) %>%
     filter(!(Player %in% c('TOTALS')))
   sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
