@@ -3,15 +3,15 @@
 # Files to update each year
 #    - Position Eligibility - line 110 - from cbs dafl
 #    - cannot do this until CBS resets the league - need following year elig
-# http://dafl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:OF:U/2021:p/PosElig/
+# http://dafl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:OF:U/2023:p/PosElig/
 #    - update loadPast with latest year
 # fs2019.csv
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# Can I get ADPs in here?  pADP exists but no values yet (11/8)
-# Need 2024 position eligibility
+# Can I get ADPs in here?  pADP exists but no values yet (12/6)
 # Need 2024 injury status
+# Switch to ATC when available
 
 library("openxlsx")
 library("stringr")
@@ -23,13 +23,11 @@ library("dplyr")
 library("rvest")
 library("jsonlite")
 
+
 source("./daflFunctions.r")
 
-year <- "2024"
-lastyear <- "2023"
-auctionROI <- 0.89
 
-fd <- file.info(str_c("../steamerH",year,".json"))$mtime
+fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 20) {
@@ -40,22 +38,22 @@ if (dt > 20) {
 }
 
 #Load steamer data
-#hitters <- read.fg(str_c("../steamerH",year,".csv"))
-hitters <- read.fg(str_c("../steamerH",year,".json"))
-#hitters <- read.fg(str_c("../atcH",year,".json"))
+#hitters <- read.fg(str_c("../steamerH",cyear,".csv"))
+hitters <- read.fg(str_c("../steamerH",cyear,".json"))
+#hitters <- read.fg(str_c("../atcH",cyear,".json"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
-#pitchers <- read.fg(str_c("../steamerP",year,".csv"))
-#pitchers <- read.fg(str_c("../atcP",year,".json"))
-pitchers <- read.fg(str_c("../steamerP",year,".json"))
+#pitchers <- read.fg(str_c("../steamerP",cyear,".csv"))
+#pitchers <- read.fg(str_c("../atcP",cyear,".json"))
+pitchers <- read.fg(str_c("../steamerP",cyear,".json"))
 #pitchers <- read.fg("atcP2020.csv")
 #pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 
 
 #official file
-rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
+rosters <- read.csv(str_c("../",cyear,"Rosters1.csv"), encoding="UTF-8")
 
 
 #split into P,H tables
@@ -64,7 +62,7 @@ rPitchers <- filter(rosters,Pos == 'P' | Pos == 'RP')
 
 nteams <- 14
 tdollars <- nteams * 260
-pdollars <- round(tdollars*0.38)
+pdollars <- round(tdollars*hpratio)
 hdollars <- tdollars - pdollars
 nhitters <- 13
 npitchers <- 12
@@ -109,7 +107,7 @@ rpitchers$Pos <- with(rpitchers,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 
 
 # Add in position eligibility based on 20 games
-pedf <- read.cbs(str_c("../",year,"PosElig.csv"))
+pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
@@ -181,8 +179,6 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20
   print(nvalue)
 }
 
-prosters <- select(prosters2,playerid,Player,Pos,Team,Salary,Contract,orank)
-write.csv(prosters,str_c("../",year,"fakeprotected.csv"))
 
 #Create valueRatio
 rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
@@ -191,6 +187,10 @@ rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 #cleanup rpreds for chatbot
 f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue)
 write.csv(f2,"../rpreds.csv")
+
+prosters <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 1) %>% 
+  select(playerid,Player,Pos,Team,Salary,Contract,orank)
+write.csv(prosters,str_c("../",cyear,"fakeprotected.csv"))
 
 
 lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue) %>% 
@@ -205,7 +205,7 @@ lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue)
 
 
 # Logic - filter to players that either have a valueRate > 1.5 or totalValue > 5, sort by Value descending
-totals <- rpreds %>% group_by(Team) %>% filter(rank(-Value) < 13,Value > 1) %>%
+totals <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 1) %>%
   dplyr::summarize(NumProtected = length(Team),
             Spent = sum(Salary),
             TotalValue = sum(pDFL),
@@ -501,6 +501,6 @@ nh <- filter(rpreds,Team == "Nacho Helmet") %>% arrange(-Value)
 
 # find and fix roster file problems
 
-#rosters <- read.csv(str_c("../",year,"Rosters1.csv"), encoding="UTF-8")
+#rosters <- read.csv(str_c("../",cyear,"Rosters1.csv"), encoding="UTF-8")
 #r1 <- rosters %>% filter(str_detect(playerid,"cbs"))
 

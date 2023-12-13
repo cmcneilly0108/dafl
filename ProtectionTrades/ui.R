@@ -1,6 +1,6 @@
 # 1st Tool - pullTeam
 
-shinyUI(navbarPage("Offseason Trade Evaluator, v1.0",
+shinyUI(navbarPage("Offseason Trade Evaluator, v1.13",
   tabPanel("Overview",
     verticalLayout(
       dataTableOutput("totals")

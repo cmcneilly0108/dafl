@@ -20,8 +20,6 @@ library("tidyr")
 library("jsonlite")
 source("./daflFunctions.r")
 
-cyear <- 2024
-lastyear <- "2023"
 #src <- 'atc'
 src <- 'steamer'
 
@@ -73,8 +71,8 @@ thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
 
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(hitters,thitters,by=c('playerid'))
-AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
+AllH <- left_join(hitters,thitters,by=c('playerid'),copy=FALSE)
+AllP <- left_join(pitchers,tpitchers,by=c('playerid'),copy=FALSE)
 AllH <- dplyr::rename(AllH,pDFL=zDFL)
 AllP <- dplyr::rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
@@ -113,7 +111,7 @@ pstandings <- protClean %>% group_by(Team) %>%
             Earned = TotalValue - Spent,
             VPPlayer = TotalValue/Players,
             DPP = (260-sum(Salary))/(25-Players),
-            FullValue = TotalValue + 0.85*(260-sum(Salary)),
+            FullValue = TotalValue + auctionROI*(260-sum(Salary)),
             ValueRatio = TotalValue/Spent) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
@@ -127,6 +125,7 @@ lc <- filter(protClean,Team == 'Liquor Crickets') %>% select(-Team) %>% arrange(
 nlist <- preLPP(hitters,pitchers,protected)
 thitters <- nlist[[1]]
 tpitchers <- nlist[[2]]
+
 
 # Incorporate scores back into AllH, AllP
 AllH <- left_join(hitters,thitters,by=c('playerid'))
@@ -150,7 +149,11 @@ pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 # Add column into AllH
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
-
+# Create DADP = DAFL ADP
+dafladp <- rbind(thitters,tpitchers)
+dafladp <- dafladp %>% mutate(dadp = rank(-zDFL)) %>% select(-zDFL)
+AllH <- left_join(AllH,dafladp,by=c('playerid'))
+AllP <- left_join(AllP,dafladp,by=c('playerid'))
 
 lc <- left_join(lc,pedf,by=c('playerid')) %>% select(Player,Age,posEl,Salary,Contract,pDFL)
 protected <- left_join(protected,pedf,by=c('playerid'))
@@ -401,7 +404,7 @@ protectSummary <- data.frame(type=c("hitter","pitcher"),playersProt=c(hpr,ppr),d
                              ToFill=c(hnleft,pnleft),valueTaken=c(hvr,pvr))
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pDFL > 35) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pDFL > 30) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)

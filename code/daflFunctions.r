@@ -1,9 +1,11 @@
 # # TBD
 # # Improve holds projections?
 # 
-# hpratio <- .35
- hpratio <- .4
- 
+cyear <- "2024"
+lastyear <- "2023"
+auctionROI <- 0.89
+hpratio <- .38
+
 # 
 # bullpen <- "http://www.fangraphs.com/fantasy/bullpen-report-april-25-2015/"
 nicks <- read.csv("../data/nicknames.csv",stringsAsFactors=FALSE)
