@@ -13,6 +13,10 @@
 # Need 2024 injury status
 # Switch to ATC when available
 
+# Whole batch of player duplicates! Easily found for SPs - Yoshinobu Yamamoto
+# Looks like it's for free agents that have no Team listed - check back in Feb!
+
+
 library("openxlsx")
 library("stringr")
 library("reshape2")
@@ -30,7 +34,7 @@ source("./daflFunctions.r")
 fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
-if (dt > 20) {
+if (dt > 10) {
   #system("./pullSteamer.sh")
   system("bash ../scripts/pullSteamer.sh")
   #system("bash ../scripts/pullMaster.sh")
@@ -53,7 +57,7 @@ pitchers$pSGP <- pitSGP(pitchers)
 
 
 #official file
-rosters <- read.csv(str_c("../",cyear,"Rosters1.csv"), encoding="UTF-8")
+rosters <- read.csv(str_c("../",cyear,"Rosters2.csv"), encoding="UTF-8")
 
 
 #split into P,H tables
@@ -125,8 +129,8 @@ rpitchers <- left_join(rpitchers,inj,by=c('Player'))
 
 
 
-rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
 
 #rpreds <- dplyr::rename(rpreds,Salary=Salary,Contract=Contract)
 
@@ -165,8 +169,8 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20
   rpitchers <- left_join(rpitchers,ipitchers,by=c('playerid'))
   rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
                       rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
-  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
   rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
   prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 0) %>%
@@ -185,7 +189,7 @@ rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
 rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 
 #cleanup rpreds for chatbot
-f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue)
+f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue,ADP=pADP)
 write.csv(f2,"../rpreds.csv")
 
 prosters <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 1) %>% 

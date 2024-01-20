@@ -6,20 +6,21 @@ setwd("../LeagueEval")
 teams <- sort(unique(as.character(totals$Team)))
 
 pullPlayers <- function(tm) {
-  res <- filter(rpreds,Team == tm,Value > 1) %>% arrange(-Value) %>% mutate(Rank=rank(-Value)) %>% 
+#  res <- filter(rpreds,Team == tm,netValue > 1) %>% arrange(-netValue) %>% mutate(Rank=rank(-Value)) %>% 
+  res <- filter(rpreds,Team == tm) %>% arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>% 
     select(-Team,Rank,Player:Expected.Return)
 }
 
 aggHitters <- function(tm,pos) {
-  res <- filter(rpreds,Team == tm,Value > 1,!(Pos %in% c('SP','CL','MR'))) %>% 
-    arrange(-Value) %>% mutate(Rank=rank(-Value)) %>%
+  res <- filter(rpreds,Team == tm,netValue > 1,!(Pos %in% c('SP','CL','MR'))) %>% 
+    arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>%
     select(-Team,Rank,Player:Expected.Return) %>% group_by(Pos) %>%
     summarize(Players = length(Pos),TSalary = sum(Salary),TValue = sum(Value))
 }
 
 aggPitchers <- function(tm,pos) {
-  res <- filter(rpreds,Team == tm,Value > 1,(Pos %in% c('SP','CL','MR'))) %>% 
-    arrange(-Value) %>% mutate(Rank=rank(-Value)) %>%
+  res <- filter(rpreds,Team == tm,netValue > 1,(Pos %in% c('SP','CL','MR'))) %>% 
+    arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>%
     select(-Team,Rank,Player:Expected.Return) %>% group_by(Pos) %>%
     summarize(Players = length(Pos),TSalary = sum(Salary),TValue = sum(Value))
 }
@@ -33,11 +34,11 @@ shinyServer(function(input, output,session) {
   output$Players <- renderDataTable({ pullPlayers(input$e1) })
   output$THitters <- renderDataTable({ aggHitters(input$e1) })
   output$TPitchers <- renderDataTable({ aggPitchers(input$e1) })
-  bh <- reactive({ as.data.frame(rpreds) %>% filter(valueRatio > input$rath, netValue>input$netVh,
+  bh <- reactive({ as.data.frame(rpreds) %>% filter(pADP > input$hadp, netValue>input$netVh,
                                                     pDFL>input$hdfl,Pos!='SP',Pos!='CL') %>% 
                      arrange(-Value) %>% select(Player,Team,Pos:netValue) })
   bp <- reactive({ as.data.frame(rpreds) %>% filter((Pos=='SP' | Pos=='CL'),
-                                                    valueRatio > input$ratp,netValue>input$netVp,
+                                                    pADP > input$padp,netValue>input$netVp,
                                                     pDFL>input$pdfl) %>% 
                      arrange(-Value) %>% select(Player,Team,Pos:netValue) })
   

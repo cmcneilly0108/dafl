@@ -39,7 +39,7 @@ if (dt > 14) {
 
 #official file
 #protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
+protected <- read.csv("../2024fakeprotectedChanged.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -404,7 +404,7 @@ protectSummary <- data.frame(type=c("hitter","pitcher"),playersProt=c(hpr,ppr),d
                              ToFill=c(hnleft,pnleft),valueTaken=c(hvr,pvr))
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pDFL > 30) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pDFL > 20) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
@@ -554,7 +554,7 @@ setColWidths(draft, 'OutForYear', cols = 1:20, widths = "auto")
 addWorksheet(draft,'TopHitters')
 writeData(draft,'TopHitters',topHitters,headerStyle = headerStyle)
 addStyle(draft, 'TopHitters',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-#addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
+addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
 addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
 setColWidths(draft, 'TopHitters', cols = 1:20, widths = "auto")
 

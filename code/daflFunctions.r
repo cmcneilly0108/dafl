@@ -552,10 +552,13 @@ read.fg <- function(fn) {
   df <- read_json(fn,simplifyVector = TRUE)
   # Should we be removing blank teams?  Free agents are removed, but maybe it breaks something else?
   #df <- filter(df,str_length(Team) > 0)
-  if ("playerids" %in% colnames(df)) {
-    df <- df %>% rename(playerid=playerids)
+  if ("playerid" %in% colnames(df)) {
   } else {
-    df <- df %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+    if ("playerids" %in% colnames(df)) {
+      df <- df %>% rename(playerid=playerids)
+    } else {
+      df <- df %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+    }
   }
 
   colnames(df) <- str_c('p',colnames(df))
@@ -564,6 +567,7 @@ read.fg <- function(fn) {
   df <- df %>% mutate(playerid = as.character(playerid))
   df <- left_join(df,m2,by=c('playerid'),copy=FALSE)
   df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
+  df$pTeam <- replace(df$pTeam,is.na(df$pTeam),"FA")
   df <- mutate(df,Age=year(Sys.time())-birth_year)
   dfh <- anti_join(df,m2,by=c('playerid'),copy=FALSE)
   df$playerid <- ifelse(df$playerid %in% dfh$playerid,str_c(df$Player,df$pTeam),df$playerid)

@@ -31,9 +31,14 @@ getAge <- function(playerid) {
   byear <- NA
   tryCatch(
     {
-      page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
-      byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
-      str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+      #page <- read_html(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
+      #byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
+      #str_extract("[0-9/]{8,}") %>% mdy() %>% year()
+      #page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/sa3018608/stats"),as_html=TRUE)
+      page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"),as_html=TRUE)
+      phtml <- page %>% html_text2()
+      pstring <- as.character(page)
+      byear <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
     },
     error=function(error_message) {
       print("some error")
@@ -105,21 +110,28 @@ Have to convert Team to MLB
 #fgh <- read.fg('../steamerH2023.csv')
 
 fgh <- read_json('../steamerH2024.json',simplifyVector = TRUE)
-if ("playerids" %in% colnames(fgh)) {
-  fgh <- fgh %>% rename(playerid=playerids)
+if ("playerid" %in% colnames(fgh)) {
 } else {
-  fgh <- fgh %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+  if ("playerids" %in% colnames(fgh)) {
+    fgh <- fgh %>% rename(playerid=playerids)
+  } else {
+    fgh <- fgh %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+  }
 }
 fgh <- select(fgh,playerid,Player=PlayerName,MLB=Team)
 
 #fgh <- select(fgh,playerid,Player,MLB=Team)
 
 fgp <- read_json('../steamerP2024.json',simplifyVector = TRUE)
-if ("playerids" %in% colnames(fgp)) {
-  fgp <- fgp %>% rename(playerid=playerids)
+if ("playerid" %in% colnames(fgp)) {
 } else {
-  fgp <- fgp %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+  if ("playerids" %in% colnames(fgp)) {
+    fgp <- fgp %>% rename(playerid=playerids)
+  } else {
+    fgp <- fgp %>% mutate(playerid = str_match(Name,"s?a?[0-9]+"))
+  }
 }
+
 
 fgp <- select(fgp,playerid,Player=PlayerName,MLB=Team)
 
@@ -475,5 +487,19 @@ tdf <- left_join(mymaster,pedf)
 tdf <- tdf %>% mutate(nnpos=if_else(is.na(npos),Pos,npos))
 tdf <- tdf %>% select(-Pos,-posEl,-npos) %>% rename(Pos=nnpos)
 write.csv(tdf,"../mymaster.csv")
+```
+
+Explorations on fixing the birth date problem
+```{r}
+page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/sa3002951/stats"),as_html=TRUE)
+phtml <- page %>% html_text2()
+#bdate <- str_extract(phtml,"Birth")
+#write_xml(page,"../fangraphs.xml")
+pstring <- as.character(page)
+#bdate <- str_extract(pstring,"<tr class=.player-info__bio-birthdate.>.{1,20}")
+bdate <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
+
+fgid <- "sa3002951"
+print(getAge(fgid))
 ```
 
