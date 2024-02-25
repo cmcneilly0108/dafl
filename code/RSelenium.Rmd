@@ -1,0 +1,47 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Try to scrape FG Injury page using RSelenium because we need to execute javascript.
+Reference page:  https://thatdatatho.com/tutorial-web-scraping-rselenium/
+https://joshuamccrain.com/tutorials/web_scraping_R_selenium.html
+
+FG page:  https://www.fangraphs.com/roster-resource/injury-report?groupby=all
+
+```{r}
+
+library(RSelenium)
+library(netstat)
+library(tidyverse)
+```
+```{r}
+rD <- rsDriver(browser="firefox",port=free_port(), 
+               chromever=NULL, verbose=F)
+remDr <- rD[["client"]]
+
+```
+
+```{r}
+#remDr$open()
+remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
+
+```
+```{r}
+# Looking for the correct <table> element
+#inj <- remDr$findElement(using='class name','table')
+html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
+inj <- html[[16]]
+
+inj <- rename(inj,Player=Name,MLB=Team)
+inj <- addPlayerid(inj)
+
+remDr$close()
+
+```
+
+Kill the Selenium process - how do we kill the window as well?
+```{r}
+system("taskkill /im java.exe /f")
+```
+

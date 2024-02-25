@@ -9,12 +9,13 @@
 #    - update predictHolds with latest bullpen report URL
 # edit pullSteamer and pullATC shell files
 
-# Can I get ADPs in here?  pADP exists but no values yet (12/6)
-# Need 2024 injury status
+
 # Switch to ATC when available
 
-# Whole batch of player duplicates! Easily found for SPs - Yoshinobu Yamamoto
-# Looks like it's for free agents that have no Team listed - check back in Feb!
+# Eury Perez - not protected!  BUG!
+
+computer <- 'mac'
+#computer <- 'windows'
 
 
 library("openxlsx")
@@ -26,7 +27,9 @@ library("xml2")
 library("dplyr")
 library("rvest")
 library("jsonlite")
-
+library("RSelenium")
+library("netstat")
+library("janitor")
 
 source("./daflFunctions.r")
 
@@ -38,19 +41,20 @@ if (dt > 10) {
   #system("./pullSteamer.sh")
   system("bash ../scripts/pullSteamer.sh")
   #system("bash ../scripts/pullMaster.sh")
-  #system("bash ../scripts/pullATC.sh")
-}
+  system("bash ../scripts/pullATC.sh")
+  system("bash ../scripts/fgInj.sh")
+  }
 
 #Load steamer data
 #hitters <- read.fg(str_c("../steamerH",cyear,".csv"))
-hitters <- read.fg(str_c("../steamerH",cyear,".json"))
-#hitters <- read.fg(str_c("../atcH",cyear,".json"))
+#hitters <- read.fg(str_c("../steamerH",cyear,".json"))
+hitters <- read.fg(str_c("../atcH",cyear,".json"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
 #pitchers <- read.fg(str_c("../steamerP",cyear,".csv"))
-#pitchers <- read.fg(str_c("../atcP",cyear,".json"))
-pitchers <- read.fg(str_c("../steamerP",cyear,".json"))
+pitchers <- read.fg(str_c("../atcP",cyear,".json"))
+#pitchers <- read.fg(str_c("../steamerP",cyear,".json"))
 #pitchers <- read.fg("atcP2020.csv")
 #pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
@@ -115,11 +119,22 @@ pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
+
 # Injuries data
-inj <- getInjuries()
+if (computer=='mac')
+{
+  injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
+  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
+  
+} else {
+  injOrig <- getInjuriesRS()
+}
+
+inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
+
 
 #fake out until injuries get updated
-inj <- data_frame(Player="temp",Injury="",Expected.Return="")
+#inj <- data_frame(Player="temp",Injury="",Expected.Return="")
 
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))

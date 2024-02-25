@@ -5,7 +5,6 @@
 # For live draft, create CSV with all players and teams, free agents have Team = 'Free Agent'
 # Then update draftguide to remove those rows - line 149 is when protected are removed
 
-# BUG - Justin Steele is protected but still showing up
 
 library("openxlsx")
 library("stringr")
@@ -20,8 +19,10 @@ library("tidyr")
 library("jsonlite")
 source("./daflFunctions.r")
 
-#src <- 'atc'
-src <- 'steamer'
+src <- 'atc'
+#src <- 'steamer'
+computer <- 'mac'
+#computer <- 'windows'
 
 #positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
 
@@ -33,13 +34,15 @@ dt <- difftime(cd, fd, units = "hours")
 if (dt > 14) {
   system("bash ../scripts/pullSteamer.sh")
   system("bash ../scripts/pullATC.sh")
+  system("bash ../scripts/fgInj.sh")
+  system("bash ../scripts/pullRRClosers.sh")
   predUpdate <- TRUE
 }
 
 
 #official file
 #protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2024fakeprotectedChanged.csv",stringsAsFactors=FALSE)
+protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -163,11 +166,31 @@ protected$posEl <- replace_na(protected$posEl,'P')
 AllH <- inner_join(AllH,hrank,by=c('playerid','Pos'),multiple="first")
 AllP <- inner_join(AllP,prank,by=c('playerid','Pos'),multiple="first")
 
+
 # Injuries data
-inj <- getInjuries()
+if (computer=='mac')
+{
+  injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
+  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
+
+} else {
+  injOrig <- getInjuriesRS()
+}
+
+inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
+
+pscores <- bind_rows(thitters,tpitchers)
+injOrig <- left_join(injOrig,pscores,by=c('playerid'))
+injOrig <- injOrig %>% rename(pDFL=zDFL)
+injOrig$pDFL <- replace(injOrig$pDFL,is.na(injOrig$pDFL),0)
+injOrig <- injOrig %>% select(Player,MLB,Pos,pDFL,`Injury / Surgery Date`,Injury,Status,`Latest Update`)
+injOrig <- arrange(injOrig,Pos,-pDFL)
+
+# remove protected players
+injOrig <- anti_join(injOrig,protected,by=c('Player'))
 
 #fake out until injuries get updated
-inj <- data_frame(Player="temp",Injury="",Expected.Return="")
+#inj <- data_frame(Player="temp",Injury="",Expected.Return="")
 
 AllH <- left_join(AllH,inj,by=c('Player'))
 AllP <- left_join(AllP,inj,by=c('Player'))
@@ -243,6 +266,15 @@ prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=A
 prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
 prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
   arrange(desc(FV))
+
+# Roster Resource Closer report
+# Need to update json file
+rrc <- getRRClosers()
+rrcAvail <- inner_join(rrc,AllP,by=c('playerid'))
+rrcResults <- arrange(rrcAvail,-pDFL) %>%
+  select(Player,MLB,Pos,pDFL,pSGP,Role,Tags,pADP,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,Injury,Expected.Return)
+rrcResults <- rrcResults %>% arrange(Role,-pDFL)
+
 
 
 if (predUpdate==TRUE) {
@@ -417,6 +449,7 @@ topHitters <- AllH %>% filter(pDFL > 20) %>% select(Player,MLB,posEl,Age,pDFL,AD
 draft <- createWorkbook()
 headerStyle <- createStyle(halign = "CENTER", textDecoration = "Bold")
 csRatioColumn <- createStyle(numFmt = "##0.000")
+csIntegerColumn <- createStyle(numFmt = "##0")
 csMoneyColumn <- createStyle(numFmt = "CURRENCY")
 
 
@@ -428,6 +461,7 @@ setColWidths(draft, 'Early Standings', cols = 1:10, widths = "auto")
 
 addWorksheet(draft,'Crickets')
 writeData(draft,'Crickets',lc,headerStyle = headerStyle)
+addStyle(draft, 'Crickets',style = csIntegerColumn,rows = 2:20, cols = 2,gridExpand = TRUE)
 addStyle(draft, 'Crickets',style = csMoneyColumn,rows = 2:20, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'Crickets',style = csMoneyColumn,rows = 2:20, cols = 6,gridExpand = TRUE)
 setColWidths(draft, 'Crickets', cols = 1:10, widths = "auto")
@@ -435,6 +469,7 @@ setColWidths(draft, 'Crickets', cols = 1:10, widths = "auto")
 addWorksheet(draft,'Goals')
 writeData(draft,'Goals',gmet,headerStyle = headerStyle)
 addStyle(draft, 'Goals',style = csRatioColumn,rows = 2:20, cols = 5,gridExpand = TRUE)
+addStyle(draft, 'Goals',style = csIntegerColumn,rows = 2:20, cols = 2:4,gridExpand = TRUE)
 setColWidths(draft, 'Goals', cols = 1:10, widths = "auto")
 
 addWorksheet(draft,'Protected by Position')
@@ -443,7 +478,7 @@ addStyle(draft, 'Protected by Position',style = csRatioColumn,rows = 2:20, cols 
 
 addWorksheet(draft,'Protected Breakdown')
 writeData(draft,'Protected Breakdown',currentSummary,headerStyle = headerStyle)
-#addStyle(draft, 'Protected Breakdown',style = csRatioColumn,rows = 2:20, cols = 3:4,gridExpand = TRUE)
+addStyle(draft, 'Protected Breakdown',style = csIntegerColumn,rows = 2:40, cols = 3:4,gridExpand = TRUE)
 setColWidths(draft, 'Protected Breakdown', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'Auction Pool')
@@ -454,75 +489,111 @@ addWorksheet(draft,'C')
 writeData(draft,'C',pc,headerStyle = headerStyle)
 addStyle(draft, 'C',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'C',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'C',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, 'C', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'1B')
 writeData(draft,'1B',p1b,headerStyle = headerStyle)
 addStyle(draft, '1B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, '1B',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, '1B',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, '1B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'2B')
 writeData(draft,'2B',p2b,headerStyle = headerStyle)
 addStyle(draft, '2B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, '2B',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, '2B',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, '2B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'SS')
 writeData(draft,'SS',pss,headerStyle = headerStyle)
 addStyle(draft, 'SS',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'SS',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'SS',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, 'SS', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'3B')
 writeData(draft,'3B',p3b,headerStyle = headerStyle)
 addStyle(draft, '3B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, '3B',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, '3B',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, '3B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'OF')
 writeData(draft,'OF',pof,headerStyle = headerStyle)
 addStyle(draft, 'OF',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'OF',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'OF',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, 'OF', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'DH')
 writeData(draft,'DH',pdh,headerStyle = headerStyle)
 addStyle(draft, 'DH',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'DH',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'DH',style = csIntegerColumn,rows = 2:200, cols = 8:13,gridExpand = TRUE)
 setColWidths(draft, 'DH', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'Other')
 writeData(draft,'Other',pna,headerStyle = headerStyle)
-addStyle(draft, 'Other',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csIntegerColumn,rows = 2:200, cols = 3,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csIntegerColumn,rows = 2:200, cols = 6:10,gridExpand = TRUE)
 setColWidths(draft, 'Other', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'SP')
 writeData(draft,'SP',psp,headerStyle = headerStyle)
 addStyle(draft, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'SP',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
+addStyle(draft, 'SP',style = csIntegerColumn,rows = 2:200, cols = 3,gridExpand = TRUE)
+addStyle(draft, 'SP',style = csIntegerColumn,rows = 2:200, cols = 7:10,gridExpand = TRUE)
+addStyle(draft, 'SP',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'SP',style = csIntegerColumn,rows = 2:200, cols = 12:13,gridExpand = TRUE)
 setColWidths(draft, 'SP', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'MR')
 writeData(draft,'MR',pmr,headerStyle = headerStyle)
 addStyle(draft, 'MR',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'MR',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
+addStyle(draft, 'MR',style = csIntegerColumn,rows = 2:200, cols = 3,gridExpand = TRUE)
+addStyle(draft, 'MR',style = csIntegerColumn,rows = 2:200, cols = 7:10,gridExpand = TRUE)
+addStyle(draft, 'MR',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'MR',style = csIntegerColumn,rows = 2:200, cols = 12:13,gridExpand = TRUE)
 setColWidths(draft, 'MR', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'CL')
 writeData(draft,'CL',pcl,headerStyle = headerStyle)
 addStyle(draft, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
+addStyle(draft, 'CL',style = csIntegerColumn,rows = 2:200, cols = 3,gridExpand = TRUE)
+addStyle(draft, 'CL',style = csIntegerColumn,rows = 2:200, cols = 7:10,gridExpand = TRUE)
+addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'CL',style = csIntegerColumn,rows = 2:200, cols = 12:13,gridExpand = TRUE)
 setColWidths(draft, 'CL', cols = 1:20, widths = "auto")
+
+addWorksheet(draft,'RRClosers')
+writeData(draft,'RRClosers',rrcResults,headerStyle = headerStyle)
+addStyle(draft, 'RRClosers',style = csMoneyColumn,rows = 2:400, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'RRClosers',style = csRatioColumn,rows = 2:400, cols = 5,gridExpand = TRUE)
+addStyle(draft, 'RRClosers',style = csIntegerColumn,rows = 2:400, cols = 8:12,gridExpand = TRUE)
+addStyle(draft, 'RRClosers',style = csRatioColumn,rows = 2:400, cols = 13:15,gridExpand = TRUE)
+setColWidths(draft, 'RRClosers', cols = 1:29, widths = "auto")
 
 # # Athletic Article
 # addWorksheet(draft,'SavesHolds')
@@ -537,27 +608,35 @@ setColWidths(draft, 'CL', cols = 1:20, widths = "auto")
 addWorksheet(draft,'HitProspect')
 writeData(draft,'HitProspect',prospectH,headerStyle = headerStyle)
 addStyle(draft, 'HitProspect',style = csMoneyColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
-#addStyle(draft, 'HitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
+addStyle(draft, 'HitProspect',style = csIntegerColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 setColWidths(draft, 'HitProspect', cols = 1:20, widths = "auto")
 
 # tabs[[length(tabs)+1]] <- list('PitProspect',pp,st,c(2,14))
 addWorksheet(draft,'PitProspect')
 writeData(draft,'PitProspect',prospectP,headerStyle = headerStyle)
 addStyle(draft, 'PitProspect',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
-#addStyle(draft, 'PitProspect',style = csRatioColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
+addStyle(draft, 'PitProspect',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 setColWidths(draft, 'PitProspect', cols = 1:20, widths = "auto")
 
-addWorksheet(draft,'OutForYear')
-writeData(draft,'OutForYear',OFY,headerStyle = headerStyle)
-setColWidths(draft, 'OutForYear', cols = 1:20, widths = "auto")
+# addWorksheet(draft,'OutForYear')
+# writeData(draft,'OutForYear',OFY,headerStyle = headerStyle)
+# setColWidths(draft, 'OutForYear', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'TopHitters')
 writeData(draft,'TopHitters',topHitters,headerStyle = headerStyle)
 addStyle(draft, 'TopHitters',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
 addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'TopHitters',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'TopHitters',style = csIntegerColumn,rows = 2:200, cols = 6:10,gridExpand = TRUE)
 setColWidths(draft, 'TopHitters', cols = 1:20, widths = "auto")
 
+addWorksheet(draft,'Injured')
+writeData(draft,'Injured',injOrig,headerStyle = headerStyle)
+addStyle(draft, 'Injured',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+#addStyle(draft, 'Injured',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
+#addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+setColWidths(draft, 'Injured', cols = 1:20, widths = "auto")
 # st <- list('5'=csPctColumn)
 # tabs[[length(tabs)+1]] <- list('BJGoals',bjmet,st,c())
 # 

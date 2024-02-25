@@ -1026,6 +1026,27 @@ getMLBstandings <- function() {
 #   left_join(df,stand,by=c('MLB'))
 # }
 # 
+
+getInjuriesRS <- function() {
+  rD <- rsDriver(browser="firefox",port=free_port(), 
+                 chromever=NULL, verbose=F)
+  remDr <- rD[["client"]]
+  remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
+  html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
+  inj <- html[[16]]
+  
+  inj <- rename(inj,Player=Name,MLB=Team)
+  inj <- addPlayerid(inj)
+  colnames(inj)[5] <- 'Injury'
+  #colnames(inj)[10] <- 'LatestUpdate'
+  
+  
+  remDr$close()
+  system("taskkill /im java.exe /f")
+  write.csv(inj,"../latestInjuries.csv")
+  inj
+}
+
 getInjuries <- function() {
   #url <- "http://www.cbssports.com/mlb/injuries/"
   url <- "https://scores.nbcsports.com/mlb/stats.asp?file=inj"

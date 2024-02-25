@@ -36,11 +36,11 @@ shinyServer(function(input, output,session) {
   output$TPitchers <- renderDataTable({ aggPitchers(input$e1) })
   bh <- reactive({ as.data.frame(rpreds) %>% filter(pADP > input$hadp, netValue>input$netVh,
                                                     pDFL>input$hdfl,Pos!='SP',Pos!='CL') %>% 
-                     arrange(-Value) %>% select(Player,Team,Pos:netValue) })
+                     arrange(-netValue) %>% select(Player,Team,Pos:netValue) })
   bp <- reactive({ as.data.frame(rpreds) %>% filter((Pos=='SP' | Pos=='CL'),
                                                     pADP > input$padp,netValue>input$netVp,
                                                     pDFL>input$pdfl) %>% 
-                     arrange(-Value) %>% select(Player,Team,Pos:netValue) })
+                     arrange(-netValue) %>% select(Player,Team,Pos:netValue) })
   
   
   

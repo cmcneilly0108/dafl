@@ -19,6 +19,7 @@ library(stringr)
 library("lubridate")
 library(rvest)
 library("jsonlite")
+
 #library(Lahman)
 
 source('./daflFunctions.r')
@@ -500,6 +501,6 @@ pstring <- as.character(page)
 bdate <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
 
 fgid <- "sa3002951"
-print(getAge(fgid))
+#print(getAge(fgid))
 ```
 
