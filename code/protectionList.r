@@ -160,6 +160,7 @@ cvalue <- 0
 ct <- 0
 prosters2 <- prosters
 nvalue <- sum(prosters2$Value)
+noinflation <- nvalue
 print(nvalue)
 
 #see if I can track only evaluated once
@@ -198,6 +199,8 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20
   print(nvalue)
 }
 
+inflation <- (nvalue - noinflation)/noinflation
+print(sprintf("Inflation = %0.2f%%",inflation * 100))
 
 #Create valueRatio
 rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)

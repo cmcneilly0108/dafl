@@ -1,42 +1,38 @@
-# page height
-# submit button - make it work, move player, recalc DFL, standings, lists
-# do same for pitchers - place side by side
+# Just getting this started
 
-shinyUI(navbarPage("DAFL Draft Day Tool, v0.2",
-                   tabPanel("Teams",  
-                            sidebarLayout(
-                              sidebarPanel(
-                                uiOutput("teamSelector")
-                              ),
-                            mainPanel(
-                              tableOutput("Standings")
-                            ))
+shinyUI(navbarPage("Live Auction Tool, v0.1",
+                   tabPanel("Overview",
+                            verticalLayout(
+                              dataTableOutput("pstandings")
+                            )
                    ),
-                   tabPanel("Garbage",  
-                            sidebarLayout(
-                              sidebarPanel(
-                                selectInput("position", "Choose Position:", c('C','1B','2B','SS','3B','OF','DH','SP','MR','CL'))
-                              ),
-                              mainPanel(
-                                tabsetPanel(type = "tabs",
-                                            tabPanel("League",tableOutput("Standings")),
-                                            tabPanel("Team View",h3(textOutput("showTeam", container = span)),
-                                                     h4("Hitters"),
-                                                     tableOutput("TeamHitters"),
-                                                     h4("Pitchers"),
-                                                     tableOutput("TeamPitchers")),
-                                            tabPanel("Available Players",h3(textOutput("position", container = span)),
-                                                     tableOutput("Avail")),
-                                            tabPanel("Move Player",selectizeInput('fah', 'Choose Hitter',choices = NULL,
-                                                                                  options = list(maxOptions = 10)),
-                                                     textInput("nsal", "Salary"),
-                                                     selectInput('rteam', 'Choose Team',choi = NULL),
-                                                     actionButton("apl","Assign Player"),
-                                                     class="row-fluid",
-                                                     h3('Ugly '),h3('Ugly ')
-                                            )
-                                )
+                   tabPanel("Auction Stats",
+                            verticalLayout(
+                              h2("Inflation Summary"),
+                              dataTableOutput("protectSummary"),
+                              h2("Protection by Position"),
+                              dataTableOutput("ppp")
+                            )
+                   ),
+                   tabPanel("Prospects",
+                            mainPanel(
+                              h2("Prospects"),
+                              tabsetPanel(type='tabs',
+                                          tabPanel('Hitters',
+                                                   dataTableOutput("prospectH")),
+                                          tabPanel('Pitchers',
+                                                   dataTableOutput("prospectP"))
                               )
+                            )
+                   ),
+                   tabPanel("Top Hitters",
+                            verticalLayout(
+                              dataTableOutput("topHitters")
+                            )
+                   ),
+                   tabPanel("Injured",
+                            verticalLayout(
+                              dataTableOutput("injOrig")
                             )
                    )
 )

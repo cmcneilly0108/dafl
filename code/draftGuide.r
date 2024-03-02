@@ -24,6 +24,7 @@ src <- 'atc'
 computer <- 'mac'
 #computer <- 'windows'
 
+
 #positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
 
 predUpdate <- FALSE
@@ -261,10 +262,10 @@ hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
 pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
 proh <- right_join(AllH,hplist,by=c('playerid'))
 proh <- proh %>% filter(cFV > 45)
-prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=Age.x,DFL=pDFL,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
   arrange(desc(FV))
 prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
-prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
+prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
   arrange(desc(FV))
 
 # Roster Resource Closer report
@@ -609,6 +610,7 @@ addWorksheet(draft,'HitProspect')
 writeData(draft,'HitProspect',prospectH,headerStyle = headerStyle)
 addStyle(draft, 'HitProspect',style = csMoneyColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
 addStyle(draft, 'HitProspect',style = csIntegerColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
+addStyle(draft, 'HitProspect',style = csIntegerColumn,rows = 2:200, cols = 7,gridExpand = TRUE)
 setColWidths(draft, 'HitProspect', cols = 1:20, widths = "auto")
 
 # tabs[[length(tabs)+1]] <- list('PitProspect',pp,st,c(2,14))
@@ -616,6 +618,7 @@ addWorksheet(draft,'PitProspect')
 writeData(draft,'PitProspect',prospectP,headerStyle = headerStyle)
 addStyle(draft, 'PitProspect',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'PitProspect',style = csIntegerColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
+addStyle(draft, 'PitProspect',style = csIntegerColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
 setColWidths(draft, 'PitProspect', cols = 1:20, widths = "auto")
 
 # addWorksheet(draft,'OutForYear')

@@ -1,59 +1,23 @@
 # Move a player from FA to a Team, update both lists
 # GUI to pick a player
 
-setwd("../")
-source("./draftSetup.r")
-setwd("./draftTool")
+setwd("../code/")
+source("./draftGuide.r")
+setwd("../draftTool")
 
-teams <- unique(protected$Team) 
-pstandings2 <- protected %>% group_by(Team) %>%
-  summarize(NumProtected = length(Team),
-            Spent = sum(Salary),
-            TotalValue = sum(pDFL),
-            MoneyEarned = TotalValue - Spent,
-            VPPlayer = TotalValue/NumProtected,
-            FullValue = TotalValue + (260-sum(Salary)),
-            DollarValue = TotalValue/Spent) %>%
-  arrange(-FullValue)
+teams <- unique(pstandings$Team) 
 
-pstandings <- protected %>% group_by(Team) %>%
-  summarize(PlayRem = 25 - length(Team),
-            DolRem = 260 - sum(Salary),
-            NumProtected = length(Team),
-            Spent = sum(Salary),
-            FullValue = sum(pDFL) + (260-sum(Salary))) %>%
-  arrange(-FullValue)
 
 
 
 
 shinyServer(function(input, output,session) {
-  
-  steam <- reactive({ filter(protected,Team==input$showTeam) %>% select(-X,-Team)
-  })
-  shitters <- reactive({ filter(PH,Team==input$showTeam) %>% select(-Team)
-  })
-  
-  spitchers <- reactive({ filter(PP,Team==input$showTeam) %>% select(-Team)
-  })
-  
-  avail <- reactive({ avbyPos(input$position)
-  })
-  
-  output$teamSelector <- renderUI({
-    selectInput("showTeam", "Choose Team:", as.list(teams)) })
-  
-  output$Standings <- renderGvis({ gvisTable(pstandings) })
-  
-  output$showTeam <- renderText({input$showTeam})
-  output$TeamDetail <- renderGvis({ gvisTable(steam())})
-  output$TeamHitters <- renderGvis({ gvisTable(shitters())})
-  
-  output$TeamPitchers <- renderGvis({ gvisTable(spitchers())})
-  
-  output$Avail <- renderGvis({ gvisTable(avail())})
-  
-  updateSelectizeInput(session, 'fah', choices = AvH$Player, server = TRUE)
-  updateSelectInput(session, 'rteam', choices = as.list(teams))
+  output$pstandings <- renderDataTable({ pstandings })  
+  output$injOrig <- renderDataTable({ injOrig })  
+  output$topHitters <- renderDataTable({ topHitters })  
+  output$prospectH <- renderDataTable({ prospectH })  
+  output$prospectP <- renderDataTable({ prospectP })
+  output$protectSummary <- renderDataTable({ protectSummary }) 
+  output$ppp <- renderDataTable({ ppp }) 
   
   })

@@ -239,7 +239,7 @@ s2 <- left_join(seasonResults,fcast) %>% mutate(projRatio = protect_DFL/projecte
 avprotect <- mean(s2$projRatio)
 
 
-aggStats <- tibble(Statistic=list("Protection Ratio","Prot Projection Ratio","Draft Ratio","FAAB Value","Trade Value"),
+aggStats <- tibble(Statistic=list("Protection Ratio","Prot PreSeason Ratio","Draft Ratio","FAAB Value","Trade Value"),
                    Value=list(avpratio,avprotect,avdratio,avfaab,avtrade))
 aggStats$Value <- as.numeric(aggStats$Value)
 
