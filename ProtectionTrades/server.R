@@ -8,7 +8,7 @@ teams <- sort(unique(as.character(totals$Team)))
 pullPlayers <- function(tm) {
 #  res <- filter(rpreds,Team == tm,netValue > 1) %>% arrange(-netValue) %>% mutate(Rank=rank(-Value)) %>% 
   res <- filter(rpreds,Team == tm) %>% arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>% 
-    select(-Team,Rank,Player:Expected.Return)
+    select(-Team,-rdOne,-Rank,Player:Expected.Return)
 }
 
 aggHitters <- function(tm,pos) {
@@ -28,12 +28,33 @@ aggPitchers <- function(tm,pos) {
 
 
 shinyServer(function(input, output,session) {
+  #output$totals <- renderDataTable({ totals })
+  dttotals <- datatable(totals,options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>% 
+    formatCurrency(c('TotalValue', 'MoneyEarned','VPPlayer','PostDraftEst')) %>% formatRound(c('ValueRatio','zScore'),2)
+  output$totals <- DT::renderDataTable({ dttotals })
+  
+  
+  
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
-  output$totals <- renderDataTable({ totals })
-  output$Players <- renderDataTable({ pullPlayers(input$e1) })
-  output$THitters <- renderDataTable({ aggHitters(input$e1) })
-  output$TPitchers <- renderDataTable({ aggPitchers(input$e1) })
+
+  dtPlayers <- reactive({df <- datatable(pullPlayers(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatRound(c('valueRatio'),3) %>%
+    formatCurrency(c('pDFL','Value','netValue'))})
+  output$Players <- DT::renderDataTable({ dtPlayers() })
+  
+  
+  dtTHitters <- reactive({df <- datatable(aggHitters(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+    formatCurrency(c('TValue'))})
+  output$THitters <- DT::renderDataTable({ dtTHitters() })
+  
+  dtTPitchers <- reactive({df <- datatable(aggPitchers(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+    formatCurrency(c('TValue'))})
+  output$TPitchers <- DT::renderDataTable({ dtTPitchers() })
+  
+  
+  
   bh <- reactive({ as.data.frame(rpreds) %>% filter(pADP > input$hadp, netValue>input$netVh,
                                                     pDFL>input$hdfl,Pos!='SP',Pos!='CL') %>% 
                      arrange(-netValue) %>% select(Player,Team,Pos:netValue) })
@@ -44,7 +65,15 @@ shinyServer(function(input, output,session) {
   
   
   
-  output$bp <- renderDataTable({ bp() })
-  output$bh <- renderDataTable({ bh() })
-
+  dtbp <- reactive({df <- datatable(bp(),options = list(pageLength = 20,autoWidth = FALSE)) %>%
+    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatCurrency(c('pDFL','Value','netValue'))})
+  output$bp <- DT::renderDataTable({ dtbp() })
+  
+  #output$bh <- renderDataTable({ bh() })
+  dtbh <- reactive({df <- datatable(bh(),options = list(pageLength = 20,autoWidth = FALSE)) %>%
+    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatCurrency(c('pDFL','Value','netValue'))})
+  output$bh <- DT::renderDataTable({ dtbh() })
+  
 })

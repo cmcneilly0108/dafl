@@ -1,38 +1,84 @@
 # Just getting this started
 
+#library("plotly")
+library("bslib")
+library("DT")
+
+
 shinyUI(navbarPage("Live Auction Tool, v0.1",
+                   theme = bs_theme(bootswatch = "flatly"),
                    tabPanel("Overview",
                             verticalLayout(
-                              dataTableOutput("pstandings")
+                              DT::dataTableOutput("pstandings")
                             )
                    ),
                    tabPanel("Auction Stats",
-                            verticalLayout(
-                              h2("Inflation Summary"),
-                              dataTableOutput("protectSummary"),
-                              h2("Protection by Position"),
-                              dataTableOutput("ppp")
+                            splitLayout(
+                              verticalLayout(
+                                h2("Inflation Summary"),
+                                DT::dataTableOutput("protectSummary")),
+                              verticalLayout(
+                                h2("Protection by Position"),
+                                DT::dataTableOutput("ppp"))
+                            )
+                   ),
+                   tabPanel("Protection Lists",
+                            sidebarLayout(fluid=FALSE,
+                                          sidebarPanel(
+                                            selectizeInput(
+                                              'e1', 'Select Team', choices=NULL)
+                                            ,width=2),
+                                          mainPanel(
+                                            h2(textOutput("tname")),
+                                            DT::dataTableOutput("tpSummary"),
+                                            DT::dataTableOutput("tProtect"))
+                                            )
+                   ),
+                   tabPanel("Hitters",
+                            sidebarLayout(fluid=FALSE,
+                              sidebarPanel(
+                                selectizeInput(
+                                  'e2', 'Select Position', choices=NULL)
+                                  ,width=2),
+                                mainPanel(
+                                  h2(textOutput("hpos")),
+                                  DT::dataTableOutput("hpbpos"))
+                                )
+                   ),
+                   tabPanel("Pitchers",
+                            sidebarLayout(fluid=FALSE,
+                                          sidebarPanel(
+                                            selectizeInput(
+                                              'e3', 'Select Role', choices=NULL)
+                                            ,width=2),
+                                          mainPanel(
+                                            h2(textOutput("ppos")),
+                                            DT::dataTableOutput("ppbpos"))
+                            )
+                   ),
+                   tabPanel("Bullpen Depth Charts",
+                            verticalLayout(fluid=FALSE,
+                                           DT::dataTableOutput("rrcResults")
                             )
                    ),
                    tabPanel("Prospects",
                             mainPanel(
-                              h2("Prospects"),
                               tabsetPanel(type='tabs',
                                           tabPanel('Hitters',
-                                                   dataTableOutput("prospectH")),
+                                                   DT::dataTableOutput("prospectH")),
                                           tabPanel('Pitchers',
-                                                   dataTableOutput("prospectP"))
+                                                   DT::dataTableOutput("prospectP"))
                               )
                             )
                    ),
                    tabPanel("Top Hitters",
                             verticalLayout(
-                              dataTableOutput("topHitters")
+                              DT::dataTableOutput("topHitters")
                             )
                    ),
                    tabPanel("Injured",
                             verticalLayout(
-                              dataTableOutput("injOrig")
+                              DT::dataTableOutput("injOrig")
                             )
                    )
 )
