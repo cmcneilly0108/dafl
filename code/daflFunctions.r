@@ -1031,9 +1031,14 @@ getInjuriesRS <- function() {
   rD <- rsDriver(browser="firefox",port=free_port(), 
                  chromever=NULL, verbose=F)
   remDr <- rD[["client"]]
-  remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
+  remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
+
+
+  
   html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
-  inj <- html[[16]]
+  r15 <- html[c(-1:-14)]
+  inj <- bind_rows(r15)
+  inj <- distinct(inj)
   
   inj <- rename(inj,Player=Name,MLB=Team)
   inj <- addPlayerid(inj)

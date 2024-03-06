@@ -24,13 +24,41 @@ remDr <- rD[["client"]]
 
 ```{r}
 #remDr$open()
-remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
+#remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
+
+remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
+
+
+
 
 ```
+
+```{r}
+#navigate to get full table
+myelement <- remDr$findElement(using = 'xpath', '//*[@id="root-roster-resource"]/div[2]/div[2]/div/div[2]/div[1]/select')
+#'/html/body/div[2]/div[3]/div/div[2]/div[2]/div/div[3]/div[1]/select')
+myelement$clickElement()
+
+Sys.sleep(5)
+
+option <- remDr$findElement(using = 'xpath', "//option[contains(., 'Infinity')]")
+option$clickElement()
+```
+
+
+
+
+
 ```{r}
 # Looking for the correct <table> element
 #inj <- remDr$findElement(using='class name','table')
 html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
+
+r15 <- html[c(-1:-14)]
+inj <- bind_rows(r15)
+inj <- distinct(inj)
+
+
 inj <- html[[16]]
 
 inj <- rename(inj,Player=Name,MLB=Team)

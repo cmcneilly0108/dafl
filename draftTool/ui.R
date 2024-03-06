@@ -5,7 +5,7 @@ library("bslib")
 library("DT")
 
 
-shinyUI(navbarPage("Live Auction Tool, v0.1",
+shinyUI(navbarPage("Live Auction Tool, v0.5",
                    theme = bs_theme(bootswatch = "flatly"),
                    tabPanel("Overview",
                             verticalLayout(

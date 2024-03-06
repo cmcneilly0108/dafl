@@ -14,8 +14,8 @@
 
 # Eury Perez - not protected!  BUG!
 
-computer <- 'mac'
-#computer <- 'windows'
+#computer <- 'mac'
+computer <- 'windows'
 
 
 library("openxlsx")

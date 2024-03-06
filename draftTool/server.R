@@ -11,7 +11,8 @@ hpos <- list('C','1B','2B','SS','3B','OF')
 ppos <- list('SP','MR','CL')
 
 tProtect <- function(tm) {
-  res <- filter(protClean,Team == tm ) %>% select(-Team,-playerid) %>% arrange(-pDFL)
+#  res <- filter(protClean,Team == tm ) %>% select(-Team,-playerid) %>% arrange(-pDFL)
+  res <- filter(protClean,Team == tm ) %>% select(Player,Pos,Age,pDFL,Salary, Contract) %>% arrange(-pDFL)
 }
 
 tpSummary <- function(tm) {
@@ -36,7 +37,8 @@ shinyServer(function(input, output,session) {
   output$pstandings <- DT::renderDataTable({ dtpstandings })
 
   dtprotectSummary <- datatable(protectSummary,options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
-    formatRound(c('playersProt','ToFill','valueTaken'),2)
+    formatPercentage(c('playersProt','dollarsSpent','valueTaken'),2) %>%
+    formatRound(c('ToFill'),0)
   output$protectSummary <- DT::renderDataTable({ dtprotectSummary })
   dtppp <- datatable(ppp,options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE))
   output$ppp <- DT::renderDataTable({ dtppp })
@@ -46,16 +48,17 @@ shinyServer(function(input, output,session) {
   output$tname <- renderText({ input$e1 })
 
   dttProtect <- reactive({df <- datatable(tProtect(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
-                           formatRound('pDFL',2)})
+                           formatCurrency('pDFL') %>%
+                          formatRound('Age',0)})
   output$tProtect <- DT::renderDataTable({ dttProtect() })
   dttpSummary <- reactive({df <- datatable(tpSummary(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
-    formatRound('salleft',2)})
+    formatRound('salleft',0)})
   output$tpSummary <- DT::renderDataTable({ dttpSummary() })
   
   updateSelectizeInput(session, 'e2', choices = hpos, selected = 'OF')
   output$hpos <- renderText({ input$e2 })
 
-  dthpbpos <- reactive({df <- datatable(hitPlayersbyPos(input$e2),options = list(pageLength = 20,autoWidth = FALSE, searching = FALSE, info = FALSE)) %>%
+  dthpbpos <- reactive({df <- datatable(hitPlayersbyPos(input$e2),options = list(pageLength = 20,autoWidth = FALSE, searching = FALSE, info = FALSE), filter='top') %>%
     formatRound(c('Age','ADP','HR','RBI','R','SB'),0) %>% formatCurrency('DFL') %>%
     formatRound(c('RPV','SGP','AVG'),3)
   })
@@ -64,18 +67,18 @@ shinyServer(function(input, output,session) {
   updateSelectizeInput(session, 'e3', choices = ppos, selected = 'SP')
   output$ppos <- renderText({ input$e3 })
 
-  dtppbpos <- reactive({df <- datatable(pitPlayersbyPos(input$e3),options = list(pageLength = 20,autoWidth = FALSE, info = FALSE)) %>%
+  dtppbpos <- reactive({df <- datatable(pitPlayersbyPos(input$e3),options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
     formatRound(c('Age','ADP','W','SV','HLD','SO'),0) %>% formatCurrency('DFL') %>%
     formatRound(c('RPV','SGP','ERA'),3)
   })
   output$ppbpos <- DT::renderDataTable({ dtppbpos() })
   
-  dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE)) %>%
+  dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
     formatRound(c('pADP','pW','pSV','pHLD','pSO'),0) %>% formatCurrency('pDFL') %>%
     formatRound(c('pSGP','pERA','pK/9','pBB/9'),3)
   output$rrcResults <- DT::renderDataTable({dtrrcResults})
   
-  dtinjOrig <- datatable(injOrig,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE)) %>%
+  dtinjOrig <- datatable(injOrig,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
     formatCurrency('pDFL')
   output$injOrig <- DT::renderDataTable({dtinjOrig})
 
@@ -92,6 +95,4 @@ shinyServer(function(input, output,session) {
     formatRound(c('Age','ADP'),0) %>% formatCurrency('DFL')
   output$prospectP <- DT::renderDataTable({ dtprospectP })
   
-  #output$prospectH <- renderDataTable({ prospectH })  
-  #output$prospectP <- renderDataTable({ prospectP })
 })
