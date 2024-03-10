@@ -31,8 +31,23 @@ shinyUI(navbarPage("Live Auction Tool, v0.5",
                                           mainPanel(
                                             h2(textOutput("tname")),
                                             DT::dataTableOutput("tpSummary"),
+                                            DT::dataTableOutput("Goals"),
                                             DT::dataTableOutput("tProtect"))
                                             )
+                   ),
+                   tabPanel("Protect by Pos",
+                            sidebarLayout(fluid=FALSE,
+                                          sidebarPanel(
+                                            selectizeInput(
+                                              'e4', 'Select Position', choices=NULL)
+                                            ,width=2),
+                                          mainPanel(
+                                            h2(textOutput("allpos")),
+                                            h2(textOutput("uniquePos")),
+                                            DT::dataTableOutput("tNeed"),
+                                            DT::dataTableOutput("posProtect")
+                                          )
+                            )
                    ),
                    tabPanel("Hitters",
                             sidebarLayout(fluid=FALSE,

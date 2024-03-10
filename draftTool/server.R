@@ -9,10 +9,26 @@ setwd("../draftTool")
 teams <- sort(unique(pstandings$Team))
 hpos <- list('C','1B','2B','SS','3B','OF')
 ppos <- list('SP','MR','CL')
+allpos <- c(hpos,list('SP','RP'))
 
 tProtect <- function(tm) {
-#  res <- filter(protClean,Team == tm ) %>% select(-Team,-playerid) %>% arrange(-pDFL)
   res <- filter(protClean,Team == tm ) %>% select(Player,Pos,Age,pDFL,Salary, Contract) %>% arrange(-pDFL)
+}
+
+posProtect <- function(pos) {
+  res <- filter(protClean,Pos == pos ) %>% select(Player,Team,Age,pDFL,Salary, Contract) %>% arrange(Team)
+}
+
+uniqueProtect <- function(pos) {
+  res <- filter(protClean,Pos == pos ) %>% select(Team) %>% unique() %>% nrow()
+  r2 <- paste("Unique Teams = ",res)
+}
+
+teamsInterested <- function(pos) {
+  teams <- sort(unique(pstandings$Team))
+  allteams <- data.frame(Team=teams)
+  have <- filter(protClean,Pos == pos ) %>% select(Team) %>% unique()
+  need <- anti_join(allteams,have)
 }
 
 tpSummary <- function(tm) {
@@ -51,6 +67,12 @@ shinyServer(function(input, output,session) {
                            formatCurrency('pDFL') %>%
                           formatRound('Age',0)})
   output$tProtect <- DT::renderDataTable({ dttProtect() })
+  
+  dtGoals <- reactive({df <- datatable(calcGoals(rpitchers,rhitters,targets,input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+    formatPercentage('pc',2) %>%
+    formatRound(c('collected','needed'),0)})
+  output$Goals <- DT::renderDataTable({ dtGoals() })
+
   dttpSummary <- reactive({df <- datatable(tpSummary(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
     formatRound('salleft',0)})
   output$tpSummary <- DT::renderDataTable({ dttpSummary() })
@@ -72,6 +94,20 @@ shinyServer(function(input, output,session) {
     formatRound(c('RPV','SGP','ERA'),3)
   })
   output$ppbpos <- DT::renderDataTable({ dtppbpos() })
+
+  updateSelectizeInput(session, 'e4', choices = allpos, selected = 'OF')
+  output$allpos <- renderText({ input$e4 })
+  output$uniquePos <- renderText({ uniqueProtect(input$e4) })
+  
+  dtposProtect <- reactive({df <- datatable(posProtect(input$e4),options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
+    formatCurrency('pDFL') %>%
+    formatRound('Age',0)
+  })
+  output$posProtect <- DT::renderDataTable({ dtposProtect() })
+
+  dttNeed <- reactive({df <- datatable(teamsInterested(input$e4),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE))
+  })
+  output$tNeed <- DT::renderDataTable({ dttNeed() })
   
   dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
     formatRound(c('pADP','pW','pSV','pHLD','pSO'),0) %>% formatCurrency('pDFL') %>%
@@ -87,7 +123,7 @@ shinyServer(function(input, output,session) {
     formatRound(c('AVG'),3)
   output$topHitters <- DT::renderDataTable({ dttopHitters })
   
-  dtprospectH <- datatable(prospectH,options = list(pageLength = 20,autoWidth = FALSE, searching = FALSE, info = FALSE)) %>%
+  dtprospectH <- datatable(prospectH,options = list(pageLength = 20,autoWidth = FALSE, searching = FALSE, info = FALSE), filter='top') %>%
     formatRound(c('Age','ADP'),0) %>% formatCurrency('DFL')
   output$prospectH <- DT::renderDataTable({ dtprospectH })
 
