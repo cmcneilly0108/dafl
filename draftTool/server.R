@@ -29,6 +29,13 @@ teamsInterested <- function(pos) {
   allteams <- data.frame(Team=teams)
   have <- filter(protClean,Pos == pos ) %>% select(Team) %>% unique()
   need <- anti_join(allteams,have)
+  need <- inner_join(need,currentSummary)
+  if (pos %in% c('SP','RP')) {
+    need <- filter(need,group == 'pitching')
+  } else {
+    need <- filter(need,group == 'hitting')
+  }
+  need <- arrange(need,-salleft)
 }
 
 tpSummary <- function(tm) {
@@ -105,7 +112,8 @@ shinyServer(function(input, output,session) {
   })
   output$posProtect <- DT::renderDataTable({ dtposProtect() })
 
-  dttNeed <- reactive({df <- datatable(teamsInterested(input$e4),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE))
+  dttNeed <- reactive({df <- datatable(teamsInterested(input$e4),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+    formatRound('salleft',0)
   })
   output$tNeed <- DT::renderDataTable({ dttNeed() })
   

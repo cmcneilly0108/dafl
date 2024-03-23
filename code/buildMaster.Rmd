@@ -311,22 +311,22 @@ Try adding position from fangraphs
 Fangraphs has put a block in place
 ```{r}
 
-#mymaster <- mymaster %>% rowwise() %>% 
-#  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
-ct <- 1
-noby <- filter(mymaster,is.na(Pos),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
-
-while ((ct < 10) & (nrow(noby) > 0)) {
-  ct <- ct + 1
-  noby <- filter(mymaster,is.na(Pos),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
-  print(nrow(noby))
-  noby <- noby %>% slice_sample(n=10)
-  noby <- noby %>% rowwise() %>%
-    mutate(Pos=ifelse(is.na(Pos),getPos(playerid),Pos)) %>% select(playerid,npos=Pos)
-  
-  m2 <- left_join(mymaster,noby)
-  m2 <- mutate(m2,Pos=ifelse(!is.na(Pos),Pos,npos))
-  mymaster <- select(m2,-npos)
+# #mymaster <- mymaster %>% rowwise() %>% 
+# #  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
+# ct <- 1
+# noby <- filter(mymaster,is.na(Pos),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
+# 
+# while ((ct < 10) & (nrow(noby) > 0)) {
+#   ct <- ct + 1
+#   noby <- filter(mymaster,is.na(Pos),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
+#   print(nrow(noby))
+#   noby <- noby %>% slice_sample(n=10)
+#   noby <- noby %>% rowwise() %>%
+#     mutate(Pos=ifelse(is.na(Pos),getPos(playerid),Pos)) %>% select(playerid,npos=Pos)
+#   
+#   m2 <- left_join(mymaster,noby)
+#   m2 <- mutate(m2,Pos=ifelse(!is.na(Pos),Pos,npos))
+#   mymaster <- select(m2,-npos)
   #write.csv(mymaster,"../mymaster.csv")
 }
 ```
@@ -337,9 +337,9 @@ Can I find candidate duplicates?
 Then I manually review and decide which ones to keep.
 So far - they all seem to be FG ids - real one and 'sa' one
 ```{r}
-m2 <- mymaster %>% select(Player,MLB)
-dupes <- m2[duplicated(m2),]
-print(dupes)
+# m2 <- mymaster %>% select(Player,MLB)
+# dupes <- m2[duplicated(m2),]
+# print(dupes)
 
 ```
 
@@ -350,15 +350,15 @@ Here is some code to use CBS data to fill in with blank position master records.
 NOTE: Fangraphs data does not include position data
 ```{r}
 
-cbs2 <- rename(cbs,cbsPos = Pos)
-my <- mutate(mymaster,Player=cbs_name)
-
-forPos <- left_join(cbs2,my,by=c('Player','MLB'))
-forPos <- select(forPos,playerid,cbsPos)
-
-m2 <- left_join(mymaster,forPos)
-m2 <- mutate(m2,Pos=ifelse(!is.na(cbsPos),cbsPos,Pos))
-mymaster <- select(m2,-cbsPos)
+# cbs2 <- rename(cbs,cbsPos = Pos)
+# my <- mutate(mymaster,Player=cbs_name)
+# 
+# forPos <- left_join(cbs2,my,by=c('Player','MLB'))
+# forPos <- select(forPos,playerid,cbsPos)
+# 
+# m2 <- left_join(mymaster,forPos)
+# m2 <- mutate(m2,Pos=ifelse(!is.na(cbsPos),cbsPos,Pos))
+# mymaster <- select(m2,-cbsPos)
 
 
 ```
@@ -373,18 +373,18 @@ https://www.baseball-reference.com/leagues/MLB/1991-births.shtml
 
 NOTE:  This worked a little bit, but only for hitters, and one birthyear at a time
 ```{r}
-byear <- '1990'
-page <- read_html(str_c("https://www.baseball-reference.com/leagues/MLB/",byear,"-births.shtml")) %>% 
-  html_nodes("table") 
-df <- page[[1]] %>% html_table(,header=TRUE,fill=TRUE)
-pl <- select(df,Player=Name,MLB=Tms) %>% separate_rows(MLB) %>% mutate(BRbirth_year=byear)
-
-m2 <- left_join(mymaster,pl,by=c('Player','MLB'))
-m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,BRbirth_year))
-mymaster <- select(m2,-BRbirth_year)
-
-noby <- filter(mymaster,is.na(birth_year))
-nrow(noby)
+# byear <- '1990'
+# page <- read_html(str_c("https://www.baseball-reference.com/leagues/MLB/",byear,"-births.shtml")) %>% 
+#   html_nodes("table") 
+# df <- page[[1]] %>% html_table(,header=TRUE,fill=TRUE)
+# pl <- select(df,Player=Name,MLB=Tms) %>% separate_rows(MLB) %>% mutate(BRbirth_year=byear)
+# 
+# m2 <- left_join(mymaster,pl,by=c('Player','MLB'))
+# m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,BRbirth_year))
+# mymaster <- select(m2,-BRbirth_year)
+# 
+# noby <- filter(mymaster,is.na(birth_year))
+# nrow(noby)
 
 ```
 
@@ -439,15 +439,15 @@ Fix roster file
 
 Fix hittertrend file
 ```{r}
-htrend <- read.csv("../code/hTrend.csv")
-h2 <- distinct(htrend)
-h2 <- mutate(h2,date=parse_date_time(date, orders = c('mdy', 'ymd')))
-#write.csv(h2,"../code/hTrend.csv",row.names = FALSE)
+# htrend <- read.csv("../code/hTrend.csv")
+# h2 <- distinct(htrend)
+# h2 <- mutate(h2,date=parse_date_time(date, orders = c('mdy', 'ymd')))
+# #write.csv(h2,"../code/hTrend.csv",row.names = FALSE)
 
 ```
 
 ```{r}
-pedf <- read.cbs('../poselig.csv')
+# pedf <- read.cbs('../poselig.csv')
 #pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 #pedf <- mutate(pedf,nPos=firstPos(posEl))
 #pedf <- select(pedf,-posEl)
@@ -459,13 +459,13 @@ pedf <- read.cbs('../poselig.csv')
 
 Try to bulk upload position data - NO NEED!
 ```{r}
-posfile <- read.csv("../FanGraphs Leaderboard.csv",stringsAsFactors=FALSE)
-posfile <- mutate(posfile,playerid = as.character(playerid))
-posfile <- posfile %>% rename(Player=Name,nPos=Pos) %>% select(playerid,nPos)
-
-tdf <- left_join(mymaster,posfile)
-
-ntdf <- tdf %>% filter(is.na(Pos),!is.na(nPos))
+# posfile <- read.csv("../FanGraphs Leaderboard.csv",stringsAsFactors=FALSE)
+# posfile <- mutate(posfile,playerid = as.character(playerid))
+# posfile <- posfile %>% rename(Player=Name,nPos=Pos) %>% select(playerid,nPos)
+# 
+# tdf <- left_join(mymaster,posfile)
+# 
+# ntdf <- tdf %>% filter(is.na(Pos),!is.na(nPos))
 ```
 Now let's clean up to remove the multiple positions
 Can I do it within mymaster?
@@ -473,34 +473,34 @@ Can I do it within mymaster?
 #mpos <- mymaster %>% filter(str_detect(Pos,"/"))
 #mpos <- mpos %>% mutate(Pos=firstPosSlash(Pos)) %>% mutate(Pos=str_replace(Pos,"/",""))
 
-mpos2 <- mymaster %>% mutate(Pos=ifelse(str_detect(Pos,"/"),firstPosSlash(Pos),Pos)) %>% mutate(Pos=str_replace(Pos,"/",""))
+# mpos2 <- mymaster %>% mutate(Pos=ifelse(str_detect(Pos,"/"),firstPosSlash(Pos),Pos)) %>% mutate(Pos=str_replace(Pos,"/",""))
 #write.csv(mpos2,"../mymaster.csv")
 ```
 Update default positions
 ```{r}
 # Add in position eligibility based on 20 games
-#pedf <- read.cbs(positionElig)
-pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
-pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
-pedf$npos <- str_split_i(pedf$posEl, ",", 1)
-# Add column into AllH
-tdf <- left_join(mymaster,pedf)
-tdf <- tdf %>% mutate(nnpos=if_else(is.na(npos),Pos,npos))
-tdf <- tdf %>% select(-Pos,-posEl,-npos) %>% rename(Pos=nnpos)
-write.csv(tdf,"../mymaster.csv")
+# #pedf <- read.cbs(positionElig)
+# pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
+# pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
+# pedf$npos <- str_split_i(pedf$posEl, ",", 1)
+# # Add column into AllH
+# tdf <- left_join(mymaster,pedf)
+# tdf <- tdf %>% mutate(nnpos=if_else(is.na(npos),Pos,npos))
+# tdf <- tdf %>% select(-Pos,-posEl,-npos) %>% rename(Pos=nnpos)
+# write.csv(tdf,"../mymaster.csv")
 ```
 
 Explorations on fixing the birth date problem
 ```{r}
-page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/sa3002951/stats"),as_html=TRUE)
-phtml <- page %>% html_text2()
-#bdate <- str_extract(phtml,"Birth")
-#write_xml(page,"../fangraphs.xml")
-pstring <- as.character(page)
-#bdate <- str_extract(pstring,"<tr class=.player-info__bio-birthdate.>.{1,20}")
-bdate <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
-
-fgid <- "sa3002951"
+# page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/sa3002951/stats"),as_html=TRUE)
+# phtml <- page %>% html_text2()
+# #bdate <- str_extract(phtml,"Birth")
+# #write_xml(page,"../fangraphs.xml")
+# pstring <- as.character(page)
+# #bdate <- str_extract(pstring,"<tr class=.player-info__bio-birthdate.>.{1,20}")
+# bdate <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
+# 
+# fgid <- "sa3002951"
 #print(getAge(fgid))
 ```
 

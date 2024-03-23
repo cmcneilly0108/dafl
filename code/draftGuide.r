@@ -1,6 +1,4 @@
-# TODO
-# commented out SavesHolds tab
-# Not using 2021 new pitches
+# BUG - not removing Wyatt Langford from prospects page
 
 # For live draft, create CSV with all players and teams, free agents have Team = 'Free Agent'
 # Then update draftguide to remove those rows - line 149 is when protected are removed
@@ -42,8 +40,8 @@ if (dt > 14) {
 
 
 #official file
-#protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
+protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+#protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -230,41 +228,17 @@ lc <- left_join(lc,inj,by=c('Player'))
 # change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
 
 
-#Add bogus pADP column until its filled for realz.
-#AllH$pADP <- 1
-#AllP$pADP <- 1
-# Can I get ADP?
-# from https://nfc.shgn.com/adp/baseball
-#adp <- read.csv("../ADP.tsv",stringsAsFactors=FALSE,sep = "\t")
-#adp <- select(adp,Player,pADP=ADP)
-#adp$Player <- unlist(lapply(adp$Player,swapName))
-#test <- left_join(AllH,adp)
-#join into AllH, AllP
-#AllH <- left_join(AllH,adp)
-#AllP <- left_join(AllP,adp)
-
-#Add back in to lc
-#lc <- left_join(lc,adp,by=c('Player')) %>% mutate(around=ceiling(pADP/16)) %>% select(-pADP)
-# New prospect list
-# url <- 'https://www.rotochamp.com/baseball/TopProspects.aspx'
-# page <- read_html(url) %>% html_nodes("table") %>% html_table(,header=TRUE)
-# prospects <- page[[1]]
-# prospects <- select(prospects,Player,rookRank='Composite Rank',MLB=Team,Pos=POS,Age)
-# proh <- inner_join(AllH,prospects,by=c('Player'))
-# prop <- inner_join(AllP,prospects,by=c('Player'))
-# hp <- proh %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-#   select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
-# pp <- prop %>% filter(!is.na(rookRank)) %>% arrange(-pDFL,rookRank) %>%
-#   select(Player,MLB=MLB.y,rookRank,Pos=Pos.y,Age=Age.y,DFL=pDFL,SGP=pSGP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 
 #prospects from FanGraphs
 hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
 pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
-proh <- right_join(AllH,hplist,by=c('playerid'))
+#proh <- right_join(AllH,hplist,by=c('playerid'))
+proh <- inner_join(AllH,hplist,by=c('playerid'))
 proh <- proh %>% filter(cFV > 45)
 prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
   arrange(desc(FV))
-prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
+#prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
+prop <- inner_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
 prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
   arrange(desc(FV))
 
