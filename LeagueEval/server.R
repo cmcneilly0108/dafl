@@ -15,12 +15,14 @@ shinyServer(function(input, output,session) {
   output$tname <- renderText({ input$e1 })
 
   dtTeamH <- reactive({ mdf <- datatable(pullTeam(input$e1)[[1]],options = list(pageLength = 20)) %>%
-    formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore'),2) })
+    formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore','pAVG'),3) %>% 
+    formatRound(c('pHR','pRBI','pSB','pR','Age'),0)  })
   output$TeamH <- DT::renderDataTable({ dtTeamH() })
 
   
   dtTeamP <- reactive({ mdf <- datatable(pullTeam(input$e1)[[2]],options = list(pageLength = 20)) %>%
-    formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore'),2) })
+    formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore','pERA','pFIP','pK/9'),3) %>%
+    formatRound(c('pW','pSO','pSV','pHLD','Age'),0) })
   output$TeamP <- DT::renderDataTable({ dtTeamP() })
 #  dtTeamP <- reactive({ rdf <- datatable(pullTeam(input$e1)[[2]],options = list(pageLength = 20)) %>% 
 #    formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore'),2) })
@@ -81,15 +83,22 @@ shinyServer(function(input, output,session) {
              select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
              arrange(-pDFL)
     )
-    res <- datatable(ff,options = list(pageLength = 20)) %>% formatCurrency('pDFL') %>%
-      formatRound(c('pSGP','hotscore'),2) %>% formatRound('Age',0)
+    ifelse(input$e3 %in% c('SP','MR','CL'),
+           res <- datatable(ff,options = list(pageLength = 20), filter='top') %>% formatCurrency('pDFL') %>%
+              formatRound(c('pSGP','hotscore','pERA','pK/9','pFIP','LVG'),2) %>% formatRound(c('Age','pW','pSO','pSV','pHLD'),0),
+           res <- datatable(ff,options = list(pageLength = 20), filter='top') %>% formatCurrency('pDFL') %>%
+             formatRound(c('pSGP','hotscore'),2) %>% formatRound(c('Age','pHR','pR','pRBI','pSB'),0) %>%
+             formatRound(c('pAVG'),3)
+    )
+    res
   })
   #output$topPlayers <- DT::renderDataTable({ dtRTot })
   output$topPlayers <- DT::renderDataTable({topPos()})
   
   # RRClosers - rrcResults
   dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20)) %>% 
-    formatRound(c('pSGP','hotscore','LVG'),2) %>% formatCurrency('pDFL')
+    formatRound(c('pSGP','hotscore','LVG','pERA','pK/9','pBB/9'),3) %>% formatCurrency('pDFL') %>%
+    formatRound(c('pW','pSO','pSV','pHLD'),0)
   output$rrcResults <- DT::renderDataTable({ dtrrcResults })
   
   output$lcgraph <- renderPlotly({
@@ -106,9 +115,9 @@ shinyServer(function(input, output,session) {
     formatCurrency(c('pDFL'))
   output$cTrades <- DT::renderDataTable({ dtcTrades })
 
-  dtProPit <- datatable(prospectP,options = list(pageLength = 20)) 
+  dtProPit <- datatable(prospectP,options = list(pageLength = 20)) %>% formatRound(c('Age'),1)
   output$ProPit <- DT::renderDataTable({ dtProPit })
-  dtProHit <- datatable(prospectH,options = list(pageLength = 20)) 
+  dtProHit <- datatable(prospectH,options = list(pageLength = 20))  %>% formatRound(c('Age'),1)
   output$ProHit <- DT::renderDataTable({ dtProHit })
   
 })

@@ -11,7 +11,7 @@ shinyUI(
     # “cerulean”, “cosmo”, “cyborg”, “darkly”, “flatly”, “journal”, “litera”, “lumen”, “lux”, “materia”, “minty”, 
     # “pulse”, “sandstone”, “simplex”, “sketchy”, “slate”, “solar”, “spacelab”, “superhero”, “united”, “yeti”
     theme = bs_theme(bootswatch = "flatly"),
-    "DAFL Evaluator, v1.2",
+    "DAFL Evaluator, v2.0",
     tabPanel("Talent View",
              tabsetPanel(
                type = 'tabs',

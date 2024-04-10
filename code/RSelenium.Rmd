@@ -26,7 +26,8 @@ remDr <- rD[["client"]]
 #remDr$open()
 #remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report?groupby=all")
 
-remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
+#remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
+remDr$navigate("https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&type=36&startdate=&enddate=&month=0&season1=2024&season=2024&pagenum=1&pageitems=2000000000")
 
 
 
@@ -54,17 +55,19 @@ option$clickElement()
 #inj <- remDr$findElement(using='class name','table')
 html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
 
-r15 <- html[c(-1:-14)]
-inj <- bind_rows(r15)
-inj <- distinct(inj)
+stuff <- html[[16]]
 
-
-inj <- html[[16]]
-
-inj <- rename(inj,Player=Name,MLB=Team)
-inj <- addPlayerid(inj)
-
-remDr$close()
+# r15 <- html[c(-1:-14)]
+# inj <- bind_rows(r15)
+# inj <- distinct(inj)
+# 
+# 
+# inj <- html[[16]]
+# 
+# inj <- rename(inj,Player=Name,MLB=Team)
+# inj <- addPlayerid(inj)
+# 
+# remDr$close()
 
 ```
 

@@ -296,9 +296,14 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   # 13/12 hitters/pitchers based on rosters on 5/29/14
   nhitters <- 13
   npitchers <- 12
-
+  cap <- 260
+# Setting for Protection and Draft - only focus on top 19 players
+  # nhitters <- 10
+  # npitchers <- 9
+  # cap <- 254
+  
   nteams <- 14
-  tdollars <- nteams * (260 +dadj) * ratio
+  tdollars <- nteams * (cap +dadj) * ratio
 
   # What happens when we lop of the last 5 spots
   # I can't remember why I'm doing this?
@@ -998,16 +1003,15 @@ addSalary <- function(df) {
 
 
 getMLBstandings <- function() {
-  page <- read_html("https://www.fangraphs.com/depthcharts.aspx?position=Standings") %>% 
-    html_nodes("table") %>% html_table()
-  df <- page[[12]] %>% slice(-1) %>% select(X1:X4)
-  names(df) <- df %>% slice(1) %>% unlist()
-  df <- df %>% slice(-1)
+  page <- read_html("https://www.mlb.com/standings/")
+  p2 <- page %>% html_nodes("table") %>% html_table()
+  stand <- p2[[1]]
 
-  df <- mutate(df,Season=paste(W,L,sep='-'))
+  stand <- mutate(stand,Season=paste(W,L,sep='-'), LongMLB = `AL East`)
   mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
-  df <- left_join(df,mlbmap) %>% mutate(L10 = '0-0')
-  stand <- df %>% select(MLB,Season,L10)
+  stand <- left_join(stand,mlbmap) 
+  #%>% mutate(L10 = '0-0')
+  stand <- stand %>% select(MLB,Season,L10)
 }
 
 # getMLBstandings <- function() {
@@ -1022,19 +1026,29 @@ getMLBstandings <- function() {
 # }
 
 
-# addMLBstandings <- function(df) {
-#   left_join(df,stand,by=c('MLB'))
-# }
-# 
+addMLBstandings <- function(df) {
+ left_join(df,stand,by=c('MLB'))
+}
+ 
 
-getInjuriesRS <- function() {
+rD <- NA
+remDr <- NA
+
+startRS <- function() {
   rD <- rsDriver(browser="firefox",port=free_port(), 
                  chromever=NULL, verbose=F)
   remDr <- rD[["client"]]
+}
+
+endRS <- function() {
+  remDr$close()
+  system("taskkill /im java.exe /f")
+}
+
+
+getInjuriesRS <- function() {
   remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
 
-
-  
   html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
   r15 <- html[c(-1:-14)]
   inj <- bind_rows(r15)
@@ -1044,12 +1058,19 @@ getInjuriesRS <- function() {
   inj <- addPlayerid(inj)
   colnames(inj)[5] <- 'Injury'
   #colnames(inj)[10] <- 'LatestUpdate'
-  
-  
-  remDr$close()
-  system("taskkill /im java.exe /f")
   write.csv(inj,"../latestInjuries.csv")
   inj
+}
+
+getStuffRS <- function() {
+  remDr$navigate("https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&type=36&startdate=&enddate=&month=0&season1=2024&season=2024&pagenum=1&pageitems=2000000000&qual=10")
+  
+  html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
+  stuff <- html[[16]]
+  stuff <- stuff %>% select(Player=Name,MLB=Team,`Pitching+`)
+  
+  write.csv(stuff,"../latestStuff.csv")
+  stuff
 }
 
 getInjuries <- function() {

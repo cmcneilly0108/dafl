@@ -15,6 +15,9 @@ library("xml2")
 library("rvest")
 library("tidyr")
 library("jsonlite")
+library("RSelenium")
+library("netstat")
+
 source("./daflFunctions.r")
 
 src <- 'atc'
@@ -176,6 +179,12 @@ if (computer=='mac')
   injOrig <- getInjuriesRS()
 }
 
+# Week before draft - manual download file
+injOrig <- read.xlsx("../roster-resource-download.xlsx")
+injOrig <- rename(injOrig,Player=Name,MLB=Team)
+injOrig <- injOrig %>% rename(playerid = playerId,Injury = `Injury./.Surgery`,`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury./.Surgery.Date`)
+
+
 inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
 
 pscores <- bind_rows(thitters,tpitchers)
@@ -206,27 +215,6 @@ OFY <- filter(inj,str_detect(Expected.Return,fixed('60-day',ignore_case=TRUE)))
 #OFY <- filter(inj,str_detect(Expected.Return,fixed('out for the season',ignore_case=TRUE)))
 lc <- left_join(lc,inj,by=c('Player'))
 
-# New Pitches - From FanGraphs - hasn't been updated since 2020
-#BUG - strip (date)
-# r <- read_html("https://www.fangraphs.com/fantasy/2020-new-pitch-tracker/")
-# r2 <- html_node(r,".fullpostentry") %>% html_nodes("li") %>% html_text()
-# #r3 <- str_match(r2,".+\\) (.+) – (.+)")
-# r3 <- str_match(r2,"(.+) – (.+)")
-# #r3 <- str_match(r2,"(.+) - (.+)")
-# npitch <- as.data.frame(na.omit(r3),stringsAsFactors = FALSE) %>%
-#   select(-V1) %>% dplyr::rename(Player=V2,Pitch=V3)
-# npitch$Player <- stripDates(npitch$Player)
-
-#AllP <- left_join(AllP,npitch,by=c('Player'))
-
-# oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
-# oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
-# oAllH <- select(oAllH,playerid,oDFL=pDFL)
-# oAllP <- select(oAllP,playerid,oDFL=pDFL)
-# oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-# oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-# change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
-
 
 
 #prospects from FanGraphs
@@ -252,18 +240,18 @@ rrcResults <- rrcResults %>% arrange(Role,-pDFL)
 
 
 
-if (predUpdate==TRUE) {
-  oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
-  oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
-  oAllH <- select(oAllH,playerid,oDFL=pDFL)
-  oAllP <- select(oAllP,playerid,oDFL=pDFL)
-  oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-  oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
-  change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
-  
-  write.csv(AllH,'../AllHPrev.csv')
-  write.csv(AllP,'../AllPPrev.csv')
-}
+# if (predUpdate==TRUE) {
+#   oAllH <- read.csv('../AllHPrev.csv',stringsAsFactors=FALSE)
+#   oAllP <- read.csv('../AllPPrev.csv',stringsAsFactors=FALSE)
+#   oAllH <- select(oAllH,playerid,oDFL=pDFL)
+#   oAllP <- select(oAllP,playerid,oDFL=pDFL)
+#   oAllH2 <- inner_join(oAllH,AllH,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+#   oAllP2 <- inner_join(oAllP,AllP,by=c('playerid')) %>% mutate(cDFL = pDFL - oDFL) %>% select(Player,cDFL,pDFL,Injury,Expected.Return)
+#   change <- rbind(oAllH2,oAllP2) %>% filter(abs(cDFL) > 1) %>% arrange(cDFL)
+#   
+#   write.csv(AllH,'../AllHPrev.csv')
+#   write.csv(AllP,'../AllPPrev.csv')
+# }
 
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
@@ -345,6 +333,7 @@ gmet <- calcGoals(rpitchers,rhitters,targets,'Liquor Crickets')
 firstPos <- function (str) {
   #s <- str_split(str,',')[[1]][1]
   s <- str_sub(str,0,str_locate(str,',')[[1]]-1)
+  s <- str_replace(s,",","")
   s
 }
 
@@ -411,7 +400,7 @@ protectSummary <- data.frame(type=c("hitter","pitcher"),playersProt=c(hpr,ppr),d
                              ToFill=c(hnleft,pnleft),valueTaken=c(hvr,pvr))
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pDFL > 20) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pDFL > 15) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # From Athletic article combining saves and holds
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
@@ -623,12 +612,12 @@ setColWidths(draft, 'Injured', cols = 1:20, widths = "auto")
 # 
 # st <- list('2'=csMoneyColumn,'3'=csMoneyColumn)
 # tabs[[length(tabs)+1]] <- list('Recent Changes',change,st,c(2))
-if (predUpdate==TRUE) {
-  addWorksheet(draft,'Recent Changes')
-  writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
-  addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
-  setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
-}
+# if (predUpdate==TRUE) {
+#   addWorksheet(draft,'Recent Changes')
+#   writeData(draft,'Recent Changes',change,headerStyle = headerStyle)
+#   addStyle(draft, 'Recent Changes',style = csMoneyColumn,rows = 2:200, cols = 2:3,gridExpand = TRUE)
+#   setColWidths(draft, 'Recent Changes', cols = 1:20, widths = "auto")
+# }
 
 saveWorkbook(draft,"../draftGuide.xlsx",overwrite = TRUE)
 

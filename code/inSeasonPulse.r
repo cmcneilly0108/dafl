@@ -1,5 +1,5 @@
-# Early prospects - have cbs record but no fangraphs row in projections
-#   BAT has smaller file, try bigger projection system
+# Twostarts is blanked out
+# ATC ROS exists
 
 
 library("openxlsx")
@@ -13,14 +13,18 @@ library("zoo")
 library("xml2")
 library("rvest")
 library("jsonlite")
+library("RSelenium")
+library("netstat")
 
 source("./daflFunctions.r")
 
 ### Set variables ###
 
 
-aWeek <- as.integer((as.integer(today() - as.Date("2023-03-31"))+1)/7) + 1
+aWeek <- as.integer((as.integer(today() - as.Date("2024-03-31"))+1)/7) + 1
 tWeeks <-30
+#computer <- 'mac'
+computer <- 'windows'
 
 
 # Update data files
@@ -35,7 +39,7 @@ if (dt > 10) {
   system("bash ../scripts/pullCBS.sh")
   system("bash ../scripts/pullCBS2.sh")
   system("bash ../scripts/salaryinfo.sh")
-  system("bash ../scripts/fgInj.sh")
+  #system("bash ../scripts/fgInj.sh")
 }
 
 
@@ -47,7 +51,7 @@ sal <- getSalary()
 
 # times out 8/15
 stand <- getMLBstandings()
-inj <- getInjuriesFG()
+#inj <- getInjuriesFG()
 twostarts <- get2starts()
 
 #Get latest bullpen report
@@ -194,7 +198,7 @@ AllP <- distinct(AllP)
 #nlist <- preLPP(AllH,AllP,data.frame(),(1-(aWeek/tWeeks)),50,40)
 #nlist <- preLPP(AllH,AllP,data.frame(),1,50,40)
 # Adjusted for short season
-nlist <- preLPP(AllH,AllP,data.frame(),1,25,40)
+nlist <- preLPP(AllH,AllP,data.frame(),1,50,21)
 
 bhitters <- nlist[[1]]
 bpitchers <- nlist[[2]]
@@ -244,10 +248,45 @@ AllP <- left_join(AllP,op3,by=c('playerid'))
 #AllP <- mutate(AllP,diffscore = pScore - ytdscore)
 
 #inj <- getInjuries()
-AllH <- AllH %>% addInjuriesFG() %>% addSalary()
+#AllH <- AllH %>% addInjuriesFG() %>% addSalary()
+AllH <- AllH %>% addSalary()
 #AllP <- AllP %>% addInjuries() %>% addSalary() %>% addMLBstandings() %>% add2starts()
-AllP <- AllP %>% addInjuriesFG() %>% addSalary() %>% add2starts()
+#AllP <- AllP %>% addInjuriesFG() %>% addSalary() %>% add2starts()
+AllP <- AllP %>% addSalary()
 #AllP <- AllP %>% addInjuries() %>% addSalary()
+
+# New injury stuff
+# Injuries data
+if (computer=='mac')
+{
+  injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
+  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
+  
+  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE)
+  
+} else {
+  rD <- rsDriver(browser="firefox",port=free_port(), 
+                 chromever=NULL, verbose=F)
+  remDr <- rD[["client"]]
+  
+  injOrig <- getInjuriesRS()
+  stuff <- getStuffRS()
+
+  remDr$close()
+  system("taskkill /im java.exe /f")
+  
+}
+
+# Week before draft - manual download file
+# injOrig <- read.xlsx("../roster-resource-download.xlsx")
+# injOrig <- rename(injOrig,Player=Name,MLB=Team)
+# injOrig <- injOrig %>% rename(playerid = playerId,Injury = `Injury./.Surgery`,`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury./.Surgery.Date`)
+
+
+inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
+AllH <- left_join(AllH,inj,by=c('Player'))
+AllP <- left_join(AllP,inj,by=c('Player'))
+
 
 # Need to join stand
 AllP <- left_join(AllP,stand,by=c('MLB'))
@@ -266,18 +305,19 @@ AllP <- left_join(AllP,stand,by=c('MLB'))
 
 
 # Get stuff+ data
-#fn <- "https://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13,d&page=1_1000"
+#fn <- "https://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=36&season=2024&month=0&season1=2024&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2024-01-01&enddate=2024-12-31&sort=13,d&page=1_1000"
 #fn <- "https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&lg=all&qual=0&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&sort=13%2Cd&page=1_1000&pagenum=1&pageitems=2000000000"
-fn <- "https://www.fangraphs.com/leaders-legacy.aspx?pos=all&stats=pit&lg=all&qual=30&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&page=1_1000"
-page <- read_html(fn) %>% html_nodes("table") %>% html_table()
-df <- page[[7]]
-df <- df %>% slice(-1) %>% select(-X1)
-names(df) <- df %>% slice(1) %>% unlist()
-df <- df %>% slice(-(1:2))
-#stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
-stuff <- df %>% select(Player=Name,`Pitching+`)
+# fn <- "https://www.fangraphs.com/leaders-legacy.aspx?pos=all&stats=pit&lg=all&qual=30&type=36&season=2023&month=0&season1=2023&ind=0&team=0&rost=0&age=0&filter=&players=0&startdate=2023-01-01&enddate=2023-12-31&page=1_1000"
+# page <- read_html(fn) %>% html_nodes("table") %>% html_table()
+# df <- page[[7]]
+# df <- df %>% slice(-1) %>% select(-X1)
+# names(df) <- df %>% slice(1) %>% unlist()
+# df <- df %>% slice(-(1:2))
+# #stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
+# stuff <- df %>% select(Player=Name,`Pitching+`)
 AllP <- left_join(AllP,stuff)
-
+#AllP$`Pitching+` <- 100
+AllP$twostarts <- 'no'
 
 #Other team/pos messes things up
 
@@ -369,7 +409,6 @@ myteam <- pullTeam('Liquor Crickets')
 mh <- myteam[[1]]
 mp <- myteam[[2]]
 
-#FAP$twostarts <- 'no'
 FAP$est_ops <- 0
 FAP$ops_delta <- 0
 FAH$est_ops <- 0
@@ -591,6 +630,7 @@ res <- pullTeam('Neon Tetras')[[1]]
 
 # Add to hitter trend file
 htrend <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
+#df <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
 
 write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append = T)
 
@@ -657,7 +697,7 @@ needsOF <- inner_join(needsOF,st) %>% select(-Avail,-Short)
 
 # Let's play with htrend file
 htrend <- read.csv("hTrend.csv")
-htrend$date <- mdy(htrend$date)
+htrend$date <- ymd(htrend$date)
 #ggplot(data=htrend, aes(x=date, y=hotscore, group=Player)) +
 #  geom_line(aes(color=Player))+
 #  geom_point(aes(color=Player))
@@ -712,3 +752,4 @@ youngStuds <- AllH %>% filter(Salary< 10, Age < 26) %>%
 # names(df) <- df %>% slice(1) %>% unlist()
 # df <- df %>% slice(-(1:2))
 # stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
+
