@@ -1,4 +1,3 @@
-# Twostarts is blanked out
 # ATC ROS exists
 
 
@@ -24,7 +23,8 @@ source("./daflFunctions.r")
 aWeek <- as.integer((as.integer(today() - as.Date("2024-03-31"))+1)/7) + 1
 tWeeks <-30
 #computer <- 'mac'
-computer <- 'windows'
+#computer <- 'windows'
+computer <- Sys.info()['sysname']
 
 
 # Update data files
@@ -257,12 +257,17 @@ AllP <- AllP %>% addSalary()
 
 # New injury stuff
 # Injuries data
-if (computer=='mac')
+fd <- file.info("../latestStuff.csv")$mtime
+cd <- Sys.time()
+dt <- as.integer(difftime(cd, fd, units = "hours"))
+#dt <- 9
+if ((computer!='Windows') | (dt < 20))
 {
   injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
   
-  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE)
+  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
+    rename(`Pitching+`=`Pitching.`)
   
 } else {
   rD <- rsDriver(browser="firefox",port=free_port(), 
@@ -290,6 +295,7 @@ AllP <- left_join(AllP,inj,by=c('Player'))
 
 # Need to join stand
 AllP <- left_join(AllP,stand,by=c('MLB'))
+AllP <- left_join(AllP,twostarts)
 #AllP$Season <- '5-5'
 #AllP$L10 <- '5-5'
 
@@ -317,7 +323,7 @@ AllP <- left_join(AllP,stand,by=c('MLB'))
 # stuff <- df %>% select(Player=Name,`Pitching+`)
 AllP <- left_join(AllP,stuff)
 #AllP$`Pitching+` <- 100
-AllP$twostarts <- 'no'
+#AllP$twostarts <- 'no'
 
 #Other team/pos messes things up
 
@@ -635,7 +641,17 @@ htrend <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
 write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append = T)
 
 
-
+# set up injOrig for reporting site
+# AllH, AllP - ids plus pDFL, add pDFL
+# Prune out taken players
+# Select only fields that I want
+dH <- AllH %>% select(playerid,pDFL,Team)
+dP <- AllP %>% select(playerid,pDFL,Team)
+dollars <- bind_rows(dH,dP)
+injOrig <- left_join(injOrig,dollars)
+injOrig$pDFL[is.na(injOrig$pDFL)] <- 0
+injOrig$Team[is.na(injOrig$Team)] <- 'Free Agent'
+injOrig <- injOrig %>% filter(Team=='Free Agent') %>% select(-X,-birth_year,-Team,-playerid)
 
 #Load some team
 someteam <- pullTeam("But Justice")

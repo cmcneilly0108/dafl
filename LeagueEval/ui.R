@@ -118,36 +118,10 @@ shinyUI(
              mainPanel(
                h2("Who Could Be Desperate"),
                DT::dataTableOutput("problems")
+             )),
+    tabPanel("Injured",
+             verticalLayout(
+               DT::dataTableOutput("injOrig")
              ))
-    #   tabPanel("by Statistic",
-    #            sidebarLayout(
-    #              sidebarPanel(
-    #                selectizeInput(
-    #                  'e3', 'Select Statistic', choices=c('HR','RBI','R','SB','BA','W','K','ERA','HLD','SV'))
-    #              ),
-    #              mainPanel(
-    #                h1('foo')
-    #                #        tableOutput("Thitting")
-    #              )
-    #            )
-    #   ),
-    # tabPanel("Under Performers",
-    #          sidebarLayout(fluid=FALSE,
-    #                        sidebarPanel(
-    #                          sliderInput("hsc", "hotscore",
-    #                                      min=0, max=20, value=8),
-    #                          sliderInput("upd", "pDFL",
-    #                                      min=0, max=20, value=5),
-    #                          sliderInput("sal", "Salary",
-    #                                      min=0, max=100, value=10)
-    #                        ),
-    #                        mainPanel(
-    #                          tabsetPanel(type='tabs',
-    #                                      tabPanel('Hitters',dataTableOutput("undH")),
-    #                                      tabPanel('Pitchers',dataTableOutput("undP"))
-    #                          )
-    #                        )
-    #          )
-    # )
   )
 )

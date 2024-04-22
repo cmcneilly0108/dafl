@@ -78,7 +78,7 @@ shinyServer(function(input, output,session) {
   topPos <- reactive({
     ifelse(input$e3 %in% c('SP','MR','CL'),
            ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
-             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,LVG,Injury,Expected.Return),
+             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,twostarts,LVG,Injury,Expected.Return),
            ff <- AllH %>% filter(str_detect(posEl,input$e3)) %>%
              select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
              arrange(-pDFL)
@@ -119,5 +119,9 @@ shinyServer(function(input, output,session) {
   output$ProPit <- DT::renderDataTable({ dtProPit })
   dtProHit <- datatable(prospectH,options = list(pageLength = 20))  %>% formatRound(c('Age'),1)
   output$ProHit <- DT::renderDataTable({ dtProHit })
+
+  dtinjOrig <- datatable(injOrig,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
+    formatCurrency('pDFL')
+  output$injOrig <- DT::renderDataTable({dtinjOrig})
   
 })

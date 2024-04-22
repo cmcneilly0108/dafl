@@ -328,7 +328,7 @@ Fangraphs has put a block in place
 #   m2 <- mutate(m2,Pos=ifelse(!is.na(Pos),Pos,npos))
 #   mymaster <- select(m2,-npos)
   #write.csv(mymaster,"../mymaster.csv")
-}
+#}
 ```
 
 THIS IS THE END!
