@@ -15,6 +15,7 @@ shinyUI(
     tabPanel("Talent View",
              tabsetPanel(
                type = 'tabs',
+               tabPanel("Overall Standings",DT::dataTableOutput("StandFull")),
                tabPanel("Rest of Season Prediction",DT::dataTableOutput("RTot")),
                tabPanel("Starters Only",DT::dataTableOutput("RTotTop"))
              )

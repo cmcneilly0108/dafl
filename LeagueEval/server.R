@@ -19,6 +19,10 @@ shinyServer(function(input, output,session) {
     formatRound(c('pHR','pRBI','pSB','pR','Age'),0)  })
   output$TeamH <- DT::renderDataTable({ dtTeamH() })
 
+  dtStandFull <- datatable(dstandfull,options = list(pageLength = 20))
+#    formatCurrency(c('hDFL', 'piDFL','tDFL')) %>% formatRound('zScore',2)
+  output$StandFull <- DT::renderDataTable({ dtStandFull })
+  
   
   dtTeamP <- reactive({ mdf <- datatable(pullTeam(input$e1)[[2]],options = list(pageLength = 20)) %>%
     formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore','pERA','pFIP','pK/9'),3) %>%
@@ -47,7 +51,7 @@ shinyServer(function(input, output,session) {
                                          options = list(pageLength = 20))
 
   dtcatSummary <- datatable(catSummary,options = list(pageLength = 20)) %>% 
-    formatRound(c('pvp','pvm'),2)
+    formatRound(c('pvp','pvm','opportunity'),2)
   output$catSummary <- DT::renderDataTable({ dtcatSummary })
   
   tprof <- reactive({
@@ -96,7 +100,7 @@ shinyServer(function(input, output,session) {
   output$topPlayers <- DT::renderDataTable({topPos()})
   
   # RRClosers - rrcResults
-  dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20)) %>% 
+  dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20), filter='top') %>% 
     formatRound(c('pSGP','hotscore','LVG','pERA','pK/9','pBB/9'),3) %>% formatCurrency('pDFL') %>%
     formatRound(c('pW','pSO','pSV','pHLD'),0)
   output$rrcResults <- DT::renderDataTable({ dtrrcResults })

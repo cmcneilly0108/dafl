@@ -615,6 +615,7 @@ read.fgOLD <- function(fn) {
 # 
 read.cbs <- function(fn) {
   df <- read.csv(fn,skip=1,stringsAsFactors=FALSE, encoding="UTF-8")
+  df <- mutate(df,Player = str_replace(Player,'&#149;','|'))
   df <- mutate(df, Pos = pullPos(Player))
   df <- mutate(df, MLB = pullMLB(Player))
   df <- filter(df,!is.na(MLB))
@@ -967,6 +968,7 @@ getSalary <- function() {
     filter(!(Player %in% c('TOTALS')))
   sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
   sal$Team <- na.locf(sal$Team)
+  sal <- mutate(sal,Player = str_replace(Player,'&#149;','|'))
   sal <- mutate(sal, MLB = pullMLB(Player))
   sal$Player <- unlist(lapply(sal$Player,stripName))
   sal$Salary <- as.integer(sal$Salary)
@@ -1125,16 +1127,28 @@ add2starts <- function(df) {
 }
 
 # What on earth is this calculation???
+# Where does the weight come from?  This is different by category
 pvCat <- function(col,weight,myScore) {
+  # average rate of stats collected for this category - times a weight that I don't understand
+  # weight is being used as a big week gain/loss - what would that mean in the standings
+  # still don't reemember why it changes by category as opposed to a statid value like 0.1
   rate <- (mean(col)/aWeek)*weight
   df <- data_frame(Vals=col)
+  # wVals = difference between my score and others divided by rate = how many spots away am I?
+  # rVals = a rank order of wVals
   df <- mutate(df,wVals = (Vals-myScore)/rate, rVals=as.numeric(rank(-Vals)))
+  # My rVAl
   myr <- as.numeric(filter(df,Vals==myScore)$rVals)
-  df <- mutate(df,pvpVals = ifelse(rVals<myr,
-                                   ifelse(wVals < 1,1,1/wVals),0))
-  df <- mutate(df,pvmVals = ifelse(rVals>myr,
-                                   ifelse(wVals > -1,1,1/wVals),0))
-  list(sum(df$pvpVals),sum(df$pvmVals)*-1)
+  # pvpVals = for rVals less than me, no credit, if wVals clos, give 1, otherwise 1/wVals
+  # pvmVals = same but on the negative side
+  df <- mutate(df,pvpVals = ifelse(wVals < 0, 0,
+                                   ifelse(rVals<myr,
+                                          ifelse(wVals < 1,1,1/wVals),0)))
+  df <- mutate(df,pvmVals = ifelse(wVals > 0, 0,
+                                   ifelse(rVals>myr,
+                                          ifelse(wVals > -1,-1,1/wVals),0)))
+  # Add all the column data and you get your overall score
+  list(sum(df$pvpVals),sum(df$pvmVals),(sum(df$pvpVals)+sum(df$pvmVals)))
 }
 
 # firstRowHeaders <- function(df) {
