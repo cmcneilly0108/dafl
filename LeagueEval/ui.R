@@ -42,8 +42,9 @@ shinyUI(
                sidebarPanel(selectizeInput(
                  'e3',
                  'Select Position',
-                 choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
-               ), width = 1),
+                 choices = c('Hitters','C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
+               ),
+               checkboxInput('fa','Free Agents Only'),value=TRUE,width = 1),
                mainPanel(DT::dataTableOutput("topPlayers"))
              )),
     tabPanel("Closer Detail",

@@ -80,12 +80,19 @@ shinyServer(function(input, output,session) {
 
 #  Top By Position
   topPos <- reactive({
+    ifelse(input$fa == TRUE,ffh <- filter(AllH,Team=='Free Agent'),ffh <- AllH)
+    ifelse(input$fa == TRUE,ffp <- filter(AllP,Team=='Free Agent'),ffp <- AllP)
     ifelse(input$e3 %in% c('SP','MR','CL'),
-           ff <- AllP %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
+           ff <- ffp %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
              select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,twostarts,LVG,Injury,Expected.Return),
-           ff <- AllH %>% filter(str_detect(posEl,input$e3)) %>%
-             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
-             arrange(-pDFL)
+           ifelse(input$e3 == 'Hitters',
+                  ff <- ffh %>%
+                    select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    arrange(-pDFL),
+                  ff <- ffh %>% filter(str_detect(posEl,input$e3)) %>%
+                    select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    arrange(-pDFL)
+           )
     )
     ifelse(input$e3 %in% c('SP','MR','CL'),
            res <- datatable(ff,options = list(pageLength = 20), filter='top') %>% formatCurrency('pDFL') %>%

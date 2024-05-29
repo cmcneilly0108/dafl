@@ -638,6 +638,33 @@ read.cbs <- function(fn) {
   addPlayerid(df)
 }
 
+missing.cbs <- function(fn) {
+  df <- read.csv(fn,skip=1,stringsAsFactors=FALSE, encoding="UTF-8")
+  df <- mutate(df,Player = str_replace(Player,'&#149;','|'))
+  df <- mutate(df, Pos = pullPos(Player))
+  df <- mutate(df, MLB = pullMLB(Player))
+  df <- filter(df,!is.na(MLB))
+  df$Player <- unlist(lapply(df$Player,stripName))
+  # Team abbreviations are not the same - find all discrepancies WAS->WSH
+  df$MLB <- replace(df$MLB,df$MLB=='WAS','WSN')
+  df$MLB <- replace(df$MLB,df$MLB=='CWS','CHW')
+  df$MLB <- replace(df$MLB,df$MLB=='TB','TBR')
+  df$MLB <- replace(df$MLB,df$MLB=='KC','KCR')
+  df$MLB <- replace(df$MLB,df$MLB=='SD','SDP')
+  df$MLB <- replace(df$MLB,df$MLB=='SF','SFG')
+  
+  # Create Team column
+  #df <- mutate(df,Avail=str_replace(Avail,'\\.\\.\\.',''))
+  #df <- left_join(df,nicks,by=c('Avail'))
+  df$Team <- df$Avail
+  #df$Team <- str_replace(df$Team,'W','Free Agent')
+  df$Team <- ifelse(str_detect(df$Team,'W '),'Free Agent',df$Team)
+  df <- select(df,-Avail)
+  m2 <- select(master,-Pos,-Player) %>% dplyr::rename(Player=cbs_name)
+  dfleft <- anti_join(df, m2,by=c('Player','MLB'))
+  dfleft
+}
+
 addPlayerid <- function(df) {
   m2 <- select(master,-Pos,-Player) %>% dplyr::rename(Player=cbs_name)
   # Merge with team

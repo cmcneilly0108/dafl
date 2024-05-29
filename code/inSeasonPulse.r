@@ -1,5 +1,5 @@
 # ATC ROS exists
-
+# Zack Neto?
 
 library("openxlsx")
 library("stringr")
@@ -328,7 +328,8 @@ AllP <- left_join(AllP,stuff)
 #AllP$`Pitching+` <- 100
 #AllP$twostarts <- 'no'
 
-#Other team/pos messes things up
+#All pitchers get a position
+AllP <- AllP %>% mutate(Pos = ifelse(is.na(Pos),'SP',Pos))
 
 # Create Free Agents
 FAH <- filter(AllH,Team == 'Free Agent')
@@ -450,33 +451,33 @@ res <- pvCat(cstand$HR,0.2,as.numeric(filter(cstand,Team=='Cricket')$HR))
 pvResults <- data.frame(category='HR',pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 
 
-res <- pvCat(cstand$RBI,(1/18),as.numeric(filter(cstand,Team=='Cricket')$RBI))
+res <- pvCat(cstand$RBI,0.2,as.numeric(filter(cstand,Team=='Cricket')$RBI))
 pvResults2 <- data.frame(category='RBI', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$SB,.2,as.numeric(filter(cstand,Team=='Cricket')$SB))
+res <- pvCat(cstand$SB,0.2,as.numeric(filter(cstand,Team=='Cricket')$SB))
 pvResults2 <- data.frame(category='SB', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$R,(1/18),as.numeric(filter(cstand,Team=='Cricket')$R))
+res <- pvCat(cstand$R,0.2,as.numeric(filter(cstand,Team=='Cricket')$R))
 pvResults2 <- data.frame(category='R', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
 
 
-res <- pvCat(cstand$W,(1/6),as.numeric(filter(cstand,Team=='Cricket')$W))
+res <- pvCat(cstand$W,0.2,as.numeric(filter(cstand,Team=='Cricket')$W))
 pvResults2 <- data.frame(category='W', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$HD,0.5,as.numeric(filter(cstand,Team=='Cricket')$HD))
+res <- pvCat(cstand$HD,0.2,as.numeric(filter(cstand,Team=='Cricket')$HD))
 pvResults2 <- data.frame(category='HD', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$S,0.5,as.numeric(filter(cstand,Team=='Cricket')$S))
+res <- pvCat(cstand$S,0.2,as.numeric(filter(cstand,Team=='Cricket')$S))
 pvResults2 <- data.frame(category='S', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$K,(1/6),as.numeric(filter(cstand,Team=='Cricket')$K))
+res <- pvCat(cstand$K,0.2,as.numeric(filter(cstand,Team=='Cricket')$K))
 pvResults2 <- data.frame(category='K', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
@@ -772,3 +773,6 @@ youngStuds <- AllH %>% filter(Salary< 10, Age < 26) %>%
 # df <- df %>% slice(-(1:2))
 # stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
 
+# check master file against CBS names
+mhit <- missing.cbs("../AllHitters.csv")
+mpit <- missing.cbs("../AllPitchers01.csv")
