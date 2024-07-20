@@ -39,7 +39,7 @@ getAge <- function(playerid) {
       page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"),as_html=TRUE)
       phtml <- page %>% html_text2()
       pstring <- as.character(page)
-      byear <- str_extract(pstring,"<td>([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
+      byear <- str_extract(pstring,":.([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
     },
     error=function(error_message) {
       print("some error")
@@ -144,7 +144,7 @@ fgraphs <- bind_rows(fgh,fgp)
 
 fgraphs <- filter(fgraphs,str_length(MLB)>0)
 
-noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid'))
+noidmatchfg <- anti_join(fgraphs,mymaster,by=c('playerid'))
 
 ```
 Add the prospects!!!
@@ -169,7 +169,7 @@ fgraphsp <- bind_rows(fgh,fgp)
 ```{r}
 #fgraphsp <- filter(fgraphsp,str_length(MLB)>0)
 
-noidmatch <- anti_join(fgraphsp,mymaster,by=c('playerid'))
+noidmatchfgpros <- anti_join(fgraphsp,mymaster,by=c('playerid'))
 
 ```
 
@@ -186,26 +186,34 @@ mymaster <- mutate(mymaster,MLB=ifelse(is.na(MLB.y),MLB.x,MLB.y)) %>% select(-ML
 
 If name and team are identical, replace the id
 ```{r}
+noidmatch <- rbind(noidmatchfg,noidmatchfgpros)
+#noidmatch <- noidmatchfg
+
 sameName <- inner_join(noidmatch,mymaster,by=c('Player','MLB'))
-repl <- select(sameName,playerid = playerid.y,newid = playerid.x)
+repl <- select(sameName,playerid = playerid.x,newid = playerid.y)
+# remove rows if newid is an 'sa' number
+repl <- filter(repl,str_starts(newid,'sa'))
+
 mymaster <- left_join(mymaster,repl)
 mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
 ```
 
+Maybe this is a problem - maybe this should be turned off.  Let's try!  7/16/24
 If name is identical but team is different - update id AND MLB
 ```{r}
-noidmatch2 <- anti_join(fgraphs,mymaster,by=c('playerid'))
-sameName2 <- inner_join(noidmatch2,mymaster,by=c('Player'))
-
-repl2 <- select(sameName2,playerid = playerid.y,newid = playerid.x,MLB = MLB.y, newMLB = MLB.x)
-mymaster <- left_join(mymaster,repl2)
-mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
-mymaster <- mutate(mymaster,MLB = ifelse(is.na(newMLB),MLB,newMLB)) %>% select(-newMLB)
+#noidmatch2 <- anti_join(noidmatch,mymaster,by=c('playerid'))
+# sameName2 <- inner_join(noidmatch,mymaster,by=c('Player'))
+# 
+# repl2 <- select(sameName2,playerid = playerid.y,newid = playerid.x,MLB = MLB.y, newMLB = MLB.x)
+# mymaster <- left_join(mymaster,repl2)
+# mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
+# mymaster <- mutate(mymaster,MLB = ifelse(is.na(newMLB),MLB,newMLB)) %>% select(-newMLB)
 ```
 Add new rows
 
 ```{r}
-noidmatch <- anti_join(fgraphs,mymaster,by=c('playerid')) %>% mutate(birth_year=NA,cbs_name=Player,Pos='')
+noidmatch <- anti_join(noidmatch,mymaster,by=c('playerid'))
+noidmatch <- noidmatch %>% mutate(birth_year=NA,cbs_name=Player,Pos='')
 addthem <- noidmatch %>% select(playerid,Player,birth_year,cbs_name,Pos,MLB)
 
 mymaster <- bind_rows(mymaster,addthem)
@@ -264,10 +272,12 @@ write.csv(mymaster,"../mymaster.csv")
 
 
 Summary statistics go here
+
+There are 2 Luis Moreno's on the NYM minor leagues and it is causing file problems
 ```{r}
-print(str_c("New ids from fangraphs = ",nrow(noidmatch)))
-print(str_c("Combine rows (player+mlb) = ",nrow(sameName)))
-print(str_c("Change MLB team (player only) = ",nrow(repl2)))
+print(str_c("New ids from fangraphs = ",nrow(noidmatchfg)))
+print(str_c("Prospects: Combine rows (player+mlb) = ",nrow(noidmatchfgpros)))
+#print(str_c("Change MLB team (player only) = ",nrow(repl2)))
 print(str_c("New players added from fangraphs = ",nrow(addthem)))
 print(str_c("New players added from CBS = ",nrow(nonamecbs)))
 ```

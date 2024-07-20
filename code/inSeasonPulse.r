@@ -14,6 +14,7 @@ library("rvest")
 library("jsonlite")
 library("RSelenium")
 library("netstat")
+library("RSQLite")
 
 source("./daflFunctions.r")
 
@@ -39,7 +40,8 @@ if (dt > 10) {
   system("bash ../scripts/pullCBS.sh")
   system("bash ../scripts/pullCBS2.sh")
   system("bash ../scripts/salaryinfo.sh")
-  #system("bash ../scripts/fgInj.sh")
+  # fgInj is only used for prospect json files.  Run manually
+  system("bash ../scripts/fgInj.sh")
 }
 
 
@@ -125,9 +127,10 @@ dev.off()
 # Once Season Starts
 
 pitchers <- read.fg("../steamerPROS.json")
-#hitters <- read.fg("../steamerHROS.json")
 #pitchers <- read.fg("../batxPROS.json")
+
 hitters <- read.fg("../batxHROS.json")
+#hitters <- read.fg("../steamerHROS.json")
 
 
 hitters$Pos <- replace(hitters$Pos,is.na(hitters$Pos),'DH')
@@ -359,7 +362,7 @@ FAP <- select(FAP,-Team)
 rrc <- getRRClosers()
 rrcAvail <- inner_join(rrc,FAP,by=c('playerid'))
 rrcResults <- arrange(rrcAvail,-pDFL) %>%
-  select(Player,Pos,pDFL,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,pGS,W,K,S,HD,ERA,hotscore,LVG,MLB, Season, L10,Injury,Expected.Return)
+  select(Player,Pos,pDFL,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,pGS,W,K,S,HD,ERA,hotscore,LVG,MLB, Season, L10,Injury,Expected.Return,playerid)
 
 
 # change filter conditions here, check if BPReport is working, see if I'm only downloading 2 weeks
@@ -399,11 +402,11 @@ proh <- right_join(Allhitters,hplist,by=c('playerid'))
 
 #prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
 #  arrange(desc(FV),desc(DFL))
-prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
-  arrange(desc(FV))
+prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd,playerid) %>%
+  arrange(desc(FV),Top.100)
 prop <- right_join(Allpitchers,pplist,by=c('playerid'))
-prospectP <- select(prop,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Age,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
-  arrange(desc(FV))
+prospectP <- select(prop,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Age,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD,playerid) %>%
+  arrange(desc(FV),Top.100)
 
 # which prospects are taken?
 proth <- left_join(hplist,AllH,by=c('playerid'),na_matches="never") 
@@ -638,12 +641,6 @@ svSP <- AllP %>% filter(pGS > 8, pDFL > 15) %>% select(Player,Team,Salary,Contra
 res <- pullTeam('Neon Tetras')[[1]]
 
 
-# Add to hitter trend file
-htrend <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
-#df <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
-
-write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append = T)
-
 
 # set up injOrig for reporting site
 # AllH, AllP - ids plus pDFL, add pDFL
@@ -655,7 +652,8 @@ dollars <- bind_rows(dH,dP)
 injOrig <- left_join(injOrig,dollars)
 injOrig$pDFL[is.na(injOrig$pDFL)] <- 0
 injOrig$Team[is.na(injOrig$Team)] <- 'Free Agent'
-injOrig <- injOrig %>% filter(Team=='Free Agent') %>% select(-X,-birth_year,-Team,-playerid)
+#injOrig <- injOrig %>% filter(Team=='Free Agent') %>% select(-X,-birth_year,-Team,-playerid)
+injOrig <- injOrig %>% filter(Team=='Free Agent') %>% select(-X,-birth_year,-Team)
 
 #Load some team
 someteam <- pullTeam("But Justice")
@@ -715,12 +713,6 @@ needsOF <- aof %>% filter(pDFL > 7) %>% group_by(Team) %>%
   summarise(total = sum(pDFL)) %>% arrange(-total)
 needsOF <- inner_join(needsOF,st) %>% select(-Avail,-Short)
 
-# Let's play with htrend file
-htrend <- read.csv("hTrend.csv")
-htrend$date <- ymd(htrend$date)
-#ggplot(data=htrend, aes(x=date, y=hotscore, group=Player)) +
-#  geom_line(aes(color=Player))+
-#  geom_point(aes(color=Player))
 
 # Recently injured
 newHurt <- AllH %>% mutate(idate=as_date(Injury,format="%m/%d")) %>% filter(!is.na(Injury) & idate > today()-7 & Team != "Free Agent") %>%
@@ -776,3 +768,67 @@ youngStuds <- AllH %>% filter(Salary< 10, Age < 26) %>%
 # check master file against CBS names
 mhit <- missing.cbs("../AllHitters.csv")
 mpit <- missing.cbs("../AllPitchers01.csv")
+
+
+# What about storing the 2-week data everyday in a DB and then generate my charts from there?
+
+# old htrend
+
+# Add to hitter trend file
+htrend <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
+#df <- mh %>% select(Player,hotscore) %>% mutate(Date=today())
+
+write.table(htrend, "hTrend.csv", sep = ",", row.names=F, col.names = F, append = T)
+# Let's play with htrend file
+htrend <- read.csv("hTrend.csv")
+htrend$date <- ymd(htrend$date)
+#ggplot(data=htrend, aes(x=date, y=hotscore, group=Player)) +
+#  geom_line(aes(color=Player))+
+#  geom_point(aes(color=Player))
+
+
+
+conn <- dbConnect(RSQLite::SQLite(), "DAFL.db")
+
+# Player, pDFL, hotscore, date -from htrend.csv
+htrend <- AllH %>% select(playerid,Player,hotscore) %>% mutate(Date=today())
+ptrend <- AllP %>% select(playerid,Player,hotscore) %>% mutate(Date=today())
+alltrend <- rbind(htrend,ptrend)
+
+#dbWriteTable(conn,"Trending",alltrend,append=TRUE)
+
+#trowcount <- dbGetQuery(conn, "SELECT count(*) FROM Trending")
+
+trowcount <- dbGetQuery(conn, "SELECT count(*) FROM Trending where Date = ?",params = c(today()))
+asnum <- as.numeric(trowcount[[1]])
+if (asnum == 0) {
+  dbWriteTable(conn,"Trending",alltrend,append=TRUE)
+}
+
+
+
+
+
+
+# playing with links
+# https://www.fangraphs.com/players/trea-turner/16252/stats?position=SS
+AllH <- AllH %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+AllH$Player <- AllH$fg
+AllP <- AllP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+AllP$Player <- AllP$fg
+
+injOrig <- injOrig %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+injOrig$Player <- injOrig$fg
+injOrig <- injOrig %>% select(-fg)
+
+rrcResults <- rrcResults %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+rrcResults$Player <- rrcResults$fg
+rrcResults <- rrcResults %>% select(-fg,-playerid)
+
+prospectH <- prospectH %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+prospectH$Player <- prospectH$fg
+prospectH <- prospectH %>% select(-fg,-playerid)
+
+prospectP <- prospectP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
+prospectP$Player <- prospectP$fg
+prospectP <- prospectP %>% select(-fg,-playerid)

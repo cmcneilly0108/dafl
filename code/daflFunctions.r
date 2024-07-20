@@ -839,7 +839,8 @@ hotScores <- function(toph,topp,tm=FALSE) {
 
   topp <- mutate(topp,zW=(W-mW)/sdW,zSO=(K-mSO)/sdSO,zHLD=(HD-mHLD)/sdHLD,
                       zSV=(S-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
-  topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
+  topp <- mutate(topp,zScore=zW+zSO+(0.6*zHLD)+zSV+zxER)
+#  topp <- mutate(topp,zScore=zW+zSO+(0.4*zHLD)+zSV+zxER)
   topp <- arrange(topp,-zScore)
 
   # Add the total thitter value to everyone

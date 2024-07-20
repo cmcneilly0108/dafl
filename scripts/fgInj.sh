@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-curl 'https://cdn.fangraphs.com/api/roster-resource/injury-report/data?loaddate=1619181073&season=2024' -H 'authority: cdn.fangraphs.com' -H 'accept: application/json, text/plain, */*' -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.128 Safari/537.36' -H 'dnt: 1' -H 'origin: https://www.fangraphs.com' -H 'sec-fetch-site: same-site' -H 'sec-fetch-mode: cors' -H 'sec-fetch-dest: empty' -H 'referer: https://www.fangraphs.com/' -H 'accept-language: en-US,en;q=0.9' --compressed > ../injuryReport.json 
+#curl 'https://cdn.fangraphs.com/api/roster-resource/injury-report/data?loaddate=1619181073&season=2024' -H 'authority: cdn.fangraphs.com' -H 'accept: application/json, text/plain, */*' -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.128 Safari/537.36' -H 'dnt: 1' -H 'origin: https://www.fangraphs.com' -H 'sec-fetch-site: same-site' -H 'sec-fetch-mode: cors' -H 'sec-fetch-dest: empty' -H 'referer: https://www.fangraphs.com/' -H 'accept-language: en-US,en;q=0.9' --compressed > ../injuryReport.json 
 # curl 'https://www.fangraphs.com/roster-resource/injury-report?groupby=all' \
 #   -H 'authority: www.fangraphs.com' \
 #   -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \

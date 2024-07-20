@@ -63,15 +63,15 @@ shinyUI(
                )
              )),
     tabPanel(
-      "LC Hitter Trends",
+      "Player Trends",
       selectizeInput(
         "choice",
         "Pick Player",
-        choices = htrend$Player,
+        choices = trending$Player,
         selected = NULL,
         multiple = TRUE
       ),
-      plotlyOutput("lcgraph")
+      plotlyOutput("lcgraph",height="800px")
       
     ),
     tabPanel("Category Status",
@@ -93,8 +93,8 @@ shinyUI(
             "pd",
             "pDFL",
             min = 0,
-            max = 20,
-            value = 5
+            max = 30,
+            value = 10
           ),
           width = 2
         ),
