@@ -668,12 +668,12 @@ missing.cbs <- function(fn) {
 addPlayerid <- function(df) {
   m2 <- select(master,-Pos,-Player) %>% dplyr::rename(Player=cbs_name)
   # Merge with team
-  gfull <- inner_join(df, m2,by=c('Player','MLB'))
+  gfull <- inner_join(df, m2,by=c('Player','MLB'),relationship = "many-to-many")
   dfleft <- anti_join(df, m2,by=c('Player','MLB'))
   m2 <- anti_join(m2,df,by=c('Player','MLB'))
 
   # Merge rest with only name
-  gname <- left_join(dfleft, m2,by=c('Player'))
+  gname <- left_join(dfleft, m2,by=c('Player'),relationship = "many-to-many")
   gname <- select(gname,-MLB.x) %>% dplyr::rename(MLB=MLB.y)
 
   final <- rbind(gfull,gname)
@@ -686,7 +686,7 @@ addPlayeridOnly <- function(df) {
   m2 <- select(master,-Pos,-Player) %>% dplyr::rename(Player=cbs_name)
   m2 <- select(m2,Player,MLB,playerid)
   # Merge with team
-  final <- left_join(df, m2,by=c('Player'))
+  final <- left_join(df, m2,by=c('Player'),relationship = "many-to-many")
   final$playerid <- ifelse(is.na(final$playerid),final$Player,final$playerid)
   final$playerid <- ifelse(str_length(final$playerid)==0,final$Player,final$playerid)
   final

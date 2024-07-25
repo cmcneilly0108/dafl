@@ -1,3 +1,5 @@
+# BUG - trending doesn't exist for ui.R drop down until I run inSeasonPulse separately first
+
 
 setwd("../code/")
 source("./inSeasonPulse.r")
@@ -78,15 +80,13 @@ shinyServer(function(input, output,session) {
 
 # Player Trends
 #  htrend <- read.csv("./hTrend.csv")
-  trending <- dbGetQuery(conn, "SELECT * FROM Trending")
-  trending$Date <- as.Date(trending$Date)
-  trending$hotscore <- as.numeric(trending$hotscore)
 
   output$lcgraph <- renderPlotly({
     plot_ly(trending, x = ~Date, y = ~hotscore)  %>%
       filter(Player %in% input$choice) %>%
       group_by(Player) %>%
-      add_lines(color=~Player,line = list(width=5))
+      add_lines(color=~Player,line = list(width=5)) %>%
+      add_trace(color=~Player,type="scatter",mode = "markers",marker=list(size=15))
   })
   
 # Category Status

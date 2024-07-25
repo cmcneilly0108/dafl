@@ -1,5 +1,5 @@
 # ATC ROS exists
-# Zack Neto?
+
 
 library("openxlsx")
 library("stringr")
@@ -75,7 +75,7 @@ ddeets <- select(ddeets,-V3,-V4,-V5)
 
 dstandfull <- read.csv('../overall.csv',stringsAsFactors=FALSE,nrows=14) %>% select(-Rank,-X)
 
-
+# Warning error here - look it up!
 dfl <- split(ddeets, (0:nrow(ddeets) %/% 15))
 dfl <- lapply(dfl,function(x) {colnames(x) = x[1, ]
                                x <- x[-1,]
@@ -103,16 +103,16 @@ s2 <- standings %>% group_by(Week) %>% mutate(rHR = rank(HR),rR = rank(R),rSB = 
 s2 <- mutate(s2,TP=rHR+rR+rSB+rRBI+rBA+rW+rS+rHD+rK+rERA) %>% select(-Avail)
 # create line graph
 g1 <- ggplot(data=filter(s2,Team %in% leaders$Team),
-             aes(x=Week, y=TP, group=Team, shape=Team, color=Team)) + geom_line(size=1.2) +
+             aes(x=Week, y=TP, group=Team, shape=Team, color=Team)) + geom_line(linewidth=1.2) +
   geom_point(size=4) + labs(title='Top 5 plus Crickets',y='Total Points')
 s3 <- melt(s2,c('Team','Week'))
 s3$value <- as.numeric(s3$value)
 g2 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rHR','rR','rRBI','rBA','rSB')),
              aes(x=Week, y=value, group=variable, shape=variable,color=variable)) +
-  geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Hitting by Week',y='Points')
+  geom_line(linewidth=1.2) + geom_point(size=4) + labs(title='Crickets Hitting by Week',y='Points')
 g3 <- ggplot(data=filter(s3,Team=='Cricket',variable %in% c('rW','rK','rS','rHD','rERA')),
              aes(x=Week, y=value, group=variable, shape=variable,color=variable)) +
-  geom_line(size=1.2) + geom_point(size=4) + labs(title='Crickets Pitching by Week',y='Points')
+  geom_line(linewidth=1.2) + geom_point(size=4) + labs(title='Crickets Pitching by Week',y='Points')
 pdf("../DAFLcharts.pdf")
 print(g1)
 print(g2)
@@ -176,7 +176,7 @@ AllpitchersD <- distinct(Allpitchers,playerid, .keep_all = TRUE)
 pitchers <- distinct(pitchers,playerid, .keep_all = TRUE)
 
 AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
-AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE)
+AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE,relationship = "many-to-many")
 # give 50/50 weight to 2weeks/ytd
 AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-aWeek)*.5)+((yHLD/aWeek)*(tWeeks-aWeek)*.5)),0)
 # For short season, only use current year predictions
@@ -190,7 +190,7 @@ AllP$pSGP <- pitSGP(AllP)
 pedf <- read.cbs('../poselig.csv')
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 # Add column into AllH
-AllH <- left_join(AllH,pedf,by=c('playerid'))
+AllH <- left_join(AllH,pedf,by=c('playerid'),relationship = "many-to-many")
 AllH <- mutate(AllH,Position=firstPos(posEl))
 AllH <- mutate(AllH,Position=ifelse((Pos %in% c('SS','2B','C') &
                                                  str_detect(posEl,Pos)==TRUE),Pos,Position))
@@ -210,8 +210,8 @@ bhitters <- nlist[[1]]
 bpitchers <- nlist[[2]]
 
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,bhitters,by=c('playerid'))
-AllP <- left_join(AllP,bpitchers,by=c('playerid'))
+AllH <- left_join(AllH,bhitters,by=c('playerid'),relationship = "many-to-many")
+AllP <- left_join(AllP,bpitchers,by=c('playerid'),relationship = "many-to-many")
 AllH <- rename(AllH,pDFL=zDFL)
 AllP <- rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
@@ -225,8 +225,8 @@ oh <- r[[1]]
 op <- r[[2]]
 
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,oh,by=c('playerid'))
-AllP <- left_join(AllP,op,by=c('playerid'))
+AllH <- left_join(AllH,oh,by=c('playerid'),relationship = "many-to-many")
+AllP <- left_join(AllP,op,by=c('playerid'),relationship = "many-to-many")
 AllH <- rename(AllH,hotscore=zScore)
 AllP <- rename(AllP,hotscore=zScore)
 
@@ -248,8 +248,8 @@ op3 <- r[[2]]
 oh3 <- rename(oh3,pScore = zScore)
 op3 <- rename(op3,pScore = zScore)
 # Incorporate scores back into AllH, AllP
-AllH <- left_join(AllH,oh3,by=c('playerid'))
-AllP <- left_join(AllP,op3,by=c('playerid'))
+AllH <- left_join(AllH,oh3,by=c('playerid'),relationship = "many-to-many")
+AllP <- left_join(AllP,op3,by=c('playerid'),relationship = "many-to-many")
 #AllH <- mutate(AllH,diffscore = pScore - ytdscore)
 #AllP <- mutate(AllP,diffscore = pScore - ytdscore)
 
@@ -295,13 +295,13 @@ if ((computer!='Windows') | (dt < 20))
 
 
 inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
-AllH <- left_join(AllH,inj,by=c('Player'))
-AllP <- left_join(AllP,inj,by=c('Player'))
+AllH <- left_join(AllH,inj,by=c('Player'),relationship = "many-to-many")
+AllP <- left_join(AllP,inj,by=c('Player'),relationship = "many-to-many")
 
 
 # Need to join stand
-AllP <- left_join(AllP,stand,by=c('MLB'))
-AllP <- left_join(AllP,twostarts)
+AllP <- left_join(AllP,stand,by=c('MLB'),relationship = "many-to-many")
+AllP <- left_join(AllP,twostarts,relationship = "many-to-many")
 #AllP$Season <- '5-5'
 #AllP$L10 <- '5-5'
 
@@ -327,7 +327,7 @@ AllP <- left_join(AllP,twostarts)
 # df <- df %>% slice(-(1:2))
 # #stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
 # stuff <- df %>% select(Player=Name,`Pitching+`)
-AllP <- left_join(AllP,stuff)
+AllP <- left_join(AllP,stuff,relationship = "many-to-many")
 #AllP$`Pitching+` <- 100
 #AllP$twostarts <- 'no'
 
@@ -397,22 +397,22 @@ hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
 #  rename(Player = Name,playerid = playerId)
 pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
 #proh <- inner_join(FAH,hplist,by=c('playerid'))
-proh <- right_join(Allhitters,hplist,by=c('playerid'))
+proh <- right_join(Allhitters,hplist,by=c('playerid'),relationship = "many-to-many")
 #df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
 
 #prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
 #  arrange(desc(FV),desc(DFL))
 prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd,playerid) %>%
   arrange(desc(FV),Top.100)
-prop <- right_join(Allpitchers,pplist,by=c('playerid'))
+prop <- right_join(Allpitchers,pplist,by=c('playerid'),relationship = "many-to-many")
 prospectP <- select(prop,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Age,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD,playerid) %>%
   arrange(desc(FV),Top.100)
 
 # which prospects are taken?
-proth <- left_join(hplist,AllH,by=c('playerid'),na_matches="never") 
+proth <- left_join(hplist,AllH,by=c('playerid'),na_matches="never",relationship = "many-to-many") 
 aprospectH <- select(proth,Player=Player.x,MLB=Team.x,Team=Team.y,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
   arrange(desc(FV),desc(DFL))
-protp <- left_join(pplist,AllP,by=c('playerid'),na_matches="never") 
+protp <- left_join(pplist,AllP,by=c('playerid'),na_matches="never",relationship = "many-to-many") 
 aprospectP <- select(protp,Player=Player.x,MLB=Team.x,Team=Team.y,,Current.Level=mlevel,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
   arrange(desc(FV),desc(DFL))
 
@@ -649,7 +649,7 @@ res <- pullTeam('Neon Tetras')[[1]]
 dH <- AllH %>% select(playerid,pDFL,Team)
 dP <- AllP %>% select(playerid,pDFL,Team)
 dollars <- bind_rows(dH,dP)
-injOrig <- left_join(injOrig,dollars)
+injOrig <- left_join(injOrig,dollars,relationship = "many-to-many")
 injOrig$pDFL[is.na(injOrig$pDFL)] <- 0
 injOrig$Team[is.na(injOrig$Team)] <- 'Free Agent'
 #injOrig <- injOrig %>% filter(Team=='Free Agent') %>% select(-X,-birth_year,-Team,-playerid)
@@ -731,7 +731,7 @@ newSlump <- bind_rows(newSlump,newSlump2) %>% arrange(Team)
 problems <- bind_rows(newHurt, newSlump) %>% arrange(Team)
 
 #Combing pvp, pvm with points
-catSummary <- left_join(myscores,pvResults) %>% arrange(-opportunity)
+catSummary <- left_join(myscores,pvResults,relationship = "many-to-many") %>% arrange(-opportunity)
 
 # See if top 17 changes to strength of team predictions
 
@@ -805,6 +805,9 @@ if (asnum == 0) {
   dbWriteTable(conn,"Trending",alltrend,append=TRUE)
 }
 
+trending <- dbGetQuery(conn, "SELECT * FROM Trending")
+trending$Date <- as.Date(trending$Date)
+trending$hotscore <- as.numeric(trending$hotscore)
 
 
 
