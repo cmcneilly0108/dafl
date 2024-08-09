@@ -33,7 +33,7 @@ fd <- file.info("../steamerHROS.json")$mtime
 cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
 #dt <- 9
-if (dt > 10) {
+if (dt > 0) {
   system("bash ../scripts/pullSteamerROS.sh")
   system("bash ../scripts/pullBatXROS.sh")
   system("bash ../scripts/pullSteamer.sh")
@@ -450,37 +450,37 @@ TopLeft <- filter(FAH,Pos %in% c('3B','2B'),pDFL>0) %>% arrange(Pos,-pDFL,-pSGP)
 # Category Targets
 # How did I decide on the weights???
 
-res <- pvCat(cstand$HR,0.2,as.numeric(filter(cstand,Team=='Cricket')$HR))
+res <- pvCat(cstand$HR,0.3,as.numeric(filter(cstand,Team=='Cricket')$HR))
 pvResults <- data.frame(category='HR',pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 
 
-res <- pvCat(cstand$RBI,0.2,as.numeric(filter(cstand,Team=='Cricket')$RBI))
+res <- pvCat(cstand$RBI,0.3,as.numeric(filter(cstand,Team=='Cricket')$RBI))
 pvResults2 <- data.frame(category='RBI', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$SB,0.2,as.numeric(filter(cstand,Team=='Cricket')$SB))
+res <- pvCat(cstand$SB,0.3,as.numeric(filter(cstand,Team=='Cricket')$SB))
 pvResults2 <- data.frame(category='SB', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$R,0.2,as.numeric(filter(cstand,Team=='Cricket')$R))
+res <- pvCat(cstand$R,0.3,as.numeric(filter(cstand,Team=='Cricket')$R))
 pvResults2 <- data.frame(category='R', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
 
 
-res <- pvCat(cstand$W,0.2,as.numeric(filter(cstand,Team=='Cricket')$W))
+res <- pvCat(cstand$W,0.3,as.numeric(filter(cstand,Team=='Cricket')$W))
 pvResults2 <- data.frame(category='W', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$HD,0.2,as.numeric(filter(cstand,Team=='Cricket')$HD))
+res <- pvCat(cstand$HD,0.3,as.numeric(filter(cstand,Team=='Cricket')$HD))
 pvResults2 <- data.frame(category='HD', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$S,0.2,as.numeric(filter(cstand,Team=='Cricket')$S))
+res <- pvCat(cstand$S,0.3,as.numeric(filter(cstand,Team=='Cricket')$S))
 pvResults2 <- data.frame(category='S', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
-res <- pvCat(cstand$K,0.2,as.numeric(filter(cstand,Team=='Cricket')$K))
+res <- pvCat(cstand$K,0.3,as.numeric(filter(cstand,Team=='Cricket')$K))
 pvResults2 <- data.frame(category='K', pvp = res[[1]],pvm = res[[2]],opportunity=res[[3]])
 pvResults <- rbind(pvResults,pvResults2)
 
@@ -490,7 +490,8 @@ pvResults <- arrange(pvResults,-opportunity)
 # Where to focus time
 df <- cstand %>% arrange(W)
 num <- which(df$Team=='Cricket')
-myscores <- data_frame(category='W',score = num)
+#myscores <- data_frame(category='W',score = num)
+myscores <- tibble(category='W',score = num)
 df <- cstand %>% arrange(K)
 num <- which(df$Team=='Cricket')
 myscores <- myscores %>% add_row(category='K',score=num)

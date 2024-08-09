@@ -10,7 +10,7 @@ teams <- sort(unique(RTot$Team))
 
 shinyServer(function(input, output,session) {
 
-# Talent View
+# Standings
   dtStandFull <- datatable(dstandfull,options = list(pageLength = 20))
   #    formatCurrency(c('hDFL', 'piDFL','tDFL')) %>% formatRound('zScore',2)
   output$StandFull <- DT::renderDataTable({ dtStandFull })
@@ -23,7 +23,7 @@ shinyServer(function(input, output,session) {
     formatCurrency(c('hDFL', 'piDFL','tDFL')) %>% formatRound('zScore',2)
   output$RTotTop <- DT::renderDataTable({ dtRTotTop })
   
-# Hotness by Team
+# By Team
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
   
@@ -39,7 +39,7 @@ shinyServer(function(input, output,session) {
     formatRound(c('pW','pSO','pSV','pHLD','Age'),0) })
   output$TeamP <- DT::renderDataTable({ dtTeamP() })
   
-# Ranked Players
+# By Position
   topPos <- reactive({
     ifelse(input$fa == TRUE,ffh <- filter(AllH,Team=='Free Agent'),ffh <- AllH)
     ifelse(input$fa == TRUE,ffp <- filter(AllP,Team=='Free Agent'),ffp <- AllP)
@@ -67,7 +67,7 @@ shinyServer(function(input, output,session) {
   #output$topPlayers <- DT::renderDataTable({ dtRTot })
   output$topPlayers <- DT::renderDataTable({topPos()})
   
-# Closer Detail
+# Reliever Detail
   dtrrcResults <- datatable(rrcResults,options = list(pageLength = 20), filter='top', escape=FALSE) %>% 
     formatRound(c('pSGP','hotscore','LVG','pERA','pK/9','pBB/9'),3) %>% formatCurrency('pDFL') %>%
     formatRound(c('pW','pSO','pSV','pHLD'),0)

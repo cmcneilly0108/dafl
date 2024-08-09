@@ -190,9 +190,9 @@ noidmatch <- rbind(noidmatchfg,noidmatchfgpros)
 #noidmatch <- noidmatchfg
 
 sameName <- inner_join(noidmatch,mymaster,by=c('Player','MLB'))
-repl <- select(sameName,playerid = playerid.x,newid = playerid.y)
+repl <- select(sameName,playerid = playerid.y,newid = playerid.x)
 # remove rows if newid is an 'sa' number
-repl <- filter(repl,str_starts(newid,'sa'))
+#repl <- filter(repl,str_starts(newid,'sa'))
 
 mymaster <- left_join(mymaster,repl)
 mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)

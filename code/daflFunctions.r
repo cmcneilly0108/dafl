@@ -1319,5 +1319,6 @@ getFGScouts <- function(fn) {
   df <- read_json(fn,simplifyVector = TRUE)
   rr <- df[[1]]
   rrc <- rr %>% rename(Player = playerName,playerid = PlayerId)
+  rrc <- rrc %>% filter(!is.na(playerid))
 }
 

@@ -12,7 +12,7 @@ shinyUI(
     # “pulse”, “sandstone”, “simplex”, “sketchy”, “slate”, “solar”, “spacelab”, “superhero”, “united”, “yeti”
     theme = bs_theme(bootswatch = "flatly"),
     "DAFL Evaluator, v2.0",
-    tabPanel("Talent View",
+    tabPanel("Standings",
              tabsetPanel(
                type = 'tabs',
                tabPanel("Overall Standings",DT::dataTableOutput("StandFull")),
@@ -21,7 +21,7 @@ shinyUI(
              )
     ),
     tabPanel(
-      "Hotness by Team",
+      "By Team",
       sidebarLayout(
         fluid = TRUE,
         sidebarPanel(selectizeInput('e1', 'Select Team', choices =
@@ -37,7 +37,7 @@ shinyUI(
         )
       )
     ),
-    tabPanel("Ranked Players",
+    tabPanel("By Position",
              sidebarLayout(
                sidebarPanel(selectizeInput(
                  'e3',
@@ -47,21 +47,12 @@ shinyUI(
                checkboxInput('fa','Free Agents Only'),value=TRUE,width = 1),
                mainPanel(DT::dataTableOutput("topPlayers"))
              )),
-    tabPanel("Closer Detail",
+    tabPanel("Reliever Detail",
              mainPanel(
                h2("Roster Resource"),
                DT::dataTableOutput("rrcResults")
              )
     ),
-    tabPanel("LC Trends",
-             mainPanel(
-               tabsetPanel(
-                 type = 'tabs',
-                 tabPanel('Standings', plotOutput("g1")),
-                 tabPanel('Hitting', plotOutput("g2")),
-                 tabPanel('Pitching', plotOutput("g3"))
-               )
-             )),
     tabPanel(
       "Player Trends",
       selectizeInput(
@@ -74,6 +65,15 @@ shinyUI(
       plotlyOutput("lcgraph",height="800px")
       
     ),
+    tabPanel("LC Trends",
+             mainPanel(
+               tabsetPanel(
+                 type = 'tabs',
+                 tabPanel('Standings', plotOutput("g1")),
+                 tabPanel('Hitting', plotOutput("g2")),
+                 tabPanel('Pitching', plotOutput("g3"))
+               )
+             )),
     tabPanel("Category Status",
              mainPanel(
                h2("Points by Category"),
