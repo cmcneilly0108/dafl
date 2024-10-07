@@ -58,7 +58,8 @@ shinyUI(
       selectizeInput(
         "choice",
         "Pick Player",
-        choices = trending$Player,
+#        choices = trending$Player,
+        choices = NULL,
         selected = NULL,
         multiple = TRUE
       ),

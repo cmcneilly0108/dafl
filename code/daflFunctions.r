@@ -399,23 +399,37 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
 }
 
 dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
-  #Used by docii.r
-
-
-  nhitters <- 10
-  npitchers <- 10
-
-  nteams <- 10
-  tdollars <- 1400
-
-
-  pdollars <- round(tdollars*0.5)
+  #Set parameters
+  #Used by draftGuide.r
+  #Used by protectionList.r
+  #used by inSeasonPulse.r
+  
+  # 13/12 hitters/pitchers based on rosters on 5/29/14
+  nhitters <- 8
+  npitchers <- 8
+  cap <- 100
+  # Setting for Protection and Draft - only focus on top 19 players
+  # nhitters <- 10
+  # npitchers <- 9
+  # cap <- 254
+  
+  nteams <- 14
+  tdollars <- nteams * (cap +dadj) * ratio
+  
+  # What happens when we lop of the last 5 spots
+  # I can't remember why I'm doing this?
+  #nhitters <- 10
+  #npitchers <- 10
+  #tdollars <- tdollars - 80
+  
+  
+  pdollars <- round(tdollars*hpratio)
   hdollars <- tdollars - pdollars
-
-  thitters <- (nhitters * nteams)
-  tpitchers <- (npitchers * nteams)
+  
+  thitters <- (nhitters * nteams) + padj
+  tpitchers <- (npitchers * nteams) + padj
   ct <- 0
-
+  
   while (ct < 6) {
     toph <- head(ihitters,thitters)
     topp <- head(ipitchers,tpitchers)
@@ -427,7 +441,7 @@ dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,pad
     sdSB <- sd(toph$pSB,na.rm = TRUE)
     mRBI <- mean(toph$pRBI,na.rm = TRUE)
     sdRBI <- sd(toph$pRBI,na.rm = TRUE)
-
+    
     mW <- mean(topp$pW,na.rm = TRUE)
     sdW <- sd(topp$pW,na.rm = TRUE)
     mSO <- mean(topp$pSO,na.rm = TRUE)
@@ -437,33 +451,31 @@ dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,pad
     sdHLD <- ifelse(sdHLD==0,1,sdHLD)
     mSV <- mean(topp$pSV,na.rm = TRUE)
     sdSV <- sd(topp$pSV,na.rm = TRUE)
-
+    
     mAvg <- mean(toph$pAVG,na.rm = TRUE)
     sdAvg <- sd(toph$pAVG,na.rm = TRUE)
     ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
     toph <- mutate(toph,xH = pH-(pAB * mAvg))
     mxH <- mean(toph$xH,na.rm = TRUE)
     sdxH <- sd(toph$xH,na.rm = TRUE)
-
+    
     mERA <- mean(topp$pERA,na.rm = TRUE)
     sdERA <- sd(topp$pERA,na.rm = TRUE)
     ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
     topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
     mxER <- mean(topp$xER,na.rm = TRUE)
     sdxER <- sd(topp$xER,na.rm = TRUE)
-
+    
     ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
                        zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
-#    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+zxH)
-    ihitters <- mutate(ihitters,zScore=zHR+zRBI+zSB+zxH)
+    ihitters <- mutate(ihitters,zScore=zHR+zRBI+zSB+(1.0*zxH))
     ihitters <- arrange(ihitters,-zScore)
-
+    
     ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
                         zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
-#    ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.5*zHLD)+zSV+zxER)
     ipitchers <- mutate(ipitchers,zScore=zW+zSO+zSV+zxER)
     ipitchers <- arrange(ipitchers,-zScore)
-
+    
     ct <- ct + 1
   }
   # Add the total thitter value to everyone
@@ -472,7 +484,7 @@ dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,pad
   # Add pitchers
   ipitchers <- head(ipitchers,tpitchers)
   ipitchers$zScore <- ipitchers$zScore - last(ipitchers$zScore)
-
+  
   # remove protected players
   if (nrow(prot)>0) {
     ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
@@ -490,35 +502,13 @@ dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,pad
   ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
   tvalue <- sum(ip2$zScore)
   ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
-
+  
   bhitters <- select(ih2,playerid,zDFL)
   bpitchers <- select(ip2,playerid,zDFL)
-
+  
   list(bhitters,bpitchers)
 }
-# 
-# postDollars <- function(ihitters,ipitchers) {
-#   # GENERATE DFL dollar values for all players
-#   #Set parameters
-#   nteams <- 16
-#   tdollars <- nteams * (260 + 75)
-#   # 66/34 split - just guessing
-#   # books say 69/31, but that seems high for DAFL
-#   pdollars <- round(tdollars*hpratio)
-#   hdollars <- tdollars - pdollars
-#   # 13/12 hitters/pitchers based on rosters on 5/29/14
-# 
-#   # Only value a certain number of players
-#   hitSGP <- round(sum(ihitters$pSGP))
-#   pitSGP <- round(sum(ipitchers$pSGP))
-#   hsgpd <- hdollars/hitSGP
-#   psgpd <- pdollars/pitSGP
-#   # Create dollar amounts
-#   ihitters$pDFL <- ihitters$pSGP * hsgpd
-#   ipitchers$pDFL <- ipitchers$pSGP * psgpd
-# 
-#   list(ihitters,ipitchers)
-# }
+
 
 calcInflation <- function(prot) {
   # GENERATE DFL dollar values for all players

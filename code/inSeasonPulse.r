@@ -33,7 +33,7 @@ fd <- file.info("../steamerHROS.json")$mtime
 cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
 #dt <- 9
-if (dt > 0) {
+if (dt > 10) {
   system("bash ../scripts/pullSteamerROS.sh")
   system("bash ../scripts/pullBatXROS.sh")
   system("bash ../scripts/pullSteamer.sh")

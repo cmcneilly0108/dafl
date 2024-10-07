@@ -80,7 +80,7 @@ shinyServer(function(input, output,session) {
 
 # Player Trends
 #  htrend <- read.csv("./hTrend.csv")
-
+  updateSelectizeInput(session, 'choice', choices = trending$Player, server=TRUE)
   output$lcgraph <- renderPlotly({
     plot_ly(trending, x = ~Date, y = ~hotscore)  %>%
       filter(Player %in% input$choice) %>%

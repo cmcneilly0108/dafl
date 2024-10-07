@@ -4,13 +4,22 @@
 
 # Create accrued file
 #   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
-#   2019Accrued.csv
+#   2024Accrued.csv
 # Trades file!
-#   https://dafl.baseball.cbssports.com/transactions/2023/all/trades
+#   https://dafl.baseball.cbssports.com/transactions/all/trades/
 #   2019trades.csv
 # Week 1 rosters
 #   https://dafl.baseball.cbssports.com/stats/stats-main/team:all/period-1:p/salary%20info/
+#   data/2024DraftResults.csv
 #   !!!Need to manually fix Avail column!!!
+# Injuries file
+#   all transactions file?
+#   https://dafl.baseball.cbssports.com/transactions/all/all/
+#   2024all.csv 
+# Copy over 2024ProtectionLists.csv to data/ folder
+#   Change team names to new names!
+# Draftguide.xlsx
+#   Add year to draft guide file
 
 library("openxlsx")
 library("stringr")
@@ -58,7 +67,7 @@ getWeek1 <- function(fn) {
   sal <- addPlayerid(sal) %>% select(playerid,Team) %>% distinct()
 }
 
-year <- "2023"
+year <- "2024"
 
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
@@ -137,12 +146,14 @@ pitchers$asrc <- coalesce(pitchers$asrc,pitchers$dft,"faab")
 trades <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
 
 # new - need to filter for only 'Traded' rows
-trades <- filter(trades,str_detect(Players,'Traded'))
+#trades <- filter(trades,str_detect(Players,'Traded'))
 
-trades <- cSplit(trades,"Players",sep="\n",direction="long")
-trades$Player <- unlist(lapply(trades$Players,swapName3))
+# BUG - split no longer works
+#trades <- cSplit(trades,"Players",sep="\n",direction="long")
+#trades2 <- cSplit(trades,"Players",sep="#",direction="long",drop=FALSE)
+#trades$Player <- unlist(lapply(trades$Players,swapName3))
 
-trades$fTeam <- unlist(lapply(trades$Players,tradeFrom))
+#trades$fTeam <- unlist(lapply(trades$Players,tradeFrom))
 trades <- select(trades,Team,Player,Traded=Effective,fTeam)
 
 # Filter again to remove Benched and Moved rows
@@ -283,3 +294,4 @@ ncpp <- filter(pitchers,Team=="Natural Catching Position")
 
 nhh <- filter(hitters,Team=="Nacho Helmet")
 nhp <- filter(pitchers,Team=="Nacho Helmet")
+
