@@ -3,6 +3,7 @@
 
 library("openxlsx")
 library("stringr")
+library("stringi")
 library("dplyr")
 library("XML")
 library("ggplot2")
@@ -21,7 +22,7 @@ source("./daflFunctions.r")
 ### Set variables ###
 
 
-aWeek <- as.integer((as.integer(today() - as.Date("2024-03-31"))+1)/7) + 1
+aWeek <- as.integer((as.integer(today() - as.Date("2025-03-28"))+1)/7) + 1
 tWeeks <-30
 #computer <- 'mac'
 #computer <- 'windows'
@@ -68,15 +69,15 @@ twostarts <- get2starts()
 standings <- read.csv("../DAFLWeeklyStandings.csv",stringsAsFactors=FALSE)
 standings$Rank <- as.numeric(str_extract(standings$Rank,'[0-9]+'))
 #Update DAFL standings file
-dstand <- read.csv('../overall.csv',stringsAsFactors=FALSE,nrows=14) %>% select(Rank,Team,Total)
-ddeets <- read.csv('../overall.csv',stringsAsFactors=FALSE,header=FALSE,skip=16)
+dstand <- read.csv('../overall.csv',stringsAsFactors=FALSE,nrows=13) %>% select(Rank,Team,Total)
+ddeets <- read.csv('../overall.csv',stringsAsFactors=FALSE,header=FALSE,skip=15)
 ddeets <- select(ddeets,-V3,-V4,-V5)
 # Need to convert format of columns
 
-dstandfull <- read.csv('../overall.csv',stringsAsFactors=FALSE,nrows=14) %>% select(-Rank,-X)
+dstandfull <- read.csv('../overall.csv',stringsAsFactors=FALSE,nrows=13) %>% select(-Rank,-X)
 
 # Warning error here - look it up!
-dfl <- split(ddeets, (0:nrow(ddeets) %/% 15))
+dfl <- split(ddeets, (0:nrow(ddeets) %/% 14))
 dfl <- lapply(dfl,function(x) {colnames(x) = x[1, ]
                                x <- x[-1,]
                                x[[2]] <- as.numeric(x[[2]])
@@ -178,7 +179,7 @@ pitchers <- distinct(pitchers,playerid, .keep_all = TRUE)
 AllP <- inner_join(Allpitchers,pitchers,by=c('playerid'),copy=FALSE)
 AllP <- left_join(AllP,ytdp2,by=c('playerid'),copy=FALSE,relationship = "many-to-many")
 # give 50/50 weight to 2weeks/ytd
-AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-aWeek)*.5)+((yHLD/aWeek)*(tWeeks-aWeek)*.5)),0)
+AllP$pHLD <- with(AllP,round(((HD/2)*(tWeeks-aWeek)*.3)+((yHLD/aWeek)*(tWeeks-aWeek)*.7)),0)
 # For short season, only use current year predictions
 #AllP$pHLD <- with(AllP,round(((yHLD/aWeek)*(tWeeks-aWeek))))
 
@@ -276,7 +277,7 @@ if ((computer!='Windows') | (dt < 20))
     rename(`Pitching+`=`Pitching.`)
   
 } else {
-  rD <- rsDriver(browser="firefox",port=free_port(), 
+  rD <- rsDriver(browser="firefox",port=free_port(),phantomver = NULL,
                  chromever=NULL, verbose=F)
   remDr <- rD[["client"]]
   
@@ -392,29 +393,39 @@ RTot$zScore <- as.numeric(scale(RTot$tDFL))
 
 #hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors = FALSE) %>%
 #  rename(Player = Name,playerid = playerId)
-hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
+#hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
 #pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors = FALSE) %>%
 #  rename(Player = Name,playerid = playerId)
-pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
+#pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
+
+# Go back to manual download of files
+hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
+hplist <- hplist %>% rename(playerid = PlayerId)
+hplist <- hplist %>% filter(Hit!="")
+pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
+pplist <- pplist %>% rename(playerid = PlayerId)
+pplist <- pplist %>% filter(FB.Type!="")
+
+
 #proh <- inner_join(FAH,hplist,by=c('playerid'))
 proh <- right_join(Allhitters,hplist,by=c('playerid'),relationship = "many-to-many")
 #df$birth_year <- replace(df$birth_year,is.na(df$birth_year),2010)
 
 #prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
 #  arrange(desc(FV),desc(DFL))
-prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd,playerid) %>%
-  arrange(desc(FV),Top.100)
+prospectH <- select(proh,playerid,Player=Name,MLB=Org,Team,Pos=Pos.y,Age,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
+  arrange(desc(FV))
 prop <- right_join(Allpitchers,pplist,by=c('playerid'),relationship = "many-to-many")
-prospectP <- select(prop,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Age,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD,playerid) %>%
-  arrange(desc(FV),Top.100)
+prospectP <- select(prop,playerid,Player=Name,MLB=Org,Team,Age,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
+  arrange(desc(FV))
 
 # which prospects are taken?
 proth <- left_join(hplist,AllH,by=c('playerid'),na_matches="never",relationship = "many-to-many") 
-aprospectH <- select(proth,Player=Player.x,MLB=Team.x,Team=Team.y,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
-  arrange(desc(FV),desc(DFL))
+aprospectH <- select(proth,playerid,Player=Name,MLB=Org,Pos=Pos.y,Age=Age.x,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
+  arrange(desc(FV))
 protp <- left_join(pplist,AllP,by=c('playerid'),na_matches="never",relationship = "many-to-many") 
-aprospectP <- select(protp,Player=Player.x,MLB=Team.x,Team=Team.y,,Current.Level=mlevel,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
-  arrange(desc(FV),desc(DFL))
+aprospectP <- select(protp,playerid, Player=Name,MLB=Org,Age=Age.x,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
+  arrange(desc(FV))
 
 
 #Load Current Roster
@@ -810,7 +821,9 @@ trending <- dbGetQuery(conn, "SELECT * FROM Trending")
 trending$Date <- as.Date(trending$Date)
 trending$hotscore <- as.numeric(trending$hotscore)
 
-
+# Drop the rows before the season begins!
+#res <- dbExecute(conn, "DELETE FROM Trending")
+#res <- dbGetQuery(conn, "SELECT count(*) FROM Trending")
 
 
 
@@ -836,3 +849,4 @@ prospectH <- prospectH %>% select(-fg,-playerid)
 prospectP <- prospectP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
 prospectP$Player <- prospectP$fg
 prospectP <- prospectP %>% select(-fg,-playerid)
+

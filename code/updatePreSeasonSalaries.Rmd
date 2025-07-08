@@ -24,8 +24,8 @@ library("dplyr")
 
 source("./daflFunctions.r")
 
-year <- "2024"
-last <- "2023"
+year <- "2025"
+last <- "2024"
 ```
 
 Step 1:  Load in last year's final roster file

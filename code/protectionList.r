@@ -14,9 +14,9 @@
 
 # Eury Perez - not protected!  BUG!
 
-computer <- 'mac'
+#computer <- 'mac'
 #computer <- 'windows'
-
+computer <- Sys.info()['sysname']
 
 library("openxlsx")
 library("stringr")
@@ -46,13 +46,11 @@ if (dt > 10) {
   }
 
 #Load steamer data
-#hitters <- read.fg(str_c("../steamerH",cyear,".csv"))
 #hitters <- read.fg(str_c("../steamerH",cyear,".json"))
 hitters <- read.fg(str_c("../atcH",cyear,".json"))
 #hitters <- read.fg("atcH2020.csv")
 hitters$pSGP <- hitSGP(hitters)
 
-#pitchers <- read.fg(str_c("../steamerP",cyear,".csv"))
 pitchers <- read.fg(str_c("../atcP",cyear,".json"))
 #pitchers <- read.fg(str_c("../steamerP",cyear,".json"))
 #pitchers <- read.fg("atcP2020.csv")
@@ -61,14 +59,14 @@ pitchers$pSGP <- pitSGP(pitchers)
 
 
 #official file
-rosters <- read.csv(str_c("../",cyear,"Rosters2.csv"), encoding="UTF-8")
+rosters <- read.csv(str_c("../",cyear,"Rosters.csv"), encoding="UTF-8")
 
 
 #split into P,H tables
 rHitters <- filter(rosters,Pos != 'P' & Pos != 'RP')
 rPitchers <- filter(rosters,Pos == 'P' | Pos == 'RP')
 
-nteams <- 14
+nteams <- 13
 tdollars <- nteams * 260
 pdollars <- round(tdollars*hpratio)
 hdollars <- tdollars - pdollars
@@ -121,13 +119,25 @@ AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 
 # Injuries data
-if (computer=='mac')
+if ((computer!='Windows') | (dt < 20))
 {
   injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
   
+#  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
+#    rename(`Pitching+`=`Pitching.`)
+  
 } else {
+  rD <- rsDriver(browser="firefox",port=free_port(), 
+                 chromever=NULL, verbose=F)
+  remDr <- rD[["client"]]
+  
   injOrig <- getInjuriesRS()
+  #stuff <- getStuffRS()
+  
+  remDr$close()
+  system("taskkill /im java.exe /f")
+  
 }
 
 inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)

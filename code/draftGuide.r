@@ -22,8 +22,8 @@ source("./daflFunctions.r")
 
 src <- 'atc'
 #src <- 'steamer'
-computer <- 'mac'
-#computer <- 'windows'
+#computer <- 'mac'
+computer <- 'Windows'
 
 
 #positionElig <- str_c(as.character(cyear-1),'PosElig.csv',sep='')
@@ -32,7 +32,7 @@ predUpdate <- FALSE
 #predUpdate <- TRUE
 fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
-dt <- difftime(cd, fd, units = "hours")
+dt <- as.double(difftime(cd, fd, units = "hours"))
 if (dt > 14) {
   system("bash ../scripts/pullSteamer.sh")
   system("bash ../scripts/pullATC.sh")
@@ -44,7 +44,7 @@ if (dt > 14) {
 
 #official file
 protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-#protected <- read.csv("../2024fakeprotected.csv",stringsAsFactors=FALSE)
+#protected <- read.csv("../2025fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 
@@ -168,21 +168,34 @@ protected$posEl <- replace_na(protected$posEl,'P')
 AllH <- inner_join(AllH,hrank,by=c('playerid','Pos'),multiple="first")
 AllP <- inner_join(AllP,prank,by=c('playerid','Pos'),multiple="first")
 
-
+fd <- file.info(str_c("../latestInjuries.csv"))$mtime
+dt <- difftime(cd, fd, units = "hours")
 # Injuries data
-if (computer=='mac')
+if ((computer!='Windows') | (dt < 20))
 {
   injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
-
+  
+  #  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
+  #    rename(`Pitching+`=`Pitching.`)
+  
 } else {
+  rD <- rsDriver(browser="firefox",port=free_port(), 
+                 chromever=NULL, verbose=F)
+  remDr <- rD[["client"]]
+  
   injOrig <- getInjuriesRS()
+  #stuff <- getStuffRS()
+  
+  remDr$close()
+  system("taskkill /im java.exe /f")
+  
 }
 
 # Week before draft - manual download file
-injOrig <- read.xlsx("../roster-resource-download.xlsx")
-injOrig <- rename(injOrig,Player=Name,MLB=Team)
-injOrig <- injOrig %>% rename(playerid = playerId,Injury = `Injury./.Surgery`,`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury./.Surgery.Date`)
+#injOrig <- read.xlsx("../roster-resource-download.xlsx")
+#injOrig <- rename(injOrig,Player=Name,MLB=Team)
+#injOrig <- injOrig %>% rename(playerid = playerId,Injury = `Injury./.Surgery`,`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury./.Surgery.Date`)
 
 
 inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
@@ -218,16 +231,23 @@ lc <- left_join(lc,inj,by=c('Player'))
 
 
 #prospects from FanGraphs
-hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
-pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
+#hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
+#pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
+
+# Go back to manual download of files
+hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
+hplist <- hplist %>% rename(playerid = PlayerId)
+pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
+pplist <- pplist %>% rename(playerid = PlayerId)
+
 #proh <- right_join(AllH,hplist,by=c('playerid'))
 proh <- inner_join(AllH,hplist,by=c('playerid'))
-proh <- proh %>% filter(cFV > 45)
-prospectH <- select(proh,Player=Player.y,MLB=Team,Current.Level=mlevel,Pos,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
+#proh <- proh %>% filter(cFV > 45)
+prospectH <- select(proh,Player=Name,MLB=Org,Pos=Pos.y,Age=Age.x,DFL=pDFL,ADP=pADP,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
   arrange(desc(FV))
 #prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
-prop <- inner_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
-prospectP <- select(prop,Player=Player.y,MLB=Team,Current.Level=mlevel,Age=Age.x,DFL=pDFL,ADP=pADP,FV=cFV,Top.100=Ovr_Rank,FB,SL,CB,CH,CMD) %>%
+prop <- inner_join(AllP,pplist,by=c('playerid'))
+prospectP <- select(prop,Player=Name,MLB=Org,Age=Age.x,DFL=pDFL,ADP=pADP,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
   arrange(desc(FV))
 
 # Roster Resource Closer report
@@ -370,14 +390,14 @@ ptots$group <- 'pitching'
 #currentSummary <- inner_join(currentSummary,ptots)
 currentSummary <- bind_rows(htots,ptots) %>% arrange(group,-salleft) %>% select(Team,group,needed,salleft)
 
-hitterTotal <- 14*13
-pitcherTotal <- 14*12
+hitterTotal <- 13*13
+pitcherTotal <- 13*12
 hitterTaken <- nrow(rhitters)
 pitcherTaken <- nrow(rpitchers)
 hitterSpent <- sum(rhitters$Salary)
 pitcherSpent <- sum(rpitchers$Salary)
-hitterMoneyTotal <- 14*(260*(1-hpratio))
-pitcherMoneyTotal <- 14*(260*hpratio)
+hitterMoneyTotal <- 13*(260*(1-hpratio))
+pitcherMoneyTotal <- 13*(260*hpratio)
 rhitters$pDFL <- rhitters$pDFL %>% replace_na(0)
 hpdfl <- sum(rhitters$pDFL)
 ppdfl <- sum(rpitchers$pDFL)
@@ -777,3 +797,4 @@ generateGeneration <- function(slist,msal) {
 # mt4 <- left_join(myteam,AllH)
 # sum(mt2$psalary)
 pfix <- pedf %>% filter(str_starts(playerid,"cbs"))
+

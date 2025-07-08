@@ -9,6 +9,10 @@ Create new master file with the following fields:
 - birth_year
 - cbs_name
 
+Bugs to Fix
+   - Luis Moreno - there are two that both play for the Mets, some matching on name only breaks it
+   - Prospects that get called up - is fixed by manually downloading new prospect files from FG
+      - This was introduced by the daily scrape no longer working
 
 
 ```{r}
@@ -19,12 +23,13 @@ library(stringr)
 library("lubridate")
 library(rvest)
 library("jsonlite")
+library(xml2)
 
 #library(Lahman)
 
 source('./daflFunctions.r')
 
-year <- '2023'
+year <- '2025'
 
 getAge <- function(playerid) {
   print(playerid)
@@ -110,7 +115,7 @@ Have to convert Team to MLB
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
 
-fgh <- read_json('../steamerH2024.json',simplifyVector = TRUE)
+fgh <- read_json('../steamerH2025.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgh)) {
 } else {
   if ("playerids" %in% colnames(fgh)) {
@@ -123,7 +128,7 @@ fgh <- select(fgh,playerid,Player=PlayerName,MLB=Team)
 
 #fgh <- select(fgh,playerid,Player,MLB=Team)
 
-fgp <- read_json('../steamerP2024.json',simplifyVector = TRUE)
+fgp <- read_json('../steamerP2025.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgp)) {
 } else {
   if ("playerids" %in% colnames(fgp)) {
@@ -152,13 +157,22 @@ Add the prospects!!!
 
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
-fgh <- getFGScouts("../fangraphs-the-board-dataH.json")
-fgh <- select(fgh,playerid,Player,MLB=Team)
 
-fgp <- getFGScouts("../fangraphs-the-board-dataP.json")
-fgp <- select(fgp,playerid,Player,MLB=Team)
+hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
+fgh <- hplist %>% rename(playerid = PlayerId)
+fgh <- select(fgh,playerid,Player=Name,MLB=Org)
+pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
+fgp <- pplist %>% rename(playerid = PlayerId)
+fgp <- select(fgp,playerid,Player=Name,MLB=Org)
+
+#fgh <- getFGScouts("../fangraphs-the-board-dataH.json")
+#fgh <- select(fgh,playerid,Player,MLB=Team)
+
+#fgp <- getFGScouts("../fangraphs-the-board-dataP.json")
+#fgp <- select(fgp,playerid,Player,MLB=Team)
 
 fgraphsp <- bind_rows(fgh,fgp)
+fgraphsp <- fgraphsp %>% filter(playerid != "")
 
 # This is for ATC files
 #mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
@@ -239,11 +253,12 @@ nonamecbs <- anti_join(cbs,my,by=c('Player'))
 # Need to create new rows - need playerid, Player, birth_date, cbs_name, Pos, MLB
 nonamecbs <- nonamecbs %>% mutate(playerid=str_c("cbs",Player,MLB),birth_year=NA,cbs_name=Player)
 nonamecbs <- select(nonamecbs,playerid,Player,birth_year,cbs_name,Pos,MLB)
+nonamecbs <- nonamecbs %>% filter(Player != "")
 mymaster <- bind_rows(mymaster,nonamecbs)
 ```
 
 
-remove any duplicates
+remove any duplicates, or empty playerids
 ```{r}
 
 #mymaster <- unique(mymaster)
@@ -251,6 +266,8 @@ remove any duplicates
 mymaster <- mymaster %>% distinct(playerid, .keep_all = TRUE)
 
 mymaster <- mymaster %>% distinct(Player, MLB, .keep_all = TRUE)
+
+mymaster <- mymaster %>% filter(playerid != "")
 
 ```
 
@@ -274,6 +291,9 @@ write.csv(mymaster,"../mymaster.csv")
 Summary statistics go here
 
 There are 2 Luis Moreno's on the NYM minor leagues and it is causing file problems
+
+07/07/25 - 70 prospects don't have any FG ids.  I'm deleting them for now.
+
 ```{r}
 print(str_c("New ids from fangraphs = ",nrow(noidmatchfg)))
 print(str_c("Prospects: Combine rows (player+mlb) = ",nrow(noidmatchfgpros)))
@@ -293,7 +313,7 @@ ct <- 1
 noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
 nrow(noby)
 
-while ((ct < 70) & (nrow(noby) > 0)) {
+while ((ct < 80) & (nrow(noby) > 0)) {
   ct <- ct + 1
   noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
   print(nrow(noby))

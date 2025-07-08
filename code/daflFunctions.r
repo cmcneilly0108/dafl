@@ -1,8 +1,8 @@
 # # TBD
 # # Improve holds projections?
 # 
-cyear <- "2024"
-lastyear <- "2023"
+cyear <- "2025"
+lastyear <- "2024"
 auctionROI <- 0.89
 hpratio <- .38
 
@@ -302,7 +302,7 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   # npitchers <- 9
   # cap <- 254
   
-  nteams <- 14
+  nteams <- 13
   tdollars <- nteams * (cap +dadj) * ratio
 
   # What happens when we lop of the last 5 spots
@@ -513,7 +513,7 @@ dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,pad
 calcInflation <- function(prot) {
   # GENERATE DFL dollar values for all players
   #Set parameters
-  nteams <- 16
+  nteams <- 13
   tdollars <- nteams * 260
   # 66/34 split - just guessing
   # books say 69/31, but that seems high for DAFL
@@ -1083,10 +1083,11 @@ getInjuriesRS <- function() {
 }
 
 getStuffRS <- function() {
-  remDr$navigate("https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&type=36&startdate=&enddate=&month=0&season1=2024&season=2024&pagenum=1&pageitems=2000000000&qual=10")
+  remDr$navigate("https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&type=36&startdate=&enddate=&month=0&season1=2025&season=2025&pagenum=1&pageitems=2000000000&qual=10")
   
   html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
   stuff <- html[[16]]
+  #stuff$Name <- stri_enc_toascii(stuff$Name)
   stuff <- stuff %>% select(Player=Name,MLB=Team,`Pitching+`)
   
   write.csv(stuff,"../latestStuff.csv")
