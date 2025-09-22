@@ -9,10 +9,6 @@ Create new master file with the following fields:
 - birth_year
 - cbs_name
 
-Bugs to Fix
-   - Luis Moreno - there are two that both play for the Mets, some matching on name only breaks it
-   - Prospects that get called up - is fixed by manually downloading new prospect files from FG
-      - This was introduced by the daily scrape no longer working
 
 
 ```{r}
@@ -160,9 +156,11 @@ Add the prospects!!!
 
 hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
 fgh <- hplist %>% rename(playerid = PlayerId)
+#fgh <- hplist 
 fgh <- select(fgh,playerid,Player=Name,MLB=Org)
 pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
 fgp <- pplist %>% rename(playerid = PlayerId)
+#fgp <- pplist
 fgp <- select(fgp,playerid,Player=Name,MLB=Org)
 
 #fgh <- getFGScouts("../fangraphs-the-board-dataH.json")
@@ -172,7 +170,6 @@ fgp <- select(fgp,playerid,Player=Name,MLB=Org)
 #fgp <- select(fgp,playerid,Player,MLB=Team)
 
 fgraphsp <- bind_rows(fgh,fgp)
-fgraphsp <- fgraphsp %>% filter(playerid != "")
 
 # This is for ATC files
 #mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
@@ -253,7 +250,6 @@ nonamecbs <- anti_join(cbs,my,by=c('Player'))
 # Need to create new rows - need playerid, Player, birth_date, cbs_name, Pos, MLB
 nonamecbs <- nonamecbs %>% mutate(playerid=str_c("cbs",Player,MLB),birth_year=NA,cbs_name=Player)
 nonamecbs <- select(nonamecbs,playerid,Player,birth_year,cbs_name,Pos,MLB)
-nonamecbs <- nonamecbs %>% filter(Player != "")
 mymaster <- bind_rows(mymaster,nonamecbs)
 ```
 
@@ -291,9 +287,6 @@ write.csv(mymaster,"../mymaster.csv")
 Summary statistics go here
 
 There are 2 Luis Moreno's on the NYM minor leagues and it is causing file problems
-
-07/07/25 - 70 prospects don't have any FG ids.  I'm deleting them for now.
-
 ```{r}
 print(str_c("New ids from fangraphs = ",nrow(noidmatchfg)))
 print(str_c("Prospects: Combine rows (player+mlb) = ",nrow(noidmatchfgpros)))
