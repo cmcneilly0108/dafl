@@ -14,6 +14,7 @@ library("xml2")
 library("rvest")
 library("jsonlite")
 library("RSelenium")
+library("wdman")
 library("netstat")
 library("RSQLite")
 
@@ -25,8 +26,8 @@ source("./daflFunctions.r")
 aWeek <- as.integer((as.integer(today() - as.Date("2025-03-28"))+1)/7) + 1
 tWeeks <-30
 #computer <- 'mac'
-#computer <- 'windows'
-computer <- Sys.info()['sysname']
+computer <- 'Windows'
+#computer <- Sys.info()['sysname']
 
 
 # Update data files
@@ -269,6 +270,7 @@ cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
 #dt <- 9
 if ((computer!='Windows') | (dt < 20))
+#if (computer!='Windows')
 {
   injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
@@ -277,15 +279,61 @@ if ((computer!='Windows') | (dt < 20))
     rename(`Pitching+`=`Pitching.`)
   
 } else {
-  rD <- rsDriver(browser="firefox",port=free_port(),phantomver = NULL,
-                 chromever=NULL, verbose=F)
-  remDr <- rD[["client"]]
-  
-  injOrig <- getInjuriesRS()
-  stuff <- getStuffRS()
+  # Clean up any leftover selenium/geckodriver processes from previous runs
+  tryCatch({
+    system("pkill -f 'selenium.*4567' 2>/dev/null || true")
+    system("pkill -f 'geckodriver.*4567' 2>/dev/null || true")
+  }, error = function(e) {})
 
-  remDr$close()
-  system("taskkill /im java.exe /f")
+  Sys.sleep(1)
+
+  # Wrap RSelenium in error handling to ensure cleanup
+  tryCatch({
+    # Ensure latest GeckoDriver is available via wdman
+    gDrv <- wdman::gecko(version = "latest")
+
+    # Set up Firefox to run in headless mode (works when screen is locked)
+    rD <- rsDriver(browser="firefox",
+                   port=4567L,
+                   phantomver = NULL,
+                   geckover="latest",
+                   extraCapabilities = list(
+                     "moz:firefoxOptions" = list(
+                       args = list('--headless', '--width=1920', '--height=1080')
+                     )
+                   ),
+                   verbose=T)
+    remDr <<- rD[["client"]]
+
+    injOrig <- getInjuriesRS()
+    stuff <- getStuffRS()
+
+  }, error = function(e) {
+    cat("Error in RSelenium block:", e$message, "\n")
+    # Cleanup even on error
+    tryCatch({
+      if(exists("remDr")) remDr$close()
+    }, error = function(e2) {})
+    tryCatch({
+      if(exists("rD")) rD$server$stop()
+    }, error = function(e2) {})
+    stop(e)  # Re-throw the error after cleanup
+  }, finally = {
+    # Always run cleanup
+    tryCatch({
+      if(exists("remDr")) remDr$close()
+    }, error = function(e) {})
+
+    tryCatch({
+      if(exists("rD")) rD$server$stop()
+    }, error = function(e) {})
+
+    # Force kill any remaining selenium/geckodriver processes
+    tryCatch({
+      system("pkill -f 'selenium.*4567' 2>/dev/null || true")
+      system("pkill -f 'geckodriver.*4567' 2>/dev/null || true")
+    }, error = function(e) {})
+  })
   
 }
 

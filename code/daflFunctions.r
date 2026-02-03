@@ -1,8 +1,18 @@
 # # TBD
 # # Improve holds projections?
-# 
-cyear <- "2025"
-lastyear <- "2024"
+#
+
+# Load required libraries
+library("dplyr")
+library("stringr")
+library("lubridate")
+library("jsonlite")
+library("xml2")
+library("rvest")
+library("httr")
+
+cyear <- "2026"
+lastyear <- "2025"
 auctionROI <- 0.89
 hpratio <- .38
 
@@ -17,19 +27,19 @@ getd <- function(c) {
 
 # Skipping 2020 data since it would through off the averages
 loadPast <- function() {
-  f1 <- read.csv("../data/fs2023.csv")
+  f1 <- read.csv("../data/fs2025.csv")
   res <- genDenoms(f1)
   eras <- f1$ERA
   avgs <- f1$AVG
+  f1 <- read.csv("../data/fs2023.csv")
+  res <- rbind(res,genDenoms(f1))
+  eras <- append(eras,f1$ERA)
+  avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2022.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
   f1 <- read.csv("../data/fs2021.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2019.csv")
   res <- rbind(res,genDenoms(f1))
   eras <- append(eras,f1$ERA)
   avgs <- append(avgs,f1$AVG)
@@ -1066,19 +1076,68 @@ endRS <- function() {
 }
 
 
+# Fetch injuries from FanGraphs API (no browser needed)
+getInjuriesAPI <- function() {
+  cat("Fetching injuries from FanGraphs API...\n")
+
+  currentYear <- as.integer(format(Sys.Date(), "%Y"))
+  url <- paste0("https://www.fangraphs.com/api/roster-resource/injury-report/data?season=", currentYear)
+
+  inj <- fromJSON(url)
+  cat("Fetched", nrow(inj), "injury records for", currentYear, "\n")
+
+  # Filter out blank entries and activated players (keep only currently injured)
+  inj <- inj %>%
+    filter(!is.na(playerName),
+           playerName != "",
+           status != "Activated" | is.na(status))
+
+  cat("Filtered to", nrow(inj), "active injury records\n")
+
+  # Rename columns to match expected format
+  inj <- inj %>%
+    rename(
+      Player = playerName,
+      MLB = team,
+      playerid = playerId,
+      Injury = injurySurgery,
+      `Latest Update` = latestUpdate,
+      `Injury / Surgery Date` = date
+    ) %>%
+    select(Player, MLB, playerid, Injury, `Latest Update`, `Injury / Surgery Date`, position, status)
+
+  # Add playerid using the existing function for any missing
+  inj <- addPlayerid(inj)
+
+  write.csv(inj, "../latestInjuries.csv")
+  cat("Wrote", nrow(inj), "injuries to ../latestInjuries.csv\n")
+  inj
+}
+
+# Legacy RSelenium version (kept for reference, but getInjuriesAPI is preferred)
 getInjuriesRS <- function() {
   remDr$navigate("https://www.fangraphs.com/roster-resource/injury-report")
 
+  # Wait for page to fully load (FanGraphs uses dynamic content)
+  Sys.sleep(5)
+
   html <- remDr$getPageSource()[[1]] %>% read_html() %>% html_nodes("table") %>% html_table()
+  cat("Found", length(html), "tables on injury page\n")
+
+  # Skip header/navigation tables - may need adjustment if page structure changes
   r15 <- html[c(-1:-14)]
+  cat("Processing", length(r15), "injury tables\n")
+
   inj <- bind_rows(r15)
   inj <- distinct(inj)
-  
+  cat("Total injury records:", nrow(inj), "\n")
+
   inj <- rename(inj,Player=Name,MLB=Team)
   inj <- addPlayerid(inj)
   colnames(inj)[5] <- 'Injury'
   #colnames(inj)[10] <- 'LatestUpdate'
   write.csv(inj,"../latestInjuries.csv")
+  cat("Wrote injuries to ../latestInjuries.csv\n")
   inj
 }
 
@@ -1311,5 +1370,55 @@ getFGScouts <- function(fn) {
   rr <- df[[1]]
   rrc <- rr %>% rename(Player = playerName,playerid = PlayerId)
   rrc <- rrc %>% filter(!is.na(playerid))
+}
+
+# Claude API wrapper for AI-powered team summaries
+callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY")) {
+  if (api_key == "" || is.na(api_key)) {
+    return("Error: ANTHROPIC_API_KEY environment variable not set. Please set it with Sys.setenv(ANTHROPIC_API_KEY='your-key')")
+  }
+
+  tryCatch({
+    response <- POST(
+      url = "https://api.anthropic.com/v1/messages",
+      body = toJSON(list(
+        model = "claude-sonnet-4-5-20250929",
+        max_tokens = 2048,
+        messages = list(list(role = "user", content = prompt))
+      ), auto_unbox = TRUE),
+      add_headers(
+        `x-api-key` = api_key,
+        `anthropic-version` = "2023-06-01",
+        `content-type` = "application/json"
+      )
+    )
+
+    # Get raw response text
+    raw_text <- content(response, as = "text", encoding = "UTF-8")
+
+    # Check HTTP status
+    if (http_error(response)) {
+      return(paste("API HTTP Error:", status_code(response), "-", raw_text))
+    }
+
+    # Parse response
+    parsed <- fromJSON(raw_text)
+
+    # Check for API error in response
+    if (!is.null(parsed$error)) {
+      return(paste("API Error:", parsed$error$message))
+    }
+
+    # Extract text from response
+    if (is.data.frame(parsed$content)) {
+      return(parsed$content$text[1])
+    } else if (is.list(parsed$content)) {
+      return(parsed$content[[1]]$text)
+    } else {
+      return(paste("Unexpected response format:", raw_text))
+    }
+  }, error = function(e) {
+    paste("API Error:", e$message)
+  })
 }
 

@@ -25,7 +25,7 @@ library(xml2)
 
 source('./daflFunctions.r')
 
-year <- '2025'
+year <- '2026'
 
 getAge <- function(playerid) {
   print(playerid)
@@ -111,7 +111,7 @@ Have to convert Team to MLB
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
 
-fgh <- read_json('../steamerH2025.json',simplifyVector = TRUE)
+fgh <- read_json('../steamerH2026.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgh)) {
 } else {
   if ("playerids" %in% colnames(fgh)) {
@@ -124,7 +124,7 @@ fgh <- select(fgh,playerid,Player=PlayerName,MLB=Team)
 
 #fgh <- select(fgh,playerid,Player,MLB=Team)
 
-fgp <- read_json('../steamerP2025.json',simplifyVector = TRUE)
+fgp <- read_json('../steamerP2026.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgp)) {
 } else {
   if ("playerids" %in% colnames(fgp)) {
@@ -324,12 +324,31 @@ while ((ct < 80) & (nrow(noby) > 0)) {
 #noby <- noby %>% slice_sample(n=100)
 # noby <- noby %>% rowwise() %>%
 #   mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
-# 
+#
 # m2 <- left_join(mymaster,noby)
 # m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
 # mymaster <- select(m2,-nby)
 # write.csv(mymaster,"../mymaster.csv")
 ```
+
+Update position eligibility from CBS PosElig file
+Uses the first position when a player has multiple positions
+```{r}
+pedf <- read.cbs(str_c("../",year,"PosElig.csv"))
+pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
+# Extract first position (before the comma)
+pedf$npos <- str_split_i(pedf$posEl, ",", 1)
+pedf <- select(pedf, playerid, npos)
+
+# Update mymaster with new positions
+mymaster <- left_join(mymaster, pedf, by = c('playerid'))
+mymaster <- mymaster %>% mutate(Pos = if_else(!is.na(npos), npos, Pos))
+mymaster <- select(mymaster, -npos)
+
+write.csv(mymaster, "../mymaster.csv")
+print(str_c("Updated positions from CBS PosElig file: ", sum(!is.na(pedf$npos)), " players"))
+```
+
 Try adding position from fangraphs
 Fangraphs has put a block in place
 ```{r}

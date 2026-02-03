@@ -28,6 +28,7 @@ library("dplyr")
 library("rvest")
 library("jsonlite")
 library("RSelenium")
+library("wdman")
 library("netstat")
 library("janitor")
 
@@ -119,25 +120,27 @@ AllH <- left_join(AllH,pedf,by=c('playerid'))
 
 
 # Injuries data
-if ((computer!='Windows') | (dt < 20))
-{
+# Check age of injuries file
+injFile <- file.info("../latestInjuries.csv")$mtime
+injAge <- as.integer(difftime(Sys.time(), injFile, units = "hours"))
+
+if (injAge < 20) {
+  # Use cached file if less than 20 hours old
+  cat("Using cached injuries file (", injAge, " hours old)\n")
   injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
-  
-#  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
-#    rename(`Pitching+`=`Pitching.`)
-  
+
 } else {
-  rD <- rsDriver(browser="firefox",port=free_port(), 
-                 chromever=NULL, verbose=F)
-  remDr <- rD[["client"]]
-  
-  injOrig <- getInjuriesRS()
-  #stuff <- getStuffRS()
-  
-  remDr$close()
-  system("taskkill /im java.exe /f")
-  
+  # Fetch fresh data via FanGraphs API
+  cat("Injuries file is", injAge, "hours old, fetching fresh data...\n")
+  tryCatch({
+    injOrig <- getInjuriesAPI()
+  }, error = function(e) {
+    cat("Error fetching injuries:", e$message, "\n")
+    cat("Falling back to cached injuries file\n")
+    injOrig <<- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
+    injOrig <<- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
+  })
 }
 
 inj <- injOrig %>% select(Player,Injury,Expected.Return=`Latest Update`)
@@ -228,6 +231,10 @@ write.csv(prosters,str_c("../",cyear,"fakeprotected.csv"))
 lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue) %>% 
   select(Player,Pos,Team,Salary,Contract,playerid,orank)
 #prosters <- select(prosters,-playerid)
+
+# Add Fangraphs links to player names
+rpreds <- rpreds %>% mutate(Player=paste0("<a target='_blank' href='//www.fangraphs.com/players/x/",playerid,"/stats'>",Player,"</a>"))
+
 rpreds <- select(rpreds,-playerid)
 
 #lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
