@@ -34,8 +34,8 @@ library("zoo")
 source("./daflFunctions.r")
 
 cleanRosters <- function(pl) {
-  colnames(pl) <- c('Avail','Player','E1','Pos','E2','Salary','Contract','S1','S2','S3','S4','S5','S6','Rank','E3')
-  players <- select(pl,-Rank,-E1,-E2,-E3) %>%
+  colnames(pl) <- c('Avail','Player','E1','Pos','E2','Salary','Contract','S1','S2','S3','S4','S5','S6','Rank')
+  players <- select(pl,-Rank,-E1,-E2) %>%
     filter(!(Player %in% c('Player','TOTALS')))
   #players <- mutate(players,porh=ifelse((Avail %in% c('Batters','Pitchers')),Avail,NA)) %>% 
   #  fill(porh) %>% filter(!(Avail %in% c('Batters','Pitchers')))
@@ -67,7 +67,7 @@ getWeek1 <- function(fn) {
   sal <- addPlayerid(sal) %>% select(playerid,Team) %>% distinct()
 }
 
-year <- "2024"
+year <- "2025"
 
 
 # http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
@@ -145,15 +145,23 @@ pitchers$asrc <- coalesce(pitchers$asrc,pitchers$dft,"faab")
 # http://dafl.baseball.cbssports.com/transactions/all/trades/?print_rows=9999
 trades <- read.csv(str_c("../",year,"trades.csv"),stringsAsFactors=FALSE)
 
-# new - need to filter for only 'Traded' rows
-#trades <- filter(trades,str_detect(Players,'Traded'))
+# Split rows with multiple players (separated by newlines) into separate rows
+trades <- cSplit(trades,"Players",sep="\n",direction="long")
 
-# BUG - split no longer works
-#trades <- cSplit(trades,"Players",sep="\n",direction="long")
-#trades2 <- cSplit(trades,"Players",sep="#",direction="long",drop=FALSE)
-#trades$Player <- unlist(lapply(trades$Players,swapName3))
+# Parse the Players column to extract player name and from team
+# Format: "Player Name POS | TEAM - Traded from Team Name"
+trades <- trades %>%
+  filter(str_detect(Players,'Traded')) %>%  # Keep only 'Traded' rows
+  mutate(
+    # Extract player name (everything before " - Traded from")
+    Player = str_extract(Players, "^[^-]+(?= - Traded from)") %>% str_trim(),
+    # Extract the from team (everything after "Traded from ")
+    fTeam = str_extract(Players, "(?<=Traded from ).*$") %>% str_trim()
+  )
 
-#trades$fTeam <- unlist(lapply(trades$Players,tradeFrom))
+# Remove position and team info from Player name (e.g., "P | SF")
+trades$Player <- str_replace(trades$Player, " [A-Z0-9,]+\\s*\\|\\s*[A-Z]+\\s*$", "")
+
 trades <- select(trades,Team,Player,Traded=Effective,fTeam)
 
 # Filter again to remove Benched and Moved rows
@@ -248,6 +256,31 @@ fcast <- read.xlsx(str_c("../",year,"draftGuide.xlsx"),1)
 fcast <- select(fcast,Team,projectedValue=TotalValue)
 s2 <- left_join(seasonResults,fcast) %>% mutate(projRatio = protect_DFL/projectedValue)
 avprotect <- mean(s2$projRatio)
+
+# Function to rank drafted players by DFL value for any team
+getDraftedPlayersRanked <- function(team_name, hitters_df = hitters, pitchers_df = pitchers) {
+  # Filter drafted hitters for the specified team (Contract = 1 only, not protected players)
+  team_hitters <- hitters_df %>%
+    filter(Team == team_name & !is.na(dft) & Contract == 1) %>%
+    select(Player, Pos, Salary, Contract, DFL, Value) %>%
+    distinct()
+
+  # Filter drafted pitchers for the specified team (Contract = 1 only, not protected players)
+  team_pitchers <- pitchers_df %>%
+    filter(Team == team_name & !is.na(dft) & Contract == 1) %>%
+    select(Player, Pos, Salary, Contract, DFL, Value) %>%
+    distinct()
+
+  # Combine and sort by Value (descending)
+  drafted_players <- bind_rows(team_hitters, team_pitchers) %>%
+    distinct() %>%
+    arrange(desc(Value))
+
+  # Add rank column
+  drafted_players$Rank <- 1:nrow(drafted_players)
+
+  return(drafted_players)
+}
 
 
 aggStats <- tibble(Statistic=list("Protection Ratio","Prot PreSeason Ratio","Draft Ratio","FAAB Value","Trade Value"),

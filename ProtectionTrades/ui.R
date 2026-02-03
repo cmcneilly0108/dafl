@@ -6,7 +6,17 @@ library("DT")
 shinyUI(navbarPage("Offseason Trade Evaluator, v1.13",
         theme = bs_theme(bootswatch = "flatly"),
         tabPanel("Overview",
-                 verticalLayout(DT::dataTableOutput("totals"))
+                 verticalLayout(
+                   fluidRow(
+                     column(12,
+                       actionButton("refreshData", "Refresh Data",
+                                    icon = icon("refresh"),
+                                    class = "btn-primary",
+                                    style = "margin-bottom: 15px;")
+                     )
+                   ),
+                   DT::dataTableOutput("totals")
+                 )
         ),
         tabPanel("by Team",
             sidebarLayout(fluid=FALSE,
@@ -16,12 +26,29 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.13",
                 ,width=2),
               mainPanel(
                 h2(textOutput("tname")),
-                tabsetPanel(type='tabs',          
+                tabsetPanel(type='tabs',
+                  tabPanel('AI Summary',
+                    fluidRow(
+                      column(12,
+                        actionButton("generateSummary", "Generate AI Summary",
+                                     icon = icon("robot"),
+                                     class = "btn-info",
+                                     style = "margin-bottom: 15px;"),
+                        actionButton("refreshSummary", "Refresh Summary",
+                                     icon = icon("refresh"),
+                                     class = "btn-warning",
+                                     style = "margin-bottom: 15px; margin-left: 10px;")
+                      )
+                    ),
+                    wellPanel(
+                      h4("Team Analysis"),
+                      uiOutput("teamSummary")
+                    )
+                  ),
                   tabPanel('Hitting',
                            dataTableOutput("THitters")),
                   tabPanel('Pitching',dataTableOutput("TPitchers")),
-                  
-                  tabPanel('Players',dataTableOutput("Players"))          
+                  tabPanel('Players',dataTableOutput("Players"))
                 )
               )
             )
