@@ -13,9 +13,10 @@ library("zoo")
 library("xml2")
 library("rvest")
 library("jsonlite")
-library("RSelenium")
-library("wdman")
-library("netstat")
+# RSelenium no longer needed - using API calls instead
+# library("RSelenium")
+# library("wdman")
+# library("netstat")
 library("RSQLite")
 
 source("./daflFunctions.r")
@@ -263,78 +264,23 @@ AllH <- AllH %>% addSalary()
 AllP <- AllP %>% addSalary()
 #AllP <- AllP %>% addInjuries() %>% addSalary()
 
-# New injury stuff
-# Injuries data
+# Fetch injuries and Pitching+ data via API (no browser needed)
 fd <- file.info("../latestStuff.csv")$mtime
 cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
-#dt <- 9
-if ((computer!='Windows') | (dt < 20))
-#if (computer!='Windows')
-{
-  injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
-  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
-  
-  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
-    rename(`Pitching+`=`Pitching.`)
-  
+
+if (dt < 20) {
+  # Use cached data if recent enough
+  injOrig <- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
+  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`, `Injury / Surgery Date` = `Injury...Surgery.Date`)
+
+  stuff <- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
+    rename(`Pitching+` = `Pitching.`)
+
 } else {
-  # Clean up any leftover selenium/geckodriver processes from previous runs
-  tryCatch({
-    system("pkill -f 'selenium.*4567' 2>/dev/null || true")
-    system("pkill -f 'geckodriver.*4567' 2>/dev/null || true")
-  }, error = function(e) {})
-
-  Sys.sleep(1)
-
-  # Wrap RSelenium in error handling to ensure cleanup
-  tryCatch({
-    # Ensure latest GeckoDriver is available via wdman
-    gDrv <- wdman::gecko(version = "latest")
-
-    # Set up Firefox to run in headless mode (works when screen is locked)
-    rD <- rsDriver(browser="firefox",
-                   port=4567L,
-                   phantomver = NULL,
-                   geckover="latest",
-                   extraCapabilities = list(
-                     "moz:firefoxOptions" = list(
-                       args = list('--headless', '--width=1920', '--height=1080')
-                     )
-                   ),
-                   verbose=T)
-    remDr <<- rD[["client"]]
-
-    injOrig <- getInjuriesRS()
-    stuff <- getStuffRS()
-
-  }, error = function(e) {
-    cat("Error in RSelenium block:", e$message, "\n")
-    # Cleanup even on error
-    tryCatch({
-      if(exists("remDr")) remDr$close()
-    }, error = function(e2) {})
-    tryCatch({
-      if(exists("rD")) rD$server$stop()
-    }, error = function(e2) {})
-    stop(e)  # Re-throw the error after cleanup
-  }, finally = {
-    # Always run cleanup
-    tryCatch({
-      if(exists("remDr")) remDr$close()
-    }, error = function(e) {})
-
-    tryCatch({
-      if(exists("rD")) rD$server$stop()
-    }, error = function(e) {})
-
-    # Force kill any remaining selenium/geckodriver processes
-    tryCatch({
-      system("pkill -f 'selenium.*4567' 2>/dev/null || true")
-      system("pkill -f 'geckodriver.*4567' 2>/dev/null || true")
-    }, error = function(e) {})
-  })
-  
+  # Fetch fresh data from FanGraphs API
+  injOrig <- getInjuriesAPI()
+  stuff <- getStuffAPI()
 }
 
 # Week before draft - manual download file

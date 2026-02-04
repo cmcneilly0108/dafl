@@ -1061,19 +1061,20 @@ addMLBstandings <- function(df) {
 }
  
 
-rD <- NA
-remDr <- NA
-
-startRS <- function() {
-  rD <- rsDriver(browser="firefox",port=free_port(), 
-                 chromever=NULL, verbose=F)
-  remDr <- rD[["client"]]
-}
-
-endRS <- function() {
-  remDr$close()
-  system("taskkill /im java.exe /f")
-}
+# Legacy RSelenium globals and helpers - no longer needed with API approach
+# rD <- NA
+# remDr <- NA
+#
+# startRS <- function() {
+#   rD <- rsDriver(browser="firefox",port=free_port(),
+#                  chromever=NULL, verbose=F)
+#   remDr <- rD[["client"]]
+# }
+#
+# endRS <- function() {
+#   remDr$close()
+#   system("taskkill /im java.exe /f")
+# }
 
 
 # Fetch injuries from FanGraphs API (no browser needed)
@@ -1112,6 +1113,26 @@ getInjuriesAPI <- function() {
   write.csv(inj, "../latestInjuries.csv")
   cat("Wrote", nrow(inj), "injuries to ../latestInjuries.csv\n")
   inj
+}
+
+# Fetch Pitching+ data from FanGraphs API (no browser needed)
+getStuffAPI <- function() {
+  cat("Fetching Pitching+ data from FanGraphs API...\n")
+
+  currentYear <- as.integer(format(Sys.Date(), "%Y"))
+  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=",
+                currentYear, "&season1=", currentYear,
+                "&ind=0&qual=10&type=36&month=0&pageitems=2000")
+
+  stuff <- fromJSON(url)$data
+  cat("Fetched", nrow(stuff), "pitcher records for", currentYear, "\n")
+
+  stuff <- stuff %>%
+    select(Player = PlayerName, MLB = TeamNameAbb, `Pitching+` = sp_pitching)
+
+  write.csv(stuff, "../latestStuff.csv")
+  cat("Wrote", nrow(stuff), "Pitching+ records to ../latestStuff.csv\n")
+  stuff
 }
 
 # Legacy RSelenium version (kept for reference, but getInjuriesAPI is preferred)

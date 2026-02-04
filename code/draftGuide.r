@@ -15,8 +15,9 @@ library("xml2")
 library("rvest")
 library("tidyr")
 library("jsonlite")
-library("RSelenium")
-library("netstat")
+# RSelenium no longer needed - using API calls instead
+# library("RSelenium")
+# library("netstat")
 
 source("./daflFunctions.r")
 
@@ -168,28 +169,17 @@ protected$posEl <- replace_na(protected$posEl,'P')
 AllH <- inner_join(AllH,hrank,by=c('playerid','Pos'),multiple="first")
 AllP <- inner_join(AllP,prank,by=c('playerid','Pos'),multiple="first")
 
+# Fetch injuries data via API (no browser needed)
 fd <- file.info(str_c("../latestInjuries.csv"))$mtime
 dt <- difftime(cd, fd, units = "hours")
-# Injuries data
-if ((computer!='Windows') | (dt < 20))
-{
-  injOrig <- read.csv("../latestInjuries.csv",stringsAsFactors=FALSE)
-  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`,`Injury / Surgery Date` = `Injury...Surgery.Date`)
-  
-  #  stuff <- read.csv("../latestStuff.csv",stringsAsFactors=FALSE) %>%
-  #    rename(`Pitching+`=`Pitching.`)
-  
+
+if (dt < 20) {
+  # Use cached data if recent enough
+  injOrig <- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
+  injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`, `Injury / Surgery Date` = `Injury...Surgery.Date`)
 } else {
-  rD <- rsDriver(browser="firefox",port=free_port(), 
-                 chromever=NULL, verbose=F)
-  remDr <- rD[["client"]]
-  
-  injOrig <- getInjuriesRS()
-  #stuff <- getStuffRS()
-  
-  remDr$close()
-  system("taskkill /im java.exe /f")
-  
+  # Fetch fresh data from FanGraphs API
+  injOrig <- getInjuriesAPI()
 }
 
 # Week before draft - manual download file
