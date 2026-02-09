@@ -84,6 +84,10 @@ AllP <- dplyr::rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
+# Save first-pass pDFL (all players valued) for LiveDraftTool
+pDFL_all_hitters <- AllH %>% select(playerid, pDFL_full = pDFL)
+pDFL_all_pitchers <- AllP %>% select(playerid, pDFL_full = pDFL)
+
 #merge with steamer
 rhitters <- left_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
 rpitchers <- left_join(rPitchers,AllP,by=c('playerid'),copy=FALSE)
@@ -104,8 +108,8 @@ AllP$Pos <- with(AllP,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 prank <- AllP %>% group_by(Pos) %>% mutate(orank = rank(-pDFL))
 prank <- select(prank,playerid,orank)
 
-protClean <- rbind(select(rhitters,Team,Player,Contract,Salary,pDFL,Age,Pos,playerid),
-                   select(rpitchers,Team,Player,Contract,Salary,pDFL,Age,Pos,playerid))
+protClean <- rbind(select(rhitters,Team,Player,Contract,Salary,pDFL,pADP,pSkew,Age,Pos,playerid),
+                   select(rpitchers,Team,Player,Contract,Salary,pDFL,pADP,pSkew,Age,Pos,playerid))
 protClean$pDFL <- replace(protClean$pDFL,is.na(protClean$pDFL),0)
 
 
@@ -213,6 +217,9 @@ injOrig$pDFL <- replace(injOrig$pDFL,is.na(injOrig$pDFL),0)
 injOrig <- injOrig %>% select(Player,MLB,position,pDFL,`Injury / Surgery Date`,Injury,status,`Latest Update`)
 injOrig <- arrange(injOrig,position,-pDFL)
 
+# Save full injury list before removing protected players (used by LiveDraftTool)
+injOrig_full <- injOrig
+
 # remove protected players
 injOrig <- anti_join(injOrig,protected,by=c('Player'))
 
@@ -225,6 +232,29 @@ AllP <- left_join(AllP,inj,by=c('Player'))
 # Remove protected players
 #AllH <- anti_join(AllH,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
 #AllP <- anti_join(AllP,protected,by=c('Player'),copy=FALSE) %>% arrange(-pDFL)
+# Save full player pools with first-pass pDFL restored (used by LiveDraftTool)
+AllH_full <- AllH %>%
+  select(-pDFL) %>%
+  left_join(pDFL_all_hitters, by = 'playerid') %>%
+  dplyr::rename(pDFL = pDFL_full)
+AllH_full$pDFL <- replace(AllH_full$pDFL, is.na(AllH_full$pDFL), 0)
+
+AllP_full <- AllP %>%
+  select(-pDFL) %>%
+  left_join(pDFL_all_pitchers, by = 'playerid') %>%
+  dplyr::rename(pDFL = pDFL_full)
+AllP_full$pDFL <- replace(AllP_full$pDFL, is.na(AllP_full$pDFL), 0)
+
+# Add rankDiff to full pools (compare valuation vs ADP across all players)
+allRanks_full <- bind_rows(
+  AllH_full %>% select(playerid, pDFL),
+  AllP_full %>% select(playerid, pDFL)
+) %>% mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
+AllH_full <- left_join(AllH_full, allRanks_full, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
+AllP_full <- left_join(AllP_full, allRanks_full, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
+protClean <- left_join(protClean, allRanks_full, by = 'playerid') %>%
+  mutate(rankDiff = pADP - myRank) %>% select(-myRank)
+
 # Remove protected players
 AllH <- anti_join(AllH,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
 AllP <- anti_join(AllP,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)

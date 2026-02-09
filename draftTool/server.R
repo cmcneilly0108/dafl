@@ -12,11 +12,11 @@ ppos <- list('SP','MR','CL')
 allpos <- c(hpos,list('SP','RP'))
 
 tProtect <- function(tm) {
-  res <- filter(protClean,Team == tm ) %>% select(Player,Pos,Age,pDFL,Salary, Contract) %>% arrange(-pDFL)
+  res <- filter(protClean,Team == tm ) %>% select(Player,Pos,Age,pDFL,Salary,Contract,rankDiff,Skew=pSkew) %>% arrange(-pDFL)
 }
 
 posProtect <- function(pos) {
-  res <- filter(protClean,Pos == pos ) %>% select(Player,Team,Age,pDFL,Salary, Contract) %>% arrange(Team)
+  res <- filter(protClean,Pos == pos ) %>% select(Player,Team,Age,pDFL,Salary,Contract,rankDiff,Skew=pSkew) %>% arrange(Team)
 }
 
 uniqueProtect <- function(pos) {
@@ -45,13 +45,13 @@ tpSummary <- function(tm) {
 hitPlayersbyPos <- function(pos) {
   res <- AllH %>% filter(Pos == pos | str_detect(posEl,pos),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
   res <- mutate(res,RPV = (SGP - aRPV(pc,nrow(filter(pc,DFL>0))))/aRPV(pc,nrow(filter(pc,DFL>0))))
-  res <- select(res,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
+  res <- select(res,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,Injury,Expected.Return)
 }
 
 pitPlayersbyPos <- function(pos) {
   res <- AllP %>% filter(Pos==pos,pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP) %>% head(200)
   res <- mutate(res,RPV = (SGP - aRPV(psp,nrow(filter(psp,DFL>0))))/aRPV(psp,nrow(filter(psp,DFL>0))))
-  res <- select(res,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
+  res <- select(res,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return)
 }
 
 shinyServer(function(input, output,session) {
@@ -72,7 +72,8 @@ shinyServer(function(input, output,session) {
 
   dttProtect <- reactive({df <- datatable(tProtect(input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
                            formatCurrency('pDFL') %>%
-                          formatRound('Age',0)})
+                          formatRound(c('Age','rankDiff'),0) %>%
+                          formatRound('Skew',3)})
   output$tProtect <- DT::renderDataTable({ dttProtect() })
   
   dtGoals <- reactive({df <- datatable(calcGoals(rpitchers,rhitters,targets,input$e1),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE)) %>%
@@ -88,8 +89,8 @@ shinyServer(function(input, output,session) {
   output$hpos <- renderText({ input$e2 })
 
   dthpbpos <- reactive({df <- datatable(hitPlayersbyPos(input$e2),options = list(pageLength = 20,autoWidth = FALSE, searching = FALSE, info = FALSE), filter='top') %>%
-    formatRound(c('Age','ADP','HR','RBI','R','SB'),0) %>% formatCurrency('DFL') %>%
-    formatRound(c('RPV','SGP','AVG'),3)
+    formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'),0) %>% formatCurrency('DFL') %>%
+    formatRound(c('RPV','SGP','Skew','AVG'),3)
   })
   output$hpbpos <- DT::renderDataTable({ dthpbpos() })
 
@@ -97,8 +98,8 @@ shinyServer(function(input, output,session) {
   output$ppos <- renderText({ input$e3 })
 
   dtppbpos <- reactive({df <- datatable(pitPlayersbyPos(input$e3),options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
-    formatRound(c('Age','ADP','W','SV','HLD','SO'),0) %>% formatCurrency('DFL') %>%
-    formatRound(c('RPV','SGP','ERA'),3)
+    formatRound(c('Age','ADP','rankDiff','W','SV','HLD','SO'),0) %>% formatCurrency('DFL') %>%
+    formatRound(c('RPV','SGP','Skew','ERA'),3)
   })
   output$ppbpos <- DT::renderDataTable({ dtppbpos() })
 
@@ -108,7 +109,8 @@ shinyServer(function(input, output,session) {
   
   dtposProtect <- reactive({df <- datatable(posProtect(input$e4),options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top') %>%
     formatCurrency('pDFL') %>%
-    formatRound('Age',0)
+    formatRound(c('Age','rankDiff'),0) %>%
+    formatRound('Skew',3)
   })
   output$posProtect <- DT::renderDataTable({ dtposProtect() })
 
