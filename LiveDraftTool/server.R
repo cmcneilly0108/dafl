@@ -45,7 +45,8 @@ shinyServer(function(input, output, session) {
       df$playerid <- as.character(df$playerid)
       df
     },
-    draftLog = list()
+    draftLog = list(),
+    pendingPick = NULL
   )
 
   # --- Helper: split roster into H/P ---
@@ -101,15 +102,18 @@ shinyServer(function(input, output, session) {
   pstandings_r <- reactive({
     pc <- protClean_r()
     ps <- pc %>% group_by(Team) %>%
-      summarize(Players = n(),
-                Spent = sum(Salary),
+      summarize(nPlayers = n(),
+                totalSpent = sum(Salary),
                 TotalValue = sum(pDFL),
-                Earned = TotalValue - Spent,
-                VPPlayer = TotalValue / Players,
-                DPP = (cap - sum(Salary)) / (25 - Players),
-                FullValue = TotalValue + auctionROI * (cap - sum(Salary)),
-                ValueRatio = TotalValue / Spent,
                 .groups = 'drop') %>%
+      mutate(Needed = 25 - nPlayers,
+             CashLeft = cap - totalSpent,
+             Earned = TotalValue - totalSpent,
+             VPPlayer = TotalValue / nPlayers,
+             DPP = CashLeft / Needed,
+             FullValue = TotalValue + auctionROI * CashLeft,
+             ValueRatio = TotalValue / totalSpent) %>%
+      select(Team, Needed, CashLeft, TotalValue, Earned, VPPlayer, DPP, FullValue, ValueRatio) %>%
       arrange(-FullValue)
     ps$zScore <- as.numeric(scale(ps$FullValue))
     ps
@@ -250,7 +254,7 @@ shinyServer(function(input, output, session) {
   }
 
   # ============================
-  # Draft action handler
+  # Draft action handler (with validation)
   # ============================
   observeEvent(input$draftBtn, {
     req(input$playerSearch, input$draftTeam, input$draftSalary)
@@ -290,18 +294,64 @@ shinyServer(function(input, output, session) {
       stringsAsFactors = FALSE
     )
 
-    # Push to undo stack
+    # --- Validation checks ---
+    teamRoster <- rv$roster %>% filter(Team == team)
+    teamSpent <- sum(teamRoster$Salary)
+    teamCount <- nrow(teamRoster)
+
+    warnings <- c()
+    # Check 1: Would exceed $260 cap
+    if (teamSpent + salary > cap) {
+      warnings <- c(warnings, paste0("Team would exceed $260 cap ($", teamSpent + salary, " total)"))
+    }
+    # Check 2: Less than $1/player for remaining spots
+    slotsLeft <- 25 - teamCount - 1  # after this pick
+    dollarsLeft <- cap - teamSpent - salary
+    if (slotsLeft > 0 && dollarsLeft < slotsLeft) {
+      warnings <- c(warnings, paste0("Only $", dollarsLeft, " left for ", slotsLeft, " remaining spots"))
+    }
+    # Check 3: Would exceed 25 players
+    if (teamCount >= 25) {
+      warnings <- c(warnings, paste0("Team already has ", teamCount, " players (max 25)"))
+    }
+
+    if (length(warnings) > 0) {
+      # Stash pending pick and show warning modal
+      rv$pendingPick <- newRow
+      showModal(modalDialog(
+        title = "Draft Warning",
+        tags$ul(lapply(warnings, tags$li)),
+        paste0("Draft ", playerName, " to ", team, " for $", salary, "?"),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton("confirmDraftBtn", "Draft Anyway", class = "btn-danger")
+        )
+      ))
+    } else {
+      # No warnings — draft immediately
+      rv$draftLog <- c(rv$draftLog, list(newRow))
+      rv$roster <- bind_rows(rv$roster, newRow)
+      write.csv(rv$roster, rosterFile, row.names = FALSE)
+      updateSelectizeInput(session, 'playerSearch', selected = "")
+      showNotification(paste0("Drafted ", playerName, " to ", team, " for $", salary),
+                       type = "message")
+    }
+  })
+
+  # ============================
+  # Confirmed draft handler (after warning modal)
+  # ============================
+  observeEvent(input$confirmDraftBtn, {
+    req(rv$pendingPick)
+    newRow <- rv$pendingPick
+    rv$pendingPick <- NULL
+
     rv$draftLog <- c(rv$draftLog, list(newRow))
-
-    # Add to roster (triggers all reactive recalculations)
     rv$roster <- bind_rows(rv$roster, newRow)
-
-    # Persist to CSV
     write.csv(rv$roster, rosterFile, row.names = FALSE)
-
-    # Reset search input
     updateSelectizeInput(session, 'playerSearch', selected = "")
-    showNotification(paste0("Drafted ", playerName, " to ", team, " for $", salary),
+    removeModal()
+    showNotification(paste0("Drafted ", newRow$Player, " to ", newRow$Team, " for $", newRow$Salary),
                      type = "message")
   })
 
@@ -373,6 +423,7 @@ shinyServer(function(input, output, session) {
     datatable(ps, options = list(pageLength = 20, autoWidth = FALSE,
                                  paging = FALSE, searching = FALSE, info = FALSE)) %>%
       formatCurrency(c('TotalValue','Earned','VPPlayer','DPP','FullValue')) %>%
+      formatRound('CashLeft', 0) %>%
       formatRound(c('ValueRatio','zScore'), 2)
   })
 
@@ -384,6 +435,7 @@ shinyServer(function(input, output, session) {
     datatable(ps, options = list(pageLength = 20, autoWidth = FALSE,
                                  paging = FALSE, searching = FALSE, info = FALSE)) %>%
       formatCurrency(c('TotalValue','Earned','VPPlayer','DPP','FullValue')) %>%
+      formatRound('CashLeft', 0) %>%
       formatRound(c('ValueRatio','zScore'), 2)
   })
 
