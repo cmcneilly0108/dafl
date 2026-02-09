@@ -31,7 +31,8 @@ if (!file.exists(rosterFile)) {
   initRoster <- left_join(initRoster, mlbLookup, by = "playerid")
   initRoster$MLB <- replace_na(initRoster$MLB, "")
 
-  initRoster <- initRoster %>% select(Player, Pos, Team, Salary, Contract, MLB, playerid, orank)
+  initRoster$DraftOrder <- NA
+  initRoster <- initRoster %>% select(Player, Pos, Team, Salary, Contract, MLB, playerid, orank, DraftOrder)
   write.csv(initRoster, rosterFile, row.names = FALSE)
 }
 
@@ -43,9 +44,20 @@ shinyServer(function(input, output, session) {
     roster = {
       df <- read.csv(rosterFile, stringsAsFactors = FALSE)
       df$playerid <- as.character(df$playerid)
+      if (!"DraftOrder" %in% names(df)) df$DraftOrder <- NA
       df
     },
-    draftLog = list(),
+    draftLog = {
+      df <- read.csv(rosterFile, stringsAsFactors = FALSE)
+      df$playerid <- as.character(df$playerid)
+      if (!"DraftOrder" %in% names(df)) df$DraftOrder <- NA
+      drafted <- df %>% filter(!is.na(DraftOrder)) %>% arrange(DraftOrder)
+      if (nrow(drafted) > 0) {
+        split(drafted, seq_len(nrow(drafted)))
+      } else {
+        list()
+      }
+    },
     pendingPick = NULL
   )
 
@@ -282,6 +294,7 @@ shinyServer(function(input, output, session) {
 
     playerName <- pInfo$Player
 
+    maxOrder <- max(c(0, rv$roster$DraftOrder), na.rm = TRUE)
     newRow <- data.frame(
       Player = playerName,
       Pos = pos,
@@ -291,6 +304,7 @@ shinyServer(function(input, output, session) {
       MLB = mlb,
       playerid = as.character(pid),
       orank = NA,
+      DraftOrder = maxOrder + 1,
       stringsAsFactors = FALSE
     )
 
@@ -345,6 +359,10 @@ shinyServer(function(input, output, session) {
     req(rv$pendingPick)
     newRow <- rv$pendingPick
     rv$pendingPick <- NULL
+
+    # Recompute DraftOrder in case roster changed since modal was shown
+    maxOrder <- max(c(0, rv$roster$DraftOrder), na.rm = TRUE)
+    newRow$DraftOrder <- maxOrder + 1
 
     rv$draftLog <- c(rv$draftLog, list(newRow))
     rv$roster <- bind_rows(rv$roster, newRow)
