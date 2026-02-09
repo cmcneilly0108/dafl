@@ -19,7 +19,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                                        actionButton('undoBtn', 'Undo Last Pick',
                                                     class = 'btn-warning btn-block',
                                                     style = 'width:100%;')
-                                     )
+                                     ),
+                                     h4("Draft Market", style = "margin-top:15px;"),
+                                     uiOutput("buyNowSignal"),
+                                     plotOutput("buyNowGauge", height = "200px")
                               ),
                               column(8,
                                      h3("Recent Picks"),

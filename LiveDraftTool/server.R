@@ -1,5 +1,7 @@
 # LiveDraftTool server.R — reactive draft tool
 
+library(ggplot2)
+
 setwd("../code/")
 source("./draftGuide.r")
 setwd("../LiveDraftTool")
@@ -191,6 +193,69 @@ shinyServer(function(input, output, session) {
   AllP_avail <- reactive({
     roster <- rv$roster
     anti_join(AllP_full, roster, by = c('playerid')) %>% arrange(-pDFL)
+  })
+
+  # --- Buy Now gauge data ---
+  buyNowData_r <- reactive({
+    log <- rv$draftLog
+    if (length(log) == 0) return(NULL)
+    df <- bind_rows(log)
+    valueLookup <- bind_rows(
+      AllH_full %>% select(playerid, pDFL),
+      AllP_full %>% select(playerid, pDFL)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    df <- left_join(df, valueLookup, by = "playerid")
+    df$pDFL <- replace_na(df$pDFL, 0)
+    df$surplus <- df$pDFL - df$Salary
+    df$pickNum <- seq_len(nrow(df))
+    window <- 5
+    df$rollingAvg <- sapply(seq_len(nrow(df)), function(i) {
+      start <- max(1, i - window + 1)
+      mean(df$surplus[start:i])
+    })
+    df
+  })
+
+  output$buyNowGauge <- renderPlot({
+    data <- buyNowData_r()
+    if (is.null(data) || nrow(data) < 2) {
+      plot.new()
+      text(0.5, 0.5, "Picks will appear here", cex = 1.2, col = "gray")
+      return()
+    }
+    ggplot(data, aes(x = pickNum, y = surplus)) +
+      geom_col(aes(fill = surplus > 0), width = 0.7) +
+      geom_line(aes(y = rollingAvg), color = "#3498db", linewidth = 1.5) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+      scale_fill_manual(values = c("TRUE" = "#2ecc71", "FALSE" = "#e74c3c"), guide = "none") +
+      labs(x = "Pick #", y = "Surplus ($)") +
+      theme_minimal(base_size = 12) +
+      theme(plot.margin = margin(5, 10, 5, 10))
+  }, height = 200)
+
+  output$buyNowSignal <- renderUI({
+    data <- buyNowData_r()
+    if (is.null(data) || nrow(data) < 3) return(tags$span("Not enough picks yet", style="color:gray;"))
+    n <- nrow(data)
+    currentAvg <- data$rollingAvg[n]
+    prevAvg <- if (n >= 6) data$rollingAvg[max(1, n - 5)] else 0
+    trending_up <- currentAvg > prevAvg
+    if (currentAvg >= 0 && trending_up) {
+      label <- "Bargain Zone"; color <- "#2ecc71"
+    } else if (currentAvg >= 0 && !trending_up) {
+      label <- "Cooling Off"; color <- "#f39c12"
+    } else if (currentAvg < 0 && trending_up) {
+      label <- "Warming Up"; color <- "#f39c12"
+    } else {
+      label <- "Overpay Zone"; color <- "#e74c3c"
+    }
+    tags$div(
+      style = paste0("text-align:center; padding:6px; border-radius:4px; background:", color, "20;"),
+      tags$strong(style = paste0("color:", color, "; font-size:16px;"), label),
+      tags$br(),
+      tags$small(style = "color:gray;",
+                 paste0("Last 5 avg: $", round(currentAvg, 1)))
+    )
   })
 
   # --- topHitters ---
