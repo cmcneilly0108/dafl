@@ -1,0 +1,95 @@
+# TRADE ANALYSIS: NACHO YEAR vs LIQUOR CRICKETS
+
+## Nacho Year Strengths
+
+**Pitching Depth:**
+- 9 starting pitchers with positive netValue (Luzardo $18.4, Bradish $16.8, McLean $15.6, Pérez $13.7, Schwellenbach $11.6, Peterson $9.2, Gausman $5.6, Lodolo $4.2)
+- Strong strikeout production across the rotation (all SPs show 140+ K projections)
+- Elite value at low salaries (Bradish at $1, Pérez at $2)
+
+**Young Core:**
+- Multiple players under 26: Kurtz (23), Pérez (23), Crews (24), Neto (25), McLean (25), Langford (25)
+- Strong dynasty value with controllable costs
+
+**Premium Assets:**
+- Elite 1B/C in Nick Kurtz ($29.1 netValue, exceptional power/run production)
+- Premium SS in Zach Neto ($26.4 netValue, solid SB contributor)
+
+## Nacho Year Weaknesses
+
+**Hitting Depth:**
+- Only 6 hitters with positive netValue vs 11 pitchers
+- Weak OF depth beyond Langford (Profar $7.9, Abreu $3.5, Crews $2.5)
+- Limited power/speed combo players (only Neto shows 27 SB, Langford 22 SB, Crews 24 SB)
+
+**Category Gaps:**
+- Stolen bases: Very limited (best is Neto with 27.8, then Crews 23.9, Langford 22.4)
+- HR/RBI depth: Only Kurtz provides elite power (37.9 HR, 92.5 RBI)
+- Relief pitching: Only 1 reliever with value (Vesia $4.1, minimal saves/holds)
+
+**Positional Needs:**
+- 3B: No coverage
+- 2B: No coverage
+- Closers/Saves: Critical gap (Vesia has only 2 SV projected)
+- Additional OF power: Current OFs are average producers
+
+## Their Trade Chips
+
+**Surplus Starting Pitchers (can't protect all 9):**
+- David Peterson (SP, $9.2) - older at 31, expendable
+- Nick Lodolo (SP, $4.2) - lowest value among SPs
+- Kevin Gausman (SP, $5.6) - age 35, expensive at $13 salary
+- Spencer Schwellenbach (SP, $11.6) - mid-tier value, could move
+
+**Positional Redundancy:**
+- Ben Rice (C, $12.1) - redundant with Kurtz who can play C
+- Jonathan Aranda (1B, $6.3) - blocked by Kurtz
+- Wilyer Abreu (OF, $3.5) - 4th OF, marginal value
+- Dylan Crews (OF, $2.5) - 5th OF, lowest value
+
+**Value Players They Can't Protect:**
+- Alex Vesia (MR, $4.1) - only reliever, but limited impact
+- Jurickson Profar (OF, $7.9) - age 33, expendable
+
+## What They're Looking For
+
+**Immediate Needs:**
+- **Closers/High-leverage relievers** - desperately need saves category help
+- **Stolen base contributors** - weak across roster
+- **3B/2B** - zero coverage at these positions
+- **Power OF** - need HR/RBI boost beyond Kurtz
+
+**Trade Strategy Fit:**
+- Want to consolidate 2-3 players into 1 elite asset
+- Willing to package surplus SPs with expendable hitters
+- Looking for players they can protect (high netValue, positional needs)
+- Prefer younger controllable assets given their core age profile
+
+## Top 5 Targets for Crickets
+
+1. **Zach Neto (SS, $26.4)** - Might be available because they're #1 team with surplus value; fills Crickets' SS need (Tovar only $3.7); provides elite SB (27.8) in category where Crickets are weak; young age (25) fits both teams
+
+2. **Nick Kurtz (1B/C, $29.1)** - Longshot but worth asking; elite power (37.9 HR, 92.5 RBI) would upgrade Crickets' 1B (Díaz $15.7 is older); they have Aranda and Rice as backup 1B/C options; age 23 prospect still
+
+3. **Kyle Bradish (SP, $16.8)** - Available due to SP surplus (9 deep); elite strikeout rate (151 K); bargain $1 salary vs Crickets' expensive SPs; they can afford to move one SP with 8 others
+
+4. **Eury Pérez (SP, $13.7)** - Young (23) elite arm with massive upside (166 K); only $2 salary is incredible value; available because they can't protect 9 SPs; similar profile to Bradish as tradeable surplus
+
+5. **Ben Rice (C, $12.1)** - Definitely available as backup to Kurtz; strong power/production (27.6 HR, 77 RBI); would upgrade Crickets' C depth (Kirk only $1.4); fills positional redundancy for them
+
+## Top 5 Crickets Trade Chips
+
+1. **Matt Chapman (3B, $10.9)** - They have ZERO 3B coverage; solid power (23.3 HR) and run production (79 R); age 33 acceptable; Crickets have 3 3Bs (Caminero, Chapman, Lewis) creating redundancy
+
+2. **Carlos Estévez (CL, $6.0)** - They desperately need saves (30.3 SV projected); their only reliever (Vesia) has 2 SV; fills critical category gap; Crickets can afford to move with Brash as holds specialist
+
+3. **Royce Lewis (3B, $3.8)** - Fills their 3B void; young (27) fits their core; SB contributor (9.9) helps their weak category; Crickets' 3rd 3B option, expendable with Caminero/Chapman
+
+4. **Matt Brash (MR, $8.6)** - Elite strikeouts (71.8 K) and holds (20.4); helps their barren bullpen; amazing $1 salary; they need any relief help beyond Vesia
+
+5. **Yandy Díaz (1B, $15.7)** - Could package with others in consolidation trade; solid all-around (20 HR, 75 RBI/R); they need 1B depth beyond Kurtz/Aranda; age 35 but productive; Crickets willing to move for upgrade
+
+---
+
+**TRADE CONSTRUCTION SUGGESTION:**
+Package **Chapman ($10.9) + Estévez ($6.0) + Lewis ($3.8) = $20.7 netValue** for **Neto ($26.4)** or **Bradish ($16.8) + Profar ($7.9)**. This gives them 3B coverage, saves help, and youth while consolidating Crickets' redundancy into premium keeper assets.

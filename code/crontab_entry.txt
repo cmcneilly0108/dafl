@@ -1,0 +1,12 @@
+# DEPRECATED: We now use launchd instead of cron on macOS
+# See: ~/Library/LaunchAgents/com.dafl.inseasonpulse.plist
+#
+# The launchd agent runs run_protection_list.sh daily at 5:00 AM
+# To manage:
+#   launchctl list | grep dafl                    # check status
+#   launchctl unload ~/Library/LaunchAgents/com.dafl.inseasonpulse.plist  # disable
+#   launchctl load ~/Library/LaunchAgents/com.dafl.inseasonpulse.plist    # enable
+#
+# Old cron entries (no longer used):
+# 0 5 * * * /Users/cmcneilly/Dropbox/Personal/DAFL/code/run_inseason_pulse.sh  # Re-enable for baseball season
+# 0 5 * * * /Users/cmcneilly/Dropbox/Personal/DAFL/code/run_protection_list.sh

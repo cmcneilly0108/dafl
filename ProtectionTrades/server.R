@@ -179,7 +179,8 @@ teams <- sort(unique(as.character(totals$Team)))
 pullPlayers <- function(tm, data) {
 #  res <- filter(data,Team == tm,netValue > 1) %>% arrange(-netValue) %>% mutate(Rank=rank(-Value)) %>%
   res <- filter(data, Team == tm) %>% arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>%
-    select(-Team,-rdOne,-Rank,Player:Expected.Return)
+    select(-Team,-rdOne,-Rank,Player:Expected.Return) %>%
+    rename(Skew=pSkew)
 }
 
 aggHitters <- function(tm, data) {
@@ -270,8 +271,9 @@ shinyServer(function(input, output,session) {
   output$tname <- renderText({ input$e1 })
 
   dtPlayers <- reactive({df <- datatable(pullPlayers(input$e1, rv$rpreds),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE), escape = FALSE) %>%
-    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatRound(c('Age','pADP','rankDiff','s1','s2','s3','s4'),0) %>%
     formatRound(c('valueRatio'),3) %>%
+    formatRound(c('Skew'),2) %>%
     formatCurrency(c('pDFL','Value','netValue'))})
   output$Players <- DT::renderDataTable({ dtPlayers() })
 
@@ -297,13 +299,13 @@ shinyServer(function(input, output,session) {
   
   
   dtbp <- reactive({df <- datatable(bp(),options = list(pageLength = 20,autoWidth = FALSE), escape = FALSE) %>%
-    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatRound(c('Age','pADP','rankDiff','s1','s2','s3','s4'),0) %>%
     formatCurrency(c('pDFL','Value','netValue'))})
   output$bp <- DT::renderDataTable({ dtbp() })
 
   #output$bh <- renderDataTable({ bh() })
   dtbh <- reactive({df <- datatable(bh(),options = list(pageLength = 20,autoWidth = FALSE), escape = FALSE) %>%
-    formatRound(c('Age','pADP','s1','s2','s3','s4'),0) %>%
+    formatRound(c('Age','pADP','rankDiff','s1','s2','s3','s4'),0) %>%
     formatCurrency(c('pDFL','Value','netValue'))})
   output$bh <- DT::renderDataTable({ dtbh() })
   

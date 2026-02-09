@@ -1,0 +1,56 @@
+## Natural Catching Position Strengths
+- **Elite starting pitcher**: Cole Ragans ($33 netValue) with dominant strikeout production (210.5 K)
+- **Middle infield depth**: Two SS-eligible players (Winn, Story) with speed/runs production
+- **Speed category**: Strong SB contributors (Duran 21.2, Arozarena 22.4, Winn 12.0)
+- **Runs production**: Multiple 70+ runs scorers (Arraez, Winn, Bregman, Arozarena, Duran all 70+)
+- **Power at catcher/1B**: Salvador Perez provides 25 HR with 1B eligibility
+
+## Natural Catching Position Weaknesses
+- **Only 11 protectable players**: Below the 12-player protection threshold - critical vulnerability
+- **Outfield thin**: Only 2 OF with positive value (Duran, Arozarena)
+- **Starting pitching depth**: Only 2 SPs (Ragans, Rasmussen) - need more arms
+- **Closer situation**: Josh Hader barely protectable ($0.33 netValue) at $27 salary
+- **Positional redundancy**: Two shortstops (Winn, Story) competing for same slot
+- **Power production**: Limited 20+ HR hitters (Bregman 22.6, Perez 25.4, Arozarena 21.4)
+- **Age concerns**: Perez (35), Bregman (31), Hader (31), Story (33) all declining
+
+## Their Trade Chips
+- **Trevor Story** (SS, $3.4): Redundant with superior Masyn Winn at SS; injury-prone vet
+- **Garrett Whitlock** (MR, $2.5): Middle reliever with limited category impact
+- **Josh Hader** (CL, $0.33): Expensive closer barely worth protecting; salary burden
+- **Salvador Perez** (1B, $7.0): Aging power bat with limited positional flexibility at $14
+- **Alex Bregman** (3B, $8.3): Declining 31-year-old at expensive $17 salary
+
+## What They're Looking For
+- **More protectable assets**: Need to acquire 1-2 additional players with $3+ netValue
+- **Expansion trades (1-for-2)**: Willing to trade one better player for two lesser protectables
+- **Starting pitchers**: Critical need for SP3/SP4 types to balance roster
+- **Outfielders**: Need OF depth beyond Duran/Arozarena
+- **Younger players**: Team skews old; need youth injection for future seasons
+- **Cost-controlled talent**: Low-salary players with positive netValue to maximize profit
+
+## Top 5 Targets for Crickets
+
+1. **Cole Ragans** (SP, $33.0) - Elite ace they likely won't move, but if desperate for expansion trades, his 210 K would be transformative for Crickets' strikeout category
+
+2. **Luis Arraez** (2B, $16.0) - Perfect batting average anchor (.706 AVG percentile) at only $1 salary; Natural Catching Position has Winn/Story MI surplus, making 2B less critical to them
+
+3. **Masyn Winn** (SS, $15.8) - Young (23) SS with power/speed combo; they have Story as SS redundancy making Winn potentially available in the right deal
+
+4. **Jarren Duran** (OF, $15.5) - Elite speed/runs contributor but they're thin at OF; possibly available if getting 2 OF back
+
+5. **Drew Rasmussen** (SP, $8.7) - Solid SP2 with 156 K at only $3 salary; less essential with Ragans as ace, could be packaged in expansion deal
+
+## Top 5 Crickets Trade Chips
+
+1. **Matt Chapman** (3B, $11.6) - Fills their 3B need with Bregman aging; Crickets have 3B surplus (Caminero, Lewis); provides power/runs/speed across categories
+
+2. **Matthew Boyd** (SP, $11.7) - Addresses their desperate SP depth need at bargain $3 salary; 164 K production helps compensate if they move Rasmussen; Crickets have 7 SP to consolidate
+
+3. **Royce Lewis** (3B, $8.1) - Young upside play at only $2 salary; another 3B option with Bregman declining; power/speed profile fits their needs
+
+4. **Matt Brash** (MR, $7.5) - Replaces Whitlock's MR production with better value; elite K/9 reliever; Crickets willing to move fringe protectables
+
+5. **Ezequiel Tovar** (SS, $8.2) - Young SS to replace aging Story; power/speed combo at MI; Crickets have SS covered elsewhere and this addresses their MI depth while adding youth
+
+**IDEAL TRADE FRAMEWORK**: Crickets sends **Chapman + Boyd** (both $11+ netValue, different positions) for Natural Catching Position's **Cole Ragans** ($33 netValue). This is a 2-for-1 consolidation that helps Crickets trim to 12 protectables while giving Natural Catching Position two immediately protectable assets (reaching 13 total), addressing their 3B and SP depth simultaneously. Natural Catching Position gains $22.3 in combined netValue for $33, but gets the roster spots they desperately need.

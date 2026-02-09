@@ -186,7 +186,14 @@ AllH <- left_join(AllH,pedf,by=c('playerid'))
 AllH <- anti_join(AllH,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
 AllP <- anti_join(AllP,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
 
-
+# Compare my valuation vs league consensus (ADP)
+# positive rankDiff = sleeper (league undervalues), negative = overvalued
+allRanks <- bind_rows(
+  AllH %>% select(playerid, pDFL),
+  AllP %>% select(playerid, pDFL)
+) %>% mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
+AllH <- left_join(AllH, allRanks, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
+AllP <- left_join(AllP, allRanks, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
 
 # Add in hotscores - from inSeasonPulse.r
 # read in files
@@ -290,49 +297,49 @@ if (predUpdate==TRUE) {
 #Create separate tabs by position
 pc <- AllH %>% filter(Pos == 'C' | str_detect(posEl,'C'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pc <- mutate(pc,RPV = (SGP - aRPV(pc,nrow(filter(pc,DFL>0))))/aRPV(pc,nrow(filter(pc,DFL>0))))
-pc <- select(pc,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+pc <- select(pc,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 p1b <- AllH %>% filter(Pos == '1B' | str_detect(posEl,'1B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 p1b <- mutate(p1b,RPV = (SGP - aRPV(p1b,nrow(filter(p1b,DFL>0))))/aRPV(p1b,nrow(filter(p1b,DFL>0))))
-p1b <- select(p1b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+p1b <- select(p1b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 p2b <- AllH %>% filter(Pos == '2B' | str_detect(posEl,'2B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 p2b <- mutate(p2b,RPV = (SGP - aRPV(p2b,nrow(filter(p2b,DFL>0))))/aRPV(p2b,nrow(filter(p2b,DFL>0))))
-p2b <- select(p2b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+p2b <- select(p2b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 pss <- AllH %>% filter(Pos == 'SS' | str_detect(posEl,'SS'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pss <- mutate(pss,RPV = (SGP - aRPV(pss,nrow(filter(pss,DFL>0))))/aRPV(pss,nrow(filter(pss,DFL>0))))
-pss <- select(pss,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+pss <- select(pss,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 p3b <- AllH %>% filter(Pos == '3B' | str_detect(posEl,'3B'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 p3b <- mutate(p3b,RPV = (SGP - aRPV(p3b,nrow(filter(p3b,DFL>0))))/aRPV(p3b,nrow(filter(p3b,DFL>0))))
-p3b <- select(p3b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+p3b <- select(p3b,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 pdh <- AllH %>% filter(Pos == 'DH',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pdh <- mutate(pdh,RPV = (SGP - aRPV(pdh,nrow(filter(pdh,DFL>0))))/aRPV(pdh,nrow(filter(pdh,DFL>0))))
-pdh <- select(pdh,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+pdh <- select(pdh,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 pof <- AllH %>% filter(Pos == 'OF' | str_detect(posEl,'OF'),pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
   dplyr::rename(DFL=pDFL,SGP=pSGP)  %>% head(200)
 pof <- mutate(pof,RPV = (SGP - aRPV(pof,nrow(filter(pof,DFL>0))))/aRPV(pof,nrow(filter(pof,DFL>0))))
-pof <- select(pof,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+pof <- select(pof,Player,MLB,posEl,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 pna <- AllH %>% filter(is.na(Pos) | Pos=='',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>%
-  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
+  select(Player,MLB,Age,DFL=pDFL,SGP=pSGP,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG,hotscore,Injury,Expected.Return)
 
 
 
 psp <- AllP %>% filter(Pos=='SP',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 psp <- mutate(psp,RPV = (SGP - aRPV(psp,nrow(filter(psp,DFL>0))))/aRPV(psp,nrow(filter(psp,DFL>0))))
-psp <- select(psp,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
+psp <- select(psp,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
 
 pcl <- AllP %>% filter(Pos=='CL',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP)
 pcl <- mutate(pcl,RPV = (SGP - aRPV(pcl,nrow(filter(pcl,DFL>0))))/aRPV(pcl,nrow(filter(pcl,DFL>0))))
-pcl <- select(pcl,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
+pcl <- select(pcl,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
 
 pmr <- AllP %>% filter(Pos=='MR',pSGP > 0) %>% arrange(-pDFL,-pSGP) %>% dplyr::rename(DFL=pDFL,SGP=pSGP) %>% head(200)
 pmr <- mutate(pmr,RPV = (SGP - aRPV(pmr,nrow(filter(pmr,DFL>0))))/aRPV(pmr,nrow(filter(pmr,DFL>0))))
-pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
+pmr <- select(pmr,Player,MLB,Age,DFL,RPV,SGP,orank,ADP=pADP,rankDiff,Skew=pSkew,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,hotscore,Injury,Expected.Return,Pitch)
 
 # New prospect list
 url <- 'https://www.rotochamp.com/baseball/TopProspects.aspx'
@@ -449,14 +456,14 @@ teamLeft <- inner_join(df1,df2) %>% arrange(-hSal)
 
 
 # List of hitters to burn first
-topHitters <- AllH %>% filter(pDFL > 12) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
+topHitters <- AllH %>% filter(pDFL > 12) %>% select(Player,MLB,posEl,Age,pDFL,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG)
 
 # List of hotscore winners so far
-hotHitters <- AllH %>% filter(hotscore > 10) %>% select(Player,MLB,posEl,Age,hotscore,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG) %>%
+hotHitters <- AllH %>% filter(hotscore > 10) %>% select(Player,MLB,posEl,Age,hotscore,pDFL,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG) %>%
   arrange(-hotscore)
 hotPitchers <- AllP %>% filter(hotscore > 8) %>% 
   select(Player,MLB,Pos,Age,hotscore,DFL=pDFL,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD) %>%
-#  select(Player,MLB,posEl,Age,hotscore,pDFL,ADP=pADP,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG) %>%
+#  select(Player,MLB,posEl,Age,hotscore,pDFL,ADP=pADP,rankDiff,Skew=pSkew,HR=pHR,RBI=pRBI,R=pR,SB=pSB,AVG=pAVG) %>%
   arrange(-hotscore)
 
 
@@ -465,7 +472,7 @@ hotPitchers <- AllP %>% filter(hotscore > 8) %>%
 # savesholds <- read.csv('20athrelievers.csv',stringsAsFactors=FALSE)
 # savesholds <- rename(savesholds,Player=Pitcher)
 # savesholds <- inner_join(savesholds,AllP)
-# savesholds <- select(savesholds,Player,MLB,Age,Rank,pDFL,ADP=pADP,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
+# savesholds <- select(savesholds,Player,MLB,Age,Rank,pDFL,ADP=pADP,rankDiff,Skew=pSkew,W=pW,SO=pSO,ERA=pERA,SV=pSV,HLD=pHLD,Injury,Expected.Return,Pitch)
 
 
 # Create spreadsheet
@@ -515,77 +522,77 @@ addWorksheet(draft,'C')
 writeData(draft,'C',pc,headerStyle = headerStyle)
 addStyle(draft, 'C',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'C',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, 'C', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'1B')
 writeData(draft,'1B',p1b,headerStyle = headerStyle)
 addStyle(draft, '1B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '1B',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, '1B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'2B')
 writeData(draft,'2B',p2b,headerStyle = headerStyle)
 addStyle(draft, '2B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '2B',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, '2B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'SS')
 writeData(draft,'SS',pss,headerStyle = headerStyle)
 addStyle(draft, 'SS',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'SS',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, 'SS', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'3B')
 writeData(draft,'3B',p3b,headerStyle = headerStyle)
 addStyle(draft, '3B',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, '3B',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, '3B', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'OF')
 writeData(draft,'OF',pof,headerStyle = headerStyle)
 addStyle(draft, 'OF',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'OF',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, 'OF', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'DH')
 writeData(draft,'DH',pdh,headerStyle = headerStyle)
 addStyle(draft, 'DH',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'DH',style = csRatioColumn,rows = 2:200, cols = c(11,17),gridExpand = TRUE)
 setColWidths(draft, 'DH', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'Other')
 writeData(draft,'Other',pna,headerStyle = headerStyle)
 addStyle(draft, 'Other',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 6:7,gridExpand = TRUE)
-addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = 15,gridExpand = TRUE)
+addStyle(draft, 'Other',style = csRatioColumn,rows = 2:200, cols = c(8,14),gridExpand = TRUE)
 setColWidths(draft, 'Other', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'SP')
 writeData(draft,'SP',psp,headerStyle = headerStyle)
 addStyle(draft, 'SP',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'SP',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(draft, 'SP',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'SP',style = csRatioColumn,rows = 2:200, cols = c(10,16),gridExpand = TRUE)
 setColWidths(draft, 'SP', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'MR')
 writeData(draft,'MR',pmr,headerStyle = headerStyle)
 addStyle(draft, 'MR',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'MR',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(draft, 'MR',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'MR',style = csRatioColumn,rows = 2:200, cols = c(10,16),gridExpand = TRUE)
 setColWidths(draft, 'MR', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'CL')
 writeData(draft,'CL',pcl,headerStyle = headerStyle)
 addStyle(draft, 'CL',style = csMoneyColumn,rows = 2:200, cols = 4,gridExpand = TRUE)
 addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = 5:6,gridExpand = TRUE)
-addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = 14,gridExpand = TRUE)
+addStyle(draft, 'CL',style = csRatioColumn,rows = 2:200, cols = c(10,16),gridExpand = TRUE)
 setColWidths(draft, 'CL', cols = 1:20, widths = "auto")
 
 # # Athletic Article
@@ -619,7 +626,7 @@ addWorksheet(draft,'TopHitters')
 writeData(draft,'TopHitters',topHitters,headerStyle = headerStyle)
 addStyle(draft, 'TopHitters',style = csMoneyColumn,rows = 2:200, cols = 5,gridExpand = TRUE)
 #addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 6,gridExpand = TRUE)
-addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = 11,gridExpand = TRUE)
+addStyle(draft, 'TopHitters',style = csRatioColumn,rows = 2:200, cols = c(8,13),gridExpand = TRUE)
 setColWidths(draft, 'TopHitters', cols = 1:20, widths = "auto")
 
 addWorksheet(draft,'HotHitters')

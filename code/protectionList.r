@@ -157,8 +157,8 @@ rpitchers <- left_join(rpitchers,inj,by=c('Player'))
 
 
 
-rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+rpreds <- rbind(select(rhitters,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pHR,s2=pRBI,s3=pR,s4=pSB,pSkew,Injury,Expected.Return),
+            select(rpitchers,playerid,Team,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,s1=pW,s2=pSO,s3=pHLD,s4=pSV,pSkew,Injury,Expected.Return))
 
 #rpreds <- dplyr::rename(rpreds,Salary=Salary,Contract=Contract)
 
@@ -198,8 +198,8 @@ while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20
   rpitchers <- left_join(rpitchers,ipitchers,by=c('playerid'))
   rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
                       rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
-  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,Injury,Expected.Return),
-                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,Injury,Expected.Return))
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,pSkew,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,pSkew,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
   rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
   prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 0) %>%
@@ -219,8 +219,15 @@ print(sprintf("Inflation = %0.2f%%",inflation * 100))
 rpreds <- rpreds %>% mutate(valueRatio = pDFL/Salary)
 rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 
+# Compare my valuation vs league consensus (ADP)
+# positive rankDiff = sleeper (league undervalues), negative = overvalued
+rpreds <- rpreds %>% mutate(
+  myRank = rank(-pDFL),
+  rankDiff = pADP - myRank
+) %>% relocate(rankDiff, .before = pSkew)
+
 #cleanup rpreds for chatbot
-f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue,ADP=pADP)
+f2 <- rpreds %>% select(Team,Player,Pos,Age,Contract,Salary,"Expected Value"=netValue,ADP=pADP,rankDiff)
 write.csv(f2,"../rpreds.csv")
 
 prosters <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 1) %>% 
