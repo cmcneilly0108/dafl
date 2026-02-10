@@ -13,7 +13,8 @@ library("httr")
 
 cyear <- "2026"
 lastyear <- "2025"
-auctionROI <- 0.89
+# it's been .75 for 2024 and 2025, but .89 in 2023
+auctionROI <- 0.80
 hpratio <- .38
 
 # 
@@ -1133,6 +1134,84 @@ getStuffAPI <- function() {
   write.csv(stuff, "../latestStuff.csv")
   cat("Wrote", nrow(stuff), "Pitching+ records to ../latestStuff.csv\n")
   stuff
+}
+
+# Fetch hitter leaderboard from FanGraphs API (last 30 days by default)
+getHitterLeaders <- function(startDate, endDate) {
+  cat("Fetching hitter leaderboard from FanGraphs API...\n")
+
+  year <- as.integer(format(as.Date(endDate), "%Y"))
+
+  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data",
+                "?pos=all&stats=bat&lg=all",
+                "&season=", year, "&season1=", year,
+                "&ind=0&qual=0",
+                "&type=8&month=1000",
+                "&startdate=", startDate, "&enddate=", endDate,
+                "&pageitems=2000&rost=0")
+
+  cat("Date range:", startDate, "to", endDate, "\n")
+  hitters <- tryCatch({
+    fromJSON(url)$data
+  }, error = function(e) {
+    cat("Error fetching hitter leaders:", e$message, "\n")
+    return(NULL)
+  })
+
+  if (is.null(hitters) || nrow(hitters) == 0) {
+    cat("No hitter data returned.\n")
+    return(NULL)
+  }
+
+  cat("Fetched", nrow(hitters), "hitter records\n")
+
+  hitters <- hitters %>%
+    select(Player = PlayerName, MLB = TeamNameAbb, Pos = position,
+           G, PA, AB, H, HR, R, RBI, SB, BB, SO,
+           AVG, OBP, SLG, OPS, wOBA, `wRC+`, WAR, playerid)
+
+  write.csv(hitters, "../latestHitterLeaders.csv", row.names = FALSE)
+  cat("Wrote to ../latestHitterLeaders.csv\n")
+  hitters
+}
+
+# Fetch pitcher leaderboard from FanGraphs API (last 30 days by default)
+getPitcherLeaders <- function(startDate, endDate) {
+  cat("Fetching pitcher leaderboard from FanGraphs API...\n")
+
+  year <- as.integer(format(as.Date(endDate), "%Y"))
+
+  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data",
+                "?pos=all&stats=pit&lg=all",
+                "&season=", year, "&season1=", year,
+                "&ind=0&qual=0",
+                "&type=8&month=1000",
+                "&startdate=", startDate, "&enddate=", endDate,
+                "&pageitems=2000&rost=0")
+
+  cat("Date range:", startDate, "to", endDate, "\n")
+  pitchers <- tryCatch({
+    fromJSON(url)$data
+  }, error = function(e) {
+    cat("Error fetching pitcher leaders:", e$message, "\n")
+    return(NULL)
+  })
+
+  if (is.null(pitchers) || nrow(pitchers) == 0) {
+    cat("No pitcher data returned.\n")
+    return(NULL)
+  }
+
+  cat("Fetched", nrow(pitchers), "pitcher records\n")
+
+  pitchers <- pitchers %>%
+    select(Player = PlayerName, MLB = TeamNameAbb,
+           W, L, ERA, G, GS, SV, HLD, IP, SO, BB,
+           `K/9`, `BB/9`, HR, WHIP, BABIP, FIP, xFIP, WAR, playerid)
+
+  write.csv(pitchers, "../latestPitcherLeaders.csv", row.names = FALSE)
+  cat("Wrote to ../latestPitcherLeaders.csv\n")
+  pitchers
 }
 
 # Legacy RSelenium version (kept for reference, but getInjuriesAPI is preferred)

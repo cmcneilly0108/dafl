@@ -700,6 +700,80 @@ shinyServer(function(input, output, session) {
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
   })
 
+  # ============================
+  # Leaderboards tab
+  # ============================
+  leaderboards <- reactiveValues(hitters = NULL, pitchers = NULL)
+
+  observeEvent(input$fetchLeaders, {
+    startDate <- format(input$lbStartDate, "%Y-%m-%d")
+    endDate <- format(input$lbEndDate, "%Y-%m-%d")
+
+    showNotification("Fetching hitter leaderboard...", type = "message", duration = 3)
+    leaderboards$hitters <- tryCatch(
+      getHitterLeaders(startDate, endDate),
+      error = function(e) { showNotification(paste("Hitter error:", e$message), type = "error"); NULL }
+    )
+
+    showNotification("Fetching pitcher leaderboard...", type = "message", duration = 3)
+    leaderboards$pitchers <- tryCatch(
+      getPitcherLeaders(startDate, endDate),
+      error = function(e) { showNotification(paste("Pitcher error:", e$message), type = "error"); NULL }
+    )
+
+    if (!is.null(leaderboards$hitters) && !is.null(leaderboards$pitchers)) {
+      showNotification("Leaderboards loaded!", type = "message")
+    }
+  })
+
+  leaderH_avail <- reactive({
+    req(leaderboards$hitters)
+    roster <- rv$roster
+    h <- leaderboards$hitters
+    h$playerid <- as.character(h$playerid)
+    # Remove rostered players
+    h <- anti_join(h, roster, by = "playerid")
+    # Add pDFL from projection pool
+    pDFL_lookup <- AllH_full %>% select(playerid, pDFL) %>% distinct()
+    h <- left_join(h, pDFL_lookup, by = "playerid")
+    h$pDFL <- replace_na(h$pDFL, 0)
+    h %>% arrange(-pDFL)
+  })
+
+  leaderP_avail <- reactive({
+    req(leaderboards$pitchers)
+    roster <- rv$roster
+    p <- leaderboards$pitchers
+    p$playerid <- as.character(p$playerid)
+    # Remove rostered players
+    p <- anti_join(p, roster, by = "playerid")
+    # Add pDFL from projection pool
+    pDFL_lookup <- AllP_full %>% select(playerid, pDFL) %>% distinct()
+    p <- left_join(p, pDFL_lookup, by = "playerid")
+    p$pDFL <- replace_na(p$pDFL, 0)
+    p %>% arrange(-pDFL)
+  })
+
+  output$leaderH <- DT::renderDataTable({
+    h <- leaderH_avail()
+    datatable(h %>% select(-playerid),
+              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
+              filter = 'top') %>%
+      formatCurrency('pDFL') %>%
+      formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
+      formatRound(c('wRC+','WAR'), 1)
+  })
+
+  output$leaderP <- DT::renderDataTable({
+    p <- leaderP_avail()
+    datatable(p %>% select(-playerid),
+              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
+              filter = 'top') %>%
+      formatCurrency('pDFL') %>%
+      formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
+      formatRound('WAR', 1)
+  })
+
   output$prospectP <- DT::renderDataTable({
     datatable(prospectP,
               options = list(pageLength = 20, autoWidth = FALSE,

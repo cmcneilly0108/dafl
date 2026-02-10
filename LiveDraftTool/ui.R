@@ -121,6 +121,27 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                             verticalLayout(
                               DT::dataTableOutput("injOrig")
                             )
+                   ),
+                   tabPanel("Leaderboards",
+                            sidebarLayout(fluid = FALSE,
+                              sidebarPanel(
+                                dateInput('lbStartDate', 'Start Date',
+                                          value = Sys.Date() - 30, format = "yyyy-mm-dd"),
+                                dateInput('lbEndDate', 'End Date',
+                                          value = Sys.Date(), format = "yyyy-mm-dd"),
+                                actionButton('fetchLeaders', 'Fetch Leaderboards',
+                                             class = 'btn-primary', style = 'width:100%;'),
+                                width = 2
+                              ),
+                              mainPanel(
+                                tabsetPanel(type = 'tabs',
+                                  tabPanel('Hitters',
+                                           DT::dataTableOutput("leaderH")),
+                                  tabPanel('Pitchers',
+                                           DT::dataTableOutput("leaderP"))
+                                )
+                              )
+                            )
                    )
 )
 )
