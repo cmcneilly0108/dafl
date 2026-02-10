@@ -258,6 +258,49 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Inflation rate ---
+  inflationData_r <- reactive({
+    ps <- pstandings_r()
+    dollarsLeft <- sum(ps$CashLeft)
+    spotsLeft <- sum(ps$Needed)
+
+    # Value remaining = top N available players by pDFL, where N = remaining spots
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+    allAvail <- bind_rows(
+      ah %>% select(playerid, pDFL),
+      ap %>% select(playerid, pDFL)
+    ) %>% filter(pDFL > 0) %>% arrange(-pDFL)
+
+    topN <- head(allAvail, spotsLeft)
+    valueLeft <- sum(topN$pDFL)
+
+    inflationMult <- if (valueLeft > 0) dollarsLeft / valueLeft else NA
+    list(dollarsLeft = dollarsLeft, valueLeft = valueLeft,
+         spotsLeft = spotsLeft, inflation = inflationMult)
+  })
+
+  output$inflationDisplay <- renderUI({
+    d <- inflationData_r()
+    if (is.na(d$inflation)) return(tags$span("No data yet", style = "color:gray;"))
+
+    pct <- (d$inflation - 1) * 100
+    color <- if (pct > 10) "#e74c3c" else if (pct > 0) "#f39c12" else "#2ecc71"
+    sign <- if (pct >= 0) "+" else ""
+
+    tags$div(
+      style = "text-align:center; padding:8px; border-radius:4px; background:#f8f9fa; margin-bottom:10px;",
+      tags$strong(style = paste0("font-size:22px; color:", color, ";"),
+                  paste0(sprintf("%.1f", d$inflation), "x")),
+      tags$span(style = paste0("font-size:14px; color:", color, ";"),
+                paste0(" (", sign, sprintf("%.0f", pct), "%)")),
+      tags$br(),
+      tags$small(style = "color:gray;",
+                 paste0("$", round(d$dollarsLeft), " left / $", round(d$valueLeft),
+                        " value / ", d$spotsLeft, " spots"))
+    )
+  })
+
   # --- topHitters ---
   topHitters_r <- reactive({
     AllH_avail() %>% filter(pDFL > 15) %>%
@@ -480,6 +523,7 @@ shinyServer(function(input, output, session) {
 
     updateSelectizeInput(session, 'playerSearch',
                          choices = allChoices,
+                         selected = character(0),
                          server = TRUE)
   })
 
