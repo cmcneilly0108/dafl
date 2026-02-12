@@ -66,6 +66,90 @@ shinyServer(function(input, output, session) {
   # --- Helper: split roster into H/P ---
   isPitcherPos <- function(pos) pos %in% c('P','SP','MR','CL','RP')
 
+  # --- Build roster card for a team (slot assignment) ---
+  buildTeamRoster <- function(hitters, pitchers) {
+    makeRow <- function(slot, p) {
+      data.frame(Slot = slot, Player = p$Player[1], Pos = p$Pos[1],
+                 MLB = p$MLB[1], Age = p$Age[1], Yr = p$Contract[1],
+                 Salary = p$Salary[1], pDFL = p$pDFL[1], Value = p$Value[1],
+                 stringsAsFactors = FALSE)
+    }
+    emptyRow <- function(slot) {
+      data.frame(Slot = slot, Player = "", Pos = "", MLB = "",
+                 Age = NA_real_, Yr = NA_real_, Salary = NA_real_,
+                 pDFL = NA_real_, Value = NA_real_, stringsAsFactors = FALSE)
+    }
+
+    # --- Hitter slots: C, 1B, 2B, SS, 3B, OF x3, DH, BN x4 = 13 ---
+    hSlots <- list(
+      list(slot = "C",  pos = "C",  n = 1),
+      list(slot = "1B", pos = "1B", n = 1),
+      list(slot = "2B", pos = "2B", n = 1),
+      list(slot = "SS", pos = "SS", n = 1),
+      list(slot = "3B", pos = "3B", n = 1),
+      list(slot = "OF", pos = "OF", n = 3)
+    )
+
+    usedIds <- c()
+    hRows <- list()
+    for (sd in hSlots) {
+      cands <- hitters %>% filter(Pos == sd$pos, !playerid %in% usedIds) %>% arrange(-pDFL)
+      for (k in seq_len(sd$n)) {
+        label <- if (sd$n > 1) paste0(sd$slot, k) else sd$slot
+        if (k <= nrow(cands)) {
+          hRows[[length(hRows) + 1]] <- makeRow(label, cands[k, ])
+          usedIds <- c(usedIds, cands$playerid[k])
+        } else {
+          hRows[[length(hRows) + 1]] <- emptyRow(label)
+        }
+      }
+    }
+
+    # DH + 4 bench
+    remaining <- hitters %>% filter(!playerid %in% usedIds) %>% arrange(-pDFL)
+    benchH <- c("DH", "BN", "BN", "BN", "BN")
+    for (k in seq_along(benchH)) {
+      if (k <= nrow(remaining)) {
+        hRows[[length(hRows) + 1]] <- makeRow(benchH[k], remaining[k, ])
+      } else {
+        hRows[[length(hRows) + 1]] <- emptyRow(benchH[k])
+      }
+    }
+
+    # --- Pitcher slots: SP x5, MR x2, CL x2, BN x3 = 12 ---
+    pSlots <- list(
+      list(slot = "SP", pos = "SP", n = 7),
+      list(slot = "MR", pos = "MR", n = 2),
+      list(slot = "CL", pos = "CL", n = 2)
+    )
+
+    usedIds <- c()
+    pRows <- list()
+    for (sd in pSlots) {
+      cands <- pitchers %>% filter(Pos == sd$pos, !playerid %in% usedIds) %>% arrange(-pDFL)
+      for (k in seq_len(sd$n)) {
+        label <- if (sd$n > 1) paste0(sd$slot, k) else sd$slot
+        if (k <= nrow(cands)) {
+          pRows[[length(pRows) + 1]] <- makeRow(label, cands[k, ])
+          usedIds <- c(usedIds, cands$playerid[k])
+        } else {
+          pRows[[length(pRows) + 1]] <- emptyRow(label)
+        }
+      }
+    }
+
+    remaining <- pitchers %>% filter(!playerid %in% usedIds) %>% arrange(-pDFL)
+    for (k in 1:1) {
+      if (k <= nrow(remaining)) {
+        pRows[[length(pRows) + 1]] <- makeRow("BN", remaining[k, ])
+      } else {
+        pRows[[length(pRows) + 1]] <- emptyRow("BN")
+      }
+    }
+
+    list(hitters = bind_rows(hRows), pitchers = bind_rows(pRows))
+  }
+
   # --- Derived reactive: roster joined with projections ---
   rhitters_r <- reactive({
     roster <- rv$roster
@@ -580,38 +664,6 @@ shinyServer(function(input, output, session) {
                              paging = FALSE, searching = FALSE, info = FALSE))
   })
 
-  # Team selector
-  updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
-  output$tname <- renderText({ input$e1 })
-
-  output$tProtect <- DT::renderDataTable({
-    req(input$e1)
-    datatable(tProtect(input$e1),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatCurrency('pDFL') %>%
-      formatRound(c('Age','rankDiff'), 0) %>%
-      formatRound('Skew', 3)
-  })
-
-  output$Goals <- DT::renderDataTable({
-    req(input$e1)
-    rp <- rpitchers_r()
-    rh <- rhitters_r()
-    datatable(calcGoals(rp, rh, targets, input$e1),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatPercentage('pc', 2) %>%
-      formatRound(c('collected','needed'), 0)
-  })
-
-  output$tpSummary <- DT::renderDataTable({
-    req(input$e1)
-    datatable(tpSummary(input$e1),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatRound('salleft', 0)
-  })
 
   # Position selector
   updateSelectizeInput(session, 'e2', choices = hpos, selected = 'OF')
@@ -688,9 +740,9 @@ shinyServer(function(input, output, session) {
     datatable(topHitters_r(),
               options = list(pageLength = 20, autoWidth = FALSE,
                              searching = FALSE, info = FALSE)) %>%
-      formatRound(c('Age','ADP','HR','RBI','R','SB'), 0) %>%
+      formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('pDFL') %>%
-      formatRound(c('AVG'), 3)
+      formatRound(c('Skew','AVG'), 3)
   })
 
   output$prospectH <- DT::renderDataTable({
@@ -779,6 +831,99 @@ shinyServer(function(input, output, session) {
               options = list(pageLength = 20, autoWidth = FALSE,
                              searching = FALSE, info = FALSE)) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
+  })
+
+  # ============================
+  # Rosters tab
+  # ============================
+  updateSelectizeInput(session, 'rosterTeam', choices = teams, selected = 'Liquor Crickets')
+
+  teamRoster_r <- reactive({
+    req(input$rosterTeam)
+    roster <- rv$roster %>% filter(Team == input$rosterTeam)
+    roster$playerid <- as.character(roster$playerid)
+
+    # Lookup projection data (Age, pDFL)
+    allLookup <- bind_rows(
+      AllH_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid)),
+      AllP_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid))
+    ) %>% distinct(playerid, .keep_all = TRUE)
+
+    roster <- left_join(roster, allLookup, by = "playerid")
+    roster$pDFL <- replace_na(roster$pDFL, 0)
+    roster$Value <- roster$pDFL - roster$Salary
+
+    hitters <- roster %>% filter(!isPitcherPos(Pos)) %>% arrange(-pDFL)
+    pitchers <- roster %>% filter(isPitcherPos(Pos)) %>% arrange(-pDFL)
+
+    buildTeamRoster(hitters, pitchers)
+  })
+
+  output$rosterTeamTitle <- renderText({ input$rosterTeam })
+
+  output$rosterH <- DT::renderDataTable({
+    tr <- teamRoster_r()
+    datatable(tr$hitters, rownames = FALSE,
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE)) %>%
+      formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
+      formatRound('Age', 0) %>%
+      formatRound('Yr', 0) %>%
+      formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
+      formatStyle('Player', target = 'row',
+                  backgroundColor = styleEqual("", "#f5f5f5"))
+  })
+
+  output$rosterP <- DT::renderDataTable({
+    tr <- teamRoster_r()
+    datatable(tr$pitchers, rownames = FALSE,
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE)) %>%
+      formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
+      formatRound('Age', 0) %>%
+      formatRound('Yr', 0) %>%
+      formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
+      formatStyle('Player', target = 'row',
+                  backgroundColor = styleEqual("", "#f5f5f5"))
+  })
+
+  output$rosterGoals <- DT::renderDataTable({
+    req(input$rosterTeam)
+    rp <- rpitchers_r()
+    rh <- rhitters_r()
+    datatable(calcGoals(rp, rh, targets, input$rosterTeam),
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE),
+              rownames = FALSE) %>%
+      formatPercentage('pc', 2) %>%
+      formatRound(c('collected', 'needed'), 0)
+  })
+
+  output$rosterBudget <- renderUI({
+    tr <- teamRoster_r()
+    hSpend <- sum(tr$hitters$Salary, na.rm = TRUE)
+    pSpend <- sum(tr$pitchers$Salary, na.rm = TRUE)
+    total <- hSpend + pSpend
+    hBudget <- round(cap * (1 - hpratio))
+    pBudget <- round(cap * hpratio)
+    hFilled <- sum(tr$hitters$Player != "", na.rm = TRUE)
+    pFilled <- sum(tr$pitchers$Player != "", na.rm = TRUE)
+
+    tags$div(style = "margin-top:15px;",
+      tags$h4("Budget"),
+      tags$table(class = "table table-condensed table-bordered",
+        tags$tr(tags$td("Hitting"), tags$td(style = "text-align:right;", paste0("$", hSpend, " / $", hBudget))),
+        tags$tr(tags$td("Pitching"), tags$td(style = "text-align:right;", paste0("$", pSpend, " / $", pBudget))),
+        tags$tr(tags$td(tags$strong("Total")), tags$td(style = "text-align:right;", tags$strong(paste0("$", total, " / $", cap)))),
+        tags$tr(tags$td("Remaining"), tags$td(style = "text-align:right;", paste0("$", cap - total)))
+      ),
+      tags$h4("Roster"),
+      tags$table(class = "table table-condensed table-bordered",
+        tags$tr(tags$td("Hitters"), tags$td(style = "text-align:right;", paste0(hFilled, " / ", nhitters))),
+        tags$tr(tags$td("Pitchers"), tags$td(style = "text-align:right;", paste0(pFilled, " / ", npitchers))),
+        tags$tr(tags$td(tags$strong("Total")), tags$td(style = "text-align:right;", tags$strong(paste0(hFilled + pFilled, " / 25"))))
+      )
+    )
   })
 
 })

@@ -33,6 +33,24 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                               )
                             )
                    ),
+                   tabPanel("Rosters",
+                            sidebarLayout(fluid = FALSE,
+                              sidebarPanel(
+                                selectizeInput('rosterTeam', 'Select Team', choices = NULL),
+                                uiOutput("rosterBudget"),
+                                h4("Goals"),
+                                DT::dataTableOutput("rosterGoals"),
+                                width = 3
+                              ),
+                              mainPanel(
+                                h3(textOutput("rosterTeamTitle")),
+                                h4("Hitters"),
+                                DT::dataTableOutput("rosterH"),
+                                h4("Pitchers"),
+                                DT::dataTableOutput("rosterP")
+                              )
+                            )
+                   ),
                    tabPanel("Overview",
                             verticalLayout(
                               DT::dataTableOutput("pstandings")
@@ -47,19 +65,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                                 h2("Protection by Position"),
                                 DT::dataTableOutput("ppp"))
                             )
-                   ),
-                   tabPanel("Protection Lists",
-                            sidebarLayout(fluid=FALSE,
-                                          sidebarPanel(
-                                            selectizeInput(
-                                              'e1', 'Select Team', choices=NULL)
-                                            ,width=2),
-                                          mainPanel(
-                                            h2(textOutput("tname")),
-                                            DT::dataTableOutput("tpSummary"),
-                                            DT::dataTableOutput("Goals"),
-                                            DT::dataTableOutput("tProtect"))
-                                          )
                    ),
                    tabPanel("Protect by Pos",
                             sidebarLayout(fluid=FALSE,
