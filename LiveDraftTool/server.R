@@ -72,12 +72,14 @@ shinyServer(function(input, output, session) {
       data.frame(Slot = slot, Player = p$Player[1], Pos = p$Pos[1],
                  MLB = p$MLB[1], Age = p$Age[1], Yr = p$Contract[1],
                  Salary = p$Salary[1], pDFL = p$pDFL[1], Value = p$Value[1],
+                 playerid = p$playerid[1],
                  stringsAsFactors = FALSE)
     }
     emptyRow <- function(slot) {
       data.frame(Slot = slot, Player = "", Pos = "", MLB = "",
                  Age = NA_real_, Yr = NA_real_, Salary = NA_real_,
-                 pDFL = NA_real_, Value = NA_real_, stringsAsFactors = FALSE)
+                 pDFL = NA_real_, Value = NA_real_,
+                 playerid = NA_character_, stringsAsFactors = FALSE)
     }
 
     # --- Hitter slots: C, 1B, 2B, SS, 3B, OF x3, DH, BN x4 = 13 ---
@@ -93,7 +95,7 @@ shinyServer(function(input, output, session) {
     usedIds <- c()
     hRows <- list()
     for (sd in hSlots) {
-      cands <- hitters %>% filter(Pos == sd$pos, !playerid %in% usedIds) %>% arrange(-pDFL)
+      cands <- hitters %>% filter((!is.na(posEl) & str_detect(posEl, fixed(sd$pos))) | (is.na(posEl) & Pos == sd$pos), !playerid %in% usedIds) %>% arrange(-pDFL)
       for (k in seq_len(sd$n)) {
         label <- if (sd$n > 1) paste0(sd$slot, k) else sd$slot
         if (k <= nrow(cands)) {
@@ -845,8 +847,8 @@ shinyServer(function(input, output, session) {
 
     # Lookup projection data (Age, pDFL)
     allLookup <- bind_rows(
-      AllH_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid)),
-      AllP_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid))
+      AllH_full %>% select(playerid, Age, pDFL, posEl) %>% mutate(playerid = as.character(playerid)),
+      AllP_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid), posEl = NA_character_)
     ) %>% distinct(playerid, .keep_all = TRUE)
 
     roster <- left_join(roster, allLookup, by = "playerid")
@@ -863,7 +865,7 @@ shinyServer(function(input, output, session) {
 
   output$rosterH <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$hitters, rownames = FALSE,
+    datatable(tr$hitters %>% select(-playerid), rownames = FALSE,
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE)) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
@@ -876,7 +878,7 @@ shinyServer(function(input, output, session) {
 
   output$rosterP <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$pitchers, rownames = FALSE,
+    datatable(tr$pitchers %>% select(-playerid), rownames = FALSE,
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE)) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
@@ -889,8 +891,12 @@ shinyServer(function(input, output, session) {
 
   output$rosterGoals <- DT::renderDataTable({
     req(input$rosterTeam)
-    rp <- rpitchers_r()
-    rh <- rhitters_r()
+    tr <- teamRoster_r()
+    # Only count starters toward goals
+    hStarterIds <- tr$hitters %>% filter(!Slot %in% c("BN")) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    rh <- rhitters_r() %>% filter(playerid %in% hStarterIds)
+    rp <- rpitchers_r() %>% filter(playerid %in% pStarterIds)
     datatable(calcGoals(rp, rh, targets, input$rosterTeam),
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE),
