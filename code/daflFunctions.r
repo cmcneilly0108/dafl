@@ -1472,6 +1472,50 @@ getFGScouts <- function(fn) {
   rrc <- rrc %>% filter(!is.na(playerid))
 }
 
+# Fetch FanGraphs prospect board data from API
+# pos: "bat" for hitters, "pit" for pitchers
+# draft: e.g. "2026prospect", "2025updated". NULL = auto-detect latest.
+# Returns dataframe with same column names as manually downloaded CSV
+getFGProspects <- function(pos = "bat", draft = NULL) {
+  if (is.null(draft)) {
+    # Try candidates in priority order, use first that returns matching data
+    candidates <- c(paste0(cyear, "updated"), paste0(cyear, "prospect"),
+                    paste0(lastyear, "updated"), paste0(lastyear, "prospect"))
+    for (cand in candidates) {
+      yr <- as.integer(sub("(\\d{4}).*", "\\1", cand))
+      url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", cand, "&pos=", pos)
+      df <- tryCatch(jsonlite::fromJSON(url), error = function(e) NULL)
+      if (!is.null(df) && nrow(df) > 0 && df$Season[1] == yr) {
+        message("Using FanGraphs prospect list: ", cand)
+        break
+      }
+    }
+  } else {
+    url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", draft, "&pos=", pos)
+    df <- jsonlite::fromJSON(url)
+  }
+
+  if (pos == "bat") {
+    df <- df %>% rename(
+      Name = playerName, Pos = Position, Org = Team,
+      Top.100 = Ovr_Rank, Org.Rk = Org_Rank,
+      Pitch.Sel = Pitch_Sel, Bat.Ctrl = Bat_Ctrl,
+      Con.Style = Contact_Style, Game.Pwr = Game,
+      Raw.Pwr = Raw, Versa = Versatility,
+      Hard.Hit. = `HardHit%`, FV = cFV
+    )
+  } else {
+    df <- df %>% rename(
+      Name = playerName, Pos = Position, Org = Team,
+      Top.100 = Ovr_Rank, Org.Rk = Org_Rank,
+      TJ.Date = TJDate, FB.Type = FBType,
+      Sits = Range, Tops = Touch, FV = cFV
+    )
+  }
+
+  df %>% filter(!is.na(PlayerId))
+}
+
 # Claude API wrapper for AI-powered team summaries
 callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY")) {
   if (api_key == "" || is.na(api_key)) {

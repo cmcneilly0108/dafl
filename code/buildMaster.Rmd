@@ -154,14 +154,10 @@ Add the prospects!!!
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
 
-hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
-fgh <- hplist %>% rename(playerid = PlayerId)
-#fgh <- hplist 
-fgh <- select(fgh,playerid,Player=Name,MLB=Org)
-pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
-fgp <- pplist %>% rename(playerid = PlayerId)
-#fgp <- pplist
-fgp <- select(fgp,playerid,Player=Name,MLB=Org)
+hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId)
+fgh <- select(hplist,playerid,Player=Name,MLB=Org)
+pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId)
+fgp <- select(pplist,playerid,Player=Name,MLB=Org)
 
 #fgh <- getFGScouts("../fangraphs-the-board-dataH.json")
 #fgh <- select(fgh,playerid,Player,MLB=Team)

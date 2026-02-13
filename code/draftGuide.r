@@ -274,15 +274,9 @@ lc <- left_join(lc,inj,by=c('Player'))
 
 
 
-#prospects from FanGraphs
-#hplist <- getFGScouts("../fangraphs-the-board-dataH.json")
-#pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
-
-# Go back to manual download of files
-hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
-hplist <- hplist %>% rename(playerid = PlayerId)
-pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
-pplist <- pplist %>% rename(playerid = PlayerId)
+#prospects from FanGraphs API
+hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId)
+pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId)
 
 #proh <- right_join(AllH,hplist,by=c('playerid'))
 proh <- inner_join(AllH,hplist,by=c('playerid'))

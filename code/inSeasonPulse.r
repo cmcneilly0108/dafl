@@ -392,12 +392,10 @@ RTot$zScore <- as.numeric(scale(RTot$tDFL))
 #  rename(Player = Name,playerid = playerId)
 #pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
 
-# Go back to manual download of files
-hplist <- read.csv("../fangraphs-the-board-dataH.csv",stringsAsFactors=FALSE)
-hplist <- hplist %>% rename(playerid = PlayerId)
+#prospects from FanGraphs API
+hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId)
 hplist <- hplist %>% filter(Hit!="")
-pplist <- read.csv("../fangraphs-the-board-dataP.csv",stringsAsFactors=FALSE)
-pplist <- pplist %>% rename(playerid = PlayerId)
+pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId)
 pplist <- pplist %>% filter(FB.Type!="")
 
 

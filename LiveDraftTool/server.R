@@ -831,7 +831,7 @@ shinyServer(function(input, output, session) {
   output$prospectP <- DT::renderDataTable({
     datatable(prospectP,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE)) %>%
+                             searching = FALSE, info = FALSE), filter = 'top') %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
   })
 
