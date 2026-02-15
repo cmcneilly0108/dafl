@@ -270,6 +270,13 @@ shinyServer(function(input, output, session) {
     group_by(pc, Position) %>% summarize(Count = n(), .groups = 'drop')
   })
 
+  # --- FanGraphs link helper ---
+  fgLink <- function(name, pid) {
+    ifelse(is.na(pid) | name == "",
+           name,
+           paste0("<a target='_blank' href='//www.fangraphs.com/players/x/", pid, "/stats'>", name, "</a>"))
+  }
+
   # --- Available player pools (remove rostered) ---
   AllH_avail <- reactive({
     roster <- rv$roster
@@ -390,8 +397,24 @@ shinyServer(function(input, output, session) {
   # --- topHitters ---
   topHitters_r <- reactive({
     AllH_avail() %>% arrange(-pDFL) %>% head(40) %>%
+      mutate(Player = fgLink(Player, playerid)) %>%
       select(Player, MLB, posEl, Age, pDFL, ADP = pADP, rankDiff, Skew = pSkew,
              HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG)
+  })
+
+  # --- prospects (reactive to remove drafted players) ---
+  prospectH_r <- reactive({
+    AllH_avail() %>% inner_join(hplist, by = 'playerid') %>%
+      mutate(Player = fgLink(Name, playerid)) %>%
+      select(Player, MLB = Org, Pos = Pos.y, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, Game = Game.Pwr, Raw = Raw.Pwr, Spd) %>%
+      arrange(desc(FV))
+  })
+
+  prospectP_r <- reactive({
+    AllP_avail() %>% inner_join(pplist, by = 'playerid') %>%
+      mutate(Player = fgLink(Name, playerid)) %>%
+      select(Player, MLB = Org, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, FB, SL, CB, CH, CMD, Sits, Tops) %>%
+      arrange(desc(FV))
   })
 
   # --- injOrig (injuries minus rostered) ---
@@ -445,6 +468,7 @@ shinyServer(function(input, output, session) {
       arrange(-pDFL, -pSGP) %>% dplyr::rename(DFL = pDFL, SGP = pSGP)
     res <- mutate(res, RPV = (SGP - aRPV(res, nrow(filter(res, DFL > 0)))) /
                     aRPV(res, nrow(filter(res, DFL > 0))))
+    res <- mutate(res, Player = fgLink(Player, playerid))
     select(res, Player, MLB, posEl, Age, DFL, RPV, SGP, orank, ADP = pADP, rankDiff, Skew = pSkew,
            HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG, Injury, Expected.Return)
   }
@@ -455,6 +479,7 @@ shinyServer(function(input, output, session) {
       arrange(-pDFL, -pSGP) %>% dplyr::rename(DFL = pDFL, SGP = pSGP) %>% head(200)
     res <- mutate(res, RPV = (SGP - aRPV(res, nrow(filter(res, DFL > 0)))) /
                     aRPV(res, nrow(filter(res, DFL > 0))))
+    res <- mutate(res, Player = fgLink(Player, playerid))
     select(res, Player, MLB, Age, DFL, RPV, SGP, orank, ADP = pADP, rankDiff, Skew = pSkew,
            W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, Injury, Expected.Return)
   }
@@ -675,7 +700,7 @@ shinyServer(function(input, output, session) {
     req(input$e2)
     datatable(hitPlayersbyPos(input$e2),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top') %>%
+                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','AVG'), 3)
@@ -689,7 +714,7 @@ shinyServer(function(input, output, session) {
     req(input$e3)
     datatable(pitPlayersbyPos(input$e3),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE), filter = 'top') %>%
+                             info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','W','SV','HLD','SO'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','ERA'), 3)
@@ -723,9 +748,9 @@ shinyServer(function(input, output, session) {
 
   # Static outputs that don't change with drafting
   output$rrcResults <- DT::renderDataTable({
-    datatable(rrcResults,
+    datatable(rrcResults %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE), filter = 'top') %>%
+                             info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('pADP','pW','pSV','pHLD','pSO'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('pSGP','pERA','pK/9','pBB/9'), 3)
@@ -741,16 +766,16 @@ shinyServer(function(input, output, session) {
   output$topHitters <- DT::renderDataTable({
     datatable(topHitters_r(),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE)) %>%
+                             searching = FALSE, info = FALSE), escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('Skew','AVG'), 3)
   })
 
   output$prospectH <- DT::renderDataTable({
-    datatable(prospectH,
+    datatable(prospectH_r(),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top') %>%
+                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
   })
 
@@ -809,29 +834,29 @@ shinyServer(function(input, output, session) {
   })
 
   output$leaderH <- DT::renderDataTable({
-    h <- leaderH_avail()
+    h <- leaderH_avail() %>% mutate(Player = fgLink(Player, playerid))
     datatable(h %>% select(-playerid),
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
-              filter = 'top') %>%
+              filter = 'top', escape = FALSE) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
       formatRound(c('wRC+','WAR'), 1)
   })
 
   output$leaderP <- DT::renderDataTable({
-    p <- leaderP_avail()
+    p <- leaderP_avail() %>% mutate(Player = fgLink(Player, playerid))
     datatable(p %>% select(-playerid),
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
-              filter = 'top') %>%
+              filter = 'top', escape = FALSE) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
       formatRound('WAR', 1)
   })
 
   output$prospectP <- DT::renderDataTable({
-    datatable(prospectP,
+    datatable(prospectP_r(),
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top') %>%
+                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
   })
 
@@ -865,9 +890,9 @@ shinyServer(function(input, output, session) {
 
   output$rosterH <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$hitters %>% select(-playerid), rownames = FALSE,
+    datatable(tr$hitters %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid), rownames = FALSE,
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
-                             ordering = FALSE, autoWidth = FALSE)) %>%
+                             ordering = FALSE, autoWidth = FALSE), escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%
@@ -878,9 +903,9 @@ shinyServer(function(input, output, session) {
 
   output$rosterP <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$pitchers %>% select(-playerid), rownames = FALSE,
+    datatable(tr$pitchers %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid), rownames = FALSE,
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
-                             ordering = FALSE, autoWidth = FALSE)) %>%
+                             ordering = FALSE, autoWidth = FALSE), escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%

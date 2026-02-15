@@ -275,8 +275,8 @@ lc <- left_join(lc,inj,by=c('Player'))
 
 
 #prospects from FanGraphs API
-hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId)
-pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId)
+hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
+pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
 
 #proh <- right_join(AllH,hplist,by=c('playerid'))
 proh <- inner_join(AllH,hplist,by=c('playerid'))
@@ -293,7 +293,7 @@ prospectP <- select(prop,Player=Name,MLB=Org,Age=Age.x,DFL=pDFL,ADP=pADP,FV,Top.
 rrc <- getRRClosers()
 rrcAvail <- inner_join(rrc,AllP,by=c('playerid'))
 rrcResults <- arrange(rrcAvail,-pDFL) %>%
-  select(Player,MLB,Pos,pDFL,pSGP,Role,Tags,pADP,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,Injury,Expected.Return)
+  select(playerid,Player,MLB,Pos,pDFL,pSGP,Role,Tags,pADP,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,Injury,Expected.Return)
 rrcResults <- rrcResults %>% arrange(Role,-pDFL)
 
 
