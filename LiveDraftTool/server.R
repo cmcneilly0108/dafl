@@ -389,7 +389,7 @@ shinyServer(function(input, output, session) {
 
   # --- topHitters ---
   topHitters_r <- reactive({
-    AllH_avail() %>% filter(pDFL > 15) %>%
+    AllH_avail() %>% arrange(-pDFL) %>% head(40) %>%
       select(Player, MLB, posEl, Age, pDFL, ADP = pADP, rankDiff, Skew = pSkew,
              HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG)
   })
