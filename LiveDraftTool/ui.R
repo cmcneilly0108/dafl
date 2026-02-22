@@ -21,6 +21,11 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                                                     style = 'width:100%;')
                                      ),
                                      h4("Draft Market", style = "margin-top:15px;"),
+                                     selectInput('myTeam', 'My Team', choices = NULL),
+                                     uiOutput("spendingPower"),
+                                     selectInput('marketPos', 'Filter by Position',
+                                                 choices = c('All', 'C','1B','2B','SS','3B','OF','SP','MR','CL'),
+                                                 selected = 'All'),
                                      uiOutput("inflationDisplay"),
                                      uiOutput("buyNowSignal"),
                                      plotOutput("buyNowGauge", height = "200px")

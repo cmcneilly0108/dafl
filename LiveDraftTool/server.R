@@ -290,9 +290,17 @@ shinyServer(function(input, output, session) {
 
   # --- Buy Now gauge data ---
   buyNowData_r <- reactive({
+    pos <- input$marketPos
     log <- rv$draftLog
     if (length(log) == 0) return(NULL)
     df <- bind_rows(log)
+
+    # Filter draft log by position if selected
+    if (!is.null(pos) && pos != "All") {
+      df <- df %>% filter(Pos == pos)
+      if (nrow(df) == 0) return(NULL)
+    }
+
     valueLookup <- bind_rows(
       AllH_full %>% select(playerid, pDFL),
       AllP_full %>% select(playerid, pDFL)
@@ -353,13 +361,24 @@ shinyServer(function(input, output, session) {
 
   # --- Inflation rate ---
   inflationData_r <- reactive({
+    pos <- input$marketPos
     ps <- pstandings_r()
     dollarsLeft <- sum(ps$CashLeft)
     spotsLeft <- sum(ps$Needed)
 
-    # Value remaining = top N available players by pDFL, where N = remaining spots
     ah <- AllH_avail()
     ap <- AllP_avail()
+
+    if (!is.null(pos) && pos != "All") {
+      if (pos %in% c('SP','MR','CL')) {
+        ah <- ah[0, ]
+        ap <- ap %>% filter(Pos == pos)
+      } else {
+        ah <- ah %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos)))
+        ap <- ap[0, ]
+      }
+    }
+
     allAvail <- bind_rows(
       ah %>% select(playerid, pDFL),
       ap %>% select(playerid, pDFL)
@@ -391,6 +410,47 @@ shinyServer(function(input, output, session) {
       tags$small(style = "color:gray;",
                  paste0("$", round(d$dollarsLeft), " left / $", round(d$valueLeft),
                         " value / ", d$spotsLeft, " spots"))
+    )
+  })
+
+  # --- Spending Power ---
+  output$spendingPower <- renderUI({
+    req(input$myTeam)
+    ps <- pstandings_r()
+    me <- ps %>% filter(Team == input$myTeam)
+    if (nrow(me) == 0) return(tags$span("Team not found", style = "color:gray;"))
+
+    myDPP <- me$DPP
+    others <- ps %>% filter(Team != input$myTeam, Needed > 0)
+    if (nrow(others) == 0) return(tags$span("No other teams with needs", style = "color:gray;"))
+
+    leagueAvgDPP <- sum(others$CashLeft) / sum(others$Needed)
+    ratio <- if (leagueAvgDPP > 0) myDPP / leagueAvgDPP else NA
+    myRank <- sum(ps$DPP <= myDPP, na.rm = TRUE)  # rank among all teams (1 = worst)
+    myRank <- nteams - myRank + 1  # flip so 1 = best
+
+    if (is.na(ratio) || me$Needed <= 0) {
+      label <- "Roster Full"; color <- "gray"
+    } else if (ratio >= 1.3) {
+      label <- "Strong Buy"; color <- "#2ecc71"
+    } else if (ratio >= 1.0) {
+      label <- "Lean Buy"; color <- "#27ae60"
+    } else if (ratio >= 0.8) {
+      label <- "Neutral"; color <- "#f39c12"
+    } else {
+      label <- "Wait"; color <- "#e74c3c"
+    }
+
+    tags$div(
+      style = "text-align:center; padding:8px; border-radius:4px; background:#f8f9fa; margin-bottom:10px;",
+      tags$strong(style = paste0("font-size:18px; color:", color, ";"), label),
+      tags$br(),
+      tags$span(style = "font-size:14px;",
+                paste0("$", round(myDPP, 1), "/player vs $", round(leagueAvgDPP, 1), " avg")),
+      tags$br(),
+      tags$small(style = "color:gray;",
+                 paste0("Rank: ", myRank, "/", nteams,
+                        " | $", round(me$CashLeft), " left, ", me$Needed, " spots"))
     )
   })
 
@@ -629,7 +689,6 @@ shinyServer(function(input, output, session) {
       paste0(ap$Player, " (", ap$Pos, " - $", round(ap$pDFL), ")")
     )
     allChoices <- c(hChoices, pChoices)
-    # Sort by display label
     allChoices <- allChoices[order(names(allChoices))]
 
     updateSelectizeInput(session, 'playerSearch',
@@ -638,8 +697,9 @@ shinyServer(function(input, output, session) {
                          server = TRUE)
   })
 
-  # Team dropdown for draft
+  # Team dropdowns
   updateSelectInput(session, 'draftTeam', choices = teams)
+  updateSelectInput(session, 'myTeam', choices = teams, selected = 'Liquor Crickets')
 
   # ============================
   # New outputs: Recent Picks, Draft Standings
@@ -946,7 +1006,8 @@ shinyServer(function(input, output, session) {
         tags$tr(tags$td("Hitting"), tags$td(style = "text-align:right;", paste0("$", hSpend, " / $", hBudget))),
         tags$tr(tags$td("Pitching"), tags$td(style = "text-align:right;", paste0("$", pSpend, " / $", pBudget))),
         tags$tr(tags$td(tags$strong("Total")), tags$td(style = "text-align:right;", tags$strong(paste0("$", total, " / $", cap)))),
-        tags$tr(tags$td("Remaining"), tags$td(style = "text-align:right;", paste0("$", cap - total)))
+        tags$tr(tags$td("Remaining"), tags$td(style = "text-align:right;", paste0("$", cap - total))),
+        tags$tr(tags$td(tags$strong("Max Bid")), tags$td(style = "text-align:right;", tags$strong(paste0("$", cap - total - (25 - hFilled - pFilled - 1)))))
       ),
       tags$h4("Roster"),
       tags$table(class = "table table-condensed table-bordered",
