@@ -409,6 +409,114 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   list(bhitters,bpitchers)
 }
 
+preLPP2 <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
+  # Same as preLPP but also returns inflation-adjusted zDFL for protected players
+  hpratio <- 0.35
+  nhitters <- 13
+  npitchers <- 12
+  nteams <- 14
+  cap <- 260
+
+  pdollars <- round((nteams * (cap + dadj) * ratio)*hpratio)
+  hdollars <- (nteams * (cap + dadj) * ratio) - pdollars
+
+  thitters <- (nhitters * nteams) + padj
+  tpitchers <- (npitchers * nteams) + padj
+  ct <- 0
+
+  while (ct < 6) {
+    toph <- head(ihitters,thitters)
+    topp <- head(ipitchers,tpitchers)
+    mHR <- mean(toph$pHR,na.rm = TRUE)
+    sdHR <- sd(toph$pHR,na.rm = TRUE)
+    mR <- mean(toph$pR,na.rm = TRUE)
+    sdR <- sd(toph$pR,na.rm = TRUE)
+    mSB <- mean(toph$pSB,na.rm = TRUE)
+    sdSB <- sd(toph$pSB,na.rm = TRUE)
+    mRBI <- mean(toph$pRBI,na.rm = TRUE)
+    sdRBI <- sd(toph$pRBI,na.rm = TRUE)
+
+    mW <- mean(topp$pW,na.rm = TRUE)
+    sdW <- sd(topp$pW,na.rm = TRUE)
+    mSO <- mean(topp$pSO,na.rm = TRUE)
+    sdSO <- sd(topp$pSO,na.rm = TRUE)
+    mHLD <- mean(topp$pHLD,na.rm = TRUE)
+    sdHLD <- sd(topp$pHLD,na.rm = TRUE)
+    sdHLD <- ifelse(sdHLD==0,1,sdHLD)
+    mSV <- mean(topp$pSV,na.rm = TRUE)
+    sdSV <- sd(topp$pSV,na.rm = TRUE)
+
+    mAvg <- mean(toph$pAVG,na.rm = TRUE)
+    sdAvg <- sd(toph$pAVG,na.rm = TRUE)
+    ihitters <- mutate(ihitters,xH = pH-(pAB * mAvg))
+    toph <- mutate(toph,xH = pH-(pAB * mAvg))
+    mxH <- mean(toph$xH,na.rm = TRUE)
+    sdxH <- sd(toph$xH,na.rm = TRUE)
+
+    mERA <- mean(topp$pERA,na.rm = TRUE)
+    sdERA <- sd(topp$pERA,na.rm = TRUE)
+    ipitchers <- mutate(ipitchers,xER = (pIP * mERA/9)-pER)
+    topp <- mutate(topp,xER = (pIP * mERA/9)-pER)
+    mxER <- mean(topp$xER,na.rm = TRUE)
+    sdxER <- sd(topp$xER,na.rm = TRUE)
+
+    ihitters <- mutate(ihitters,zHR=(pHR-mHR)/sdHR,zR=(pR-mR)/sdR,zRBI=(pRBI-mRBI)/sdRBI,
+                       zSB=(pSB-mSB)/sdSB,zxH=(xH-mxH)/sdxH)
+    ihitters <- mutate(ihitters,zScore=zHR+zR+zRBI+zSB+(1.0*zxH))
+    ihitters <- arrange(ihitters,-zScore)
+
+    ipitchers <- mutate(ipitchers,zW=(pW-mW)/sdW,zSO=(pSO-mSO)/sdSO,zHLD=(pHLD-mHLD)/sdHLD,
+                       zSV=(pSV-mSV)/sdSV,zxER=(xER-mxER)/sdxER)
+    ipitchers <- mutate(ipitchers,zScore=zW+zSO+(0.5*zHLD)+zSV+zxER)
+    ipitchers <- arrange(ipitchers,-zScore)
+
+    ct <- ct + 1
+  }
+  # Add the total thitter value to everyone
+  ihitters <- head(ihitters,thitters)
+  ihitters$zScore <- ihitters$zScore - last(ihitters$zScore)
+  # Add pitchers
+  ipitchers <- head(ipitchers,tpitchers)
+  ipitchers$zScore <- ipitchers$zScore - last(ipitchers$zScore)
+
+  # remove protected players
+  if (nrow(prot)>0) {
+    ih2 <- anti_join(ihitters,prot,by=c('Player'),copy=FALSE)
+    ip2 <- anti_join(ipitchers,prot,by=c('Player'),copy=FALSE)
+    tpitchers <- tpitchers - nrow(prot[prot$Pos %in% c('SP','MR','CL'),])
+    thitters <- thitters - nrow(prot[!(prot$Pos %in% c('SP','MR','CL')),])
+    pdollars <- pdollars - sum(prot[prot$Pos %in% c('SP','MR','CL'),'Salary'])
+    hdollars <- hdollars - sum(prot[!(prot$Pos %in% c('SP','MR','CL')),'Salary'])
+  } else {
+    ih2 <- ihitters
+    ip2 <- ipitchers
+  }
+  # Calculate DFL
+  tvalue <- sum(ih2$zScore)
+  ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
+  tvalue <- sum(ip2$zScore)
+  ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
+
+  bhitters <- select(ih2,playerid,zDFL)
+  bpitchers <- select(ip2,playerid,zDFL)
+
+  # Calculate inflation-adjusted zDFL for protected players using same rates
+  if (nrow(prot) > 0) {
+    hRate <- hdollars / sum(ih2$zScore)
+    pRate <- pdollars / sum(ip2$zScore)
+    protH <- semi_join(ihitters, prot, by='Player')
+    protP <- semi_join(ipitchers, prot, by='Player')
+    protH$zDFL <- protH$zScore * hRate + 1
+    protP$zDFL <- protP$zScore * pRate + 1
+    bprot <- rbind(select(protH, playerid, zDFL), select(protP, playerid, zDFL)) %>%
+      group_by(playerid) %>% summarise(zDFL = max(zDFL), .groups = 'drop')
+  } else {
+    bprot <- data.frame(playerid=character(), zDFL=numeric())
+  }
+
+  list(bhitters, bpitchers, bprot)
+}
+
 dociiDollars <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   #Set parameters
   #Used by draftGuide.r

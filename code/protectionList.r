@@ -176,40 +176,41 @@ nvalue <- sum(prosters2$Value)
 noinflation <- nvalue
 print(nvalue)
 
-#see if I can track only evaluated once
-pjoin <- prosters2 %>% ungroup() %>% mutate(rdOne = TRUE) %>% select(playerid,rdOne)
-rhitters <- left_join(rhitters,pjoin,by=c('playerid'))
-rpitchers <- left_join(rpitchers,pjoin,by=c('playerid'))
-ctrdOne <- 100
-
-
-#while ((nvalue > (cvalue+1)) & ct < 20) {
-#while (((nvalue < cvalue) | (ctrdOne > 0)) & ct < 20) {
-while (((nvalue < cvalue) | (ctrdOne > 0)) | ((nvalue > (cvalue+.001)) & ct < 20)) {
+while ((nvalue > (cvalue+.001)) & ct < 20) {
   ct <- ct + 1
   cvalue <- nvalue
-  nlist <- preLPP(hitters,pitchers,prosters2)
+  nlist <- preLPP2(hitters,pitchers,prosters2)
   ihitters <- nlist[[1]]
   ipitchers <- nlist[[2]]
+  iprot <- nlist[[3]]
   # update rhitters, rpitchers with new pDFL and Value scores
   rhitters <- left_join(rhitters,ihitters,by=c('playerid'))
-  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
-                     rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
+  rhitters <- mutate(rhitters,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
   rpitchers <- left_join(rpitchers,ipitchers,by=c('playerid'))
-  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL),
-                      rdOne = ifelse(is.na(zDFL),rdOne,FALSE)) %>% select(-zDFL)
-  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pHR,s2=pRBI,s3=pR,s4=pSB,pSkew,Injury,Expected.Return),
-                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,rdOne,s1=pW,s2=pSO,s3=pHLD,s4=pSV,pSkew,Injury,Expected.Return))
+  rpitchers <- mutate(rpitchers,pDFL = ifelse(is.na(zDFL),pDFL,zDFL)) %>% select(-zDFL)
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,s1=pHR,s2=pRBI,s3=pR,s4=pSB,pSkew,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,s1=pW,s2=pSO,s3=pHLD,s4=pSV,pSkew,Injury,Expected.Return))
   rpreds <- mutate(rpreds,Value = pDFL - Salary)
   rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
   prosters2 <- rpreds %>% group_by(Team) %>% filter(rank(-netValue) < 13,netValue > 0) %>%
     arrange(Team,-netValue)
-  if (nrow(filter(prosters2,rdOne==TRUE))) {prosters2 <- arrange(prosters2,rdOne) %>% head(-10)} 
   nvalue <- sum(prosters2$Value)
-  ctrdOne <- nrow(filter(prosters2,rdOne==TRUE))
   print(ct)
   print(cvalue)
   print(nvalue)
+}
+
+# Apply final inflation-adjusted values to protected players (after loop to avoid circular inflation)
+if (nrow(iprot) > 0) {
+  rhitters <- left_join(rhitters, iprot, by=c('playerid'), suffix=c('','.prot'))
+  rhitters <- mutate(rhitters, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+  rpitchers <- left_join(rpitchers, iprot, by=c('playerid'), suffix=c('','.prot'))
+  rpitchers <- mutate(rpitchers, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+  # Rebuild rpreds with final inflated protected values
+  rpreds <- rbind(select(rhitters,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,s1=pHR,s2=pRBI,s3=pR,s4=pSB,pSkew,Injury,Expected.Return),
+                  select(rpitchers,Team,playerid,Player,Pos,Age,Contract,Salary,pDFL,pADP,Value,orank,s1=pW,s2=pSO,s3=pHLD,s4=pSV,pSkew,Injury,Expected.Return))
+  rpreds <- mutate(rpreds,Value = pDFL - Salary)
+  rpreds <- rpreds %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 }
 
 inflation <- (nvalue - noinflation)/noinflation

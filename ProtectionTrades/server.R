@@ -179,7 +179,7 @@ teams <- sort(unique(as.character(totals$Team)))
 pullPlayers <- function(tm, data) {
 #  res <- filter(data,Team == tm,netValue > 1) %>% arrange(-netValue) %>% mutate(Rank=rank(-Value)) %>%
   res <- filter(data, Team == tm) %>% arrange(-netValue) %>% mutate(Rank=rank(-netValue)) %>%
-    select(-Team,-rdOne,-Rank,Player:Expected.Return) %>%
+    select(-Team,-Rank,Player:Expected.Return) %>%
     rename(Skew=pSkew)
 }
 

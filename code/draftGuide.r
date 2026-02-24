@@ -84,10 +84,6 @@ AllP <- dplyr::rename(AllP,pDFL=zDFL)
 AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
 AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
-# Save first-pass pDFL (all players valued) for LiveDraftTool
-pDFL_all_hitters <- AllH %>% select(playerid, pDFL_full = pDFL)
-pDFL_all_pitchers <- AllP %>% select(playerid, pDFL_full = pDFL)
-
 #merge with steamer
 rhitters <- left_join(rHitters,AllH,by=c('playerid'),copy=FALSE)
 rpitchers <- left_join(rPitchers,AllP,by=c('playerid'),copy=FALSE)
@@ -95,8 +91,51 @@ rhitters <- select(rhitters,-Pos.x,-Player.x,Pos=Pos.y,Player=Player.y)
 rpitchers <- select(rpitchers,-Pos.x,-Player.x,Pos=Pos.y,Player=Player.y)
 #rhitters <- select(rhitters,-Pos.x,-Player.x) %>% dplyr::rename(Pos=Pos.y,Player=Player.y)
 #rpitchers <- select(rpitchers,-Pos.x,-Player.x) %>% dplyr::rename(Pos=Pos.y,Player=Player.y)
+#Generate pDFL for best players (Pass 2 — inflation-adjusted)
+#nlist <- preDollars(hitters,pitchers,protected)
+nlist <- preLPP2(hitters,pitchers,protected)
+thitters <- nlist[[1]]
+tpitchers <- nlist[[2]]
+tprot <- nlist[[3]]
+
+# Update roster players with Pass 2 (inflation-adjusted) free-agent values
+rhitters <- left_join(rhitters, thitters, by=c('playerid'), suffix=c('','.p2'))
+rhitters <- mutate(rhitters, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+rpitchers <- left_join(rpitchers, tpitchers, by=c('playerid'), suffix=c('','.p2'))
+rpitchers <- mutate(rpitchers, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+
+# Incorporate scores back into AllH, AllP
+AllH <- left_join(hitters,thitters,by=c('playerid'))
+AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
+AllH <- dplyr::rename(AllH,pDFL=zDFL)
+AllP <- dplyr::rename(AllP,pDFL=zDFL)
+AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
+AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
+
+# Update protected players with inflation-adjusted pDFL
+if (nrow(tprot) > 0) {
+  AllH <- left_join(AllH, tprot, by=c('playerid'), suffix=c('','.prot'))
+  AllH <- mutate(AllH, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+  AllP <- left_join(AllP, tprot, by=c('playerid'), suffix=c('','.prot'))
+  AllP <- mutate(AllP, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+}
+
+# Save fully-inflated pDFL (all players) for LiveDraftTool
+pDFL_all_hitters <- AllH %>% select(playerid, pDFL_full = pDFL)
+pDFL_all_pitchers <- AllP %>% select(playerid, pDFL_full = pDFL)
+
+# Merge inflated pDFL into roster data
 rhitters$Value <- rhitters$pDFL - rhitters$Salary
 rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
+# Update roster players with inflated pDFL from Pass 2
+if (nrow(tprot) > 0) {
+  rhitters <- left_join(rhitters, tprot, by=c('playerid'), suffix=c('','.prot'))
+  rhitters <- mutate(rhitters, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+  rpitchers <- left_join(rpitchers, tprot, by=c('playerid'), suffix=c('','.prot'))
+  rpitchers <- mutate(rpitchers, pDFL = ifelse(is.na(zDFL), pDFL, zDFL)) %>% select(-zDFL)
+  rhitters$Value <- rhitters$pDFL - rhitters$Salary
+  rpitchers$Value <- rpitchers$pDFL - rpitchers$Salary
+}
 
 #Generate overall Rankings by position
 
@@ -111,6 +150,7 @@ prank <- select(prank,playerid,orank)
 protClean <- rbind(select(rhitters,Team,Player,Contract,Salary,pDFL,pADP,pSkew,Age,Pos,playerid),
                    select(rpitchers,Team,Player,Contract,Salary,pDFL,pADP,pSkew,Age,Pos,playerid))
 protClean$pDFL <- replace(protClean$pDFL,is.na(protClean$pDFL),0)
+protClean <- protClean %>% mutate(netValue = pDFL - 1 - ((Salary-1)*auctionROI))
 
 
 # Create Pre-Draft Standings
@@ -128,22 +168,6 @@ pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
 
 
 lc <- filter(protClean,Team == 'Liquor Crickets') %>% select(-Team) %>% arrange(-pDFL)
-
-
-#Generate pDFL for best players
-#nlist <- preDollars(hitters,pitchers,protected)
-nlist <- preLPP(hitters,pitchers,protected)
-thitters <- nlist[[1]]
-tpitchers <- nlist[[2]]
-
-
-# Incorporate scores back into AllH, AllP
-AllH <- left_join(hitters,thitters,by=c('playerid'))
-AllP <- left_join(pitchers,tpitchers,by=c('playerid'))
-AllH <- dplyr::rename(AllH,pDFL=zDFL)
-AllP <- dplyr::rename(AllP,pDFL=zDFL)
-AllH$pDFL <- replace(AllH$pDFL,is.na(AllH$pDFL),0)
-AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 
 
 # Bucket pitchers by role
@@ -249,7 +273,8 @@ AllP_full$pDFL <- replace(AllP_full$pDFL, is.na(AllP_full$pDFL), 0)
 allRanks_full <- bind_rows(
   AllH_full %>% select(playerid, pDFL),
   AllP_full %>% select(playerid, pDFL)
-) %>% mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
+) %>% group_by(playerid) %>% summarise(pDFL = max(pDFL), .groups = 'drop') %>%
+  mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
 AllH_full <- left_join(AllH_full, allRanks_full, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
 AllP_full <- left_join(AllP_full, allRanks_full, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
 protClean <- left_join(protClean, allRanks_full, by = 'playerid') %>%
