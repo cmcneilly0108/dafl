@@ -399,9 +399,9 @@ preLPP <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) {
   }
   # Calculate DFL
   tvalue <- sum(ih2$zScore)
-  ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
+  ih2$zDFL <- (ih2$zScore / tvalue) * (hdollars - nrow(ih2)) + 1
   tvalue <- sum(ip2$zScore)
-  ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
+  ip2$zDFL <- (ip2$zScore / tvalue) * (pdollars - nrow(ip2)) + 1
 
   bhitters <- select(ih2,playerid,zDFL)
   bpitchers <- select(ip2,playerid,zDFL)
@@ -414,7 +414,7 @@ preLPP2 <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) 
   hpratio <- 0.35
   nhitters <- 13
   npitchers <- 12
-  nteams <- 14
+  nteams <- 13
   cap <- 260
 
   pdollars <- round((nteams * (cap + dadj) * ratio)*hpratio)
@@ -493,17 +493,17 @@ preLPP2 <- function(ihitters,ipitchers,prot=data.frame(),ratio=1,dadj=0,padj=0) 
   }
   # Calculate DFL
   tvalue <- sum(ih2$zScore)
-  ih2$zDFL <- (ih2$zScore / tvalue) * hdollars + 1
+  ih2$zDFL <- (ih2$zScore / tvalue) * (hdollars - nrow(ih2)) + 1
   tvalue <- sum(ip2$zScore)
-  ip2$zDFL <- (ip2$zScore / tvalue) * pdollars + 1
+  ip2$zDFL <- (ip2$zScore / tvalue) * (pdollars - nrow(ip2)) + 1
 
   bhitters <- select(ih2,playerid,zDFL)
   bpitchers <- select(ip2,playerid,zDFL)
 
   # Calculate inflation-adjusted zDFL for protected players using same rates
   if (nrow(prot) > 0) {
-    hRate <- hdollars / sum(ih2$zScore)
-    pRate <- pdollars / sum(ip2$zScore)
+    hRate <- (hdollars - nrow(ih2)) / sum(ih2$zScore)
+    pRate <- (pdollars - nrow(ip2)) / sum(ip2$zScore)
     protH <- semi_join(ihitters, prot, by='Player')
     protP <- semi_join(ipitchers, prot, by='Player')
     protH$zDFL <- protH$zScore * hRate + 1
