@@ -141,6 +141,12 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                                           value = Sys.Date(), format = "yyyy-mm-dd"),
                                 actionButton('fetchLeaders', 'Fetch Leaderboards',
                                              class = 'btn-primary', style = 'width:100%;'),
+                                tags$hr(),
+                                radioButtons('valMode', 'Valuation Mode',
+                                             choices = c('Projections Only' = 'proj',
+                                                         'Blended' = 'blend'),
+                                             selected = 'proj'),
+                                uiOutput("blendStatus"),
                                 width = 2
                               ),
                               mainPanel(

@@ -16,6 +16,10 @@ nteams <- 13
 nhitters <- 13
 npitchers <- 12
 
+# Save original pools for blend toggle
+AllH_orig <- AllH_full
+AllP_orig <- AllP_full
+
 # --- Roster file initialization ---
 rosterFile <- str_c("../", cyear, "DraftRosters.csv")
 
@@ -62,6 +66,109 @@ shinyServer(function(input, output, session) {
     },
     pendingPick = NULL
   )
+
+  # --- Blended player pools (actual stats + projections) ---
+  blendedPools_r <- reactive({
+    mode <- input$valMode
+    if (is.null(mode) || mode == "proj" ||
+        is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
+      return(list(hitters = AllH_orig, pitchers = AllP_orig))
+    }
+
+    lbH <- leaderboards$hitters
+    lbP <- leaderboards$pitchers
+    lbH$playerid <- as.character(lbH$playerid)
+    lbP$playerid <- as.character(lbP$playerid)
+
+    # Start with copies of original pools
+    newH <- AllH_orig
+    newP <- AllP_orig
+
+    # Blend hitter stats: actual counting stats + projected
+    actH <- lbH %>% select(playerid, aHR = HR, aR = R, aRBI = RBI, aSB = SB, aH = H, aAB = AB)
+    newH <- left_join(newH, actH, by = "playerid")
+    newH <- newH %>% mutate(
+      pHR = pHR + replace_na(aHR, 0),
+      pR = pR + replace_na(aR, 0),
+      pRBI = pRBI + replace_na(aRBI, 0),
+      pSB = pSB + replace_na(aSB, 0),
+      pH = pH + replace_na(aH, 0),
+      pAB = pAB + replace_na(aAB, 0),
+      pAVG = ifelse(pAB > 0, pH / pAB, 0)
+    ) %>% select(-aHR, -aR, -aRBI, -aSB, -aH, -aAB)
+
+    # Blend pitcher stats: actual counting stats + projected
+    actP <- lbP %>% select(playerid, aW = W, aSO = SO, aHLD = HLD, aSV = SV, aIP = IP, aERA = ERA)
+    newP <- left_join(newP, actP, by = "playerid")
+    newP <- newP %>% mutate(
+      aER = replace_na(aERA, 0) * replace_na(aIP, 0) / 9,
+      pW = pW + replace_na(aW, 0),
+      pSO = pSO + replace_na(aSO, 0),
+      pHLD = pHLD + replace_na(aHLD, 0),
+      pSV = pSV + replace_na(aSV, 0),
+      pIP = pIP + replace_na(aIP, 0),
+      pER = pER + aER,
+      pERA = ifelse(pIP > 0, pER / pIP * 9, 0)
+    ) %>% select(-aW, -aSO, -aHLD, -aSV, -aIP, -aERA, -aER)
+
+    # Recompute SGP with blended stats
+    newP$pSGP <- pitSGP(newP)
+    newH$pSGP <- hitSGP(newH)
+
+    # Re-run valuation to get new pDFL
+    nlist <- preLPP(newH, newP)
+    th <- nlist[[1]]
+    tp <- nlist[[2]]
+
+    # Update pDFL
+    newH <- newH %>% select(-pDFL) %>%
+      left_join(th %>% dplyr::rename(pDFL = zDFL), by = "playerid")
+    newH$pDFL <- replace_na(newH$pDFL, 0)
+
+    newP <- newP %>% select(-pDFL) %>%
+      left_join(tp %>% dplyr::rename(pDFL = zDFL), by = "playerid")
+    newP$pDFL <- replace_na(newP$pDFL, 0)
+
+    # Recompute orank within position
+    newH <- newH %>% select(-any_of('orank')) %>%
+      group_by(Pos) %>% mutate(orank = rank(-pDFL)) %>% ungroup()
+    newP <- newP %>% select(-any_of('orank')) %>%
+      group_by(Pos) %>% mutate(orank = rank(-pDFL)) %>% ungroup()
+
+    # Recompute rankDiff
+    allRanks <- bind_rows(
+      newH %>% select(playerid, pDFL),
+      newP %>% select(playerid, pDFL)
+    ) %>% group_by(playerid) %>% summarise(pDFL = max(pDFL), .groups = 'drop') %>%
+      mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
+
+    newH <- newH %>% select(-any_of(c('myRank', 'rankDiff'))) %>%
+      left_join(allRanks, by = 'playerid') %>%
+      mutate(rankDiff = pADP - myRank)
+    newP <- newP %>% select(-any_of(c('myRank', 'rankDiff'))) %>%
+      left_join(allRanks, by = 'playerid') %>%
+      mutate(rankDiff = pADP - myRank)
+
+    list(hitters = newH, pitchers = newP)
+  })
+
+  AllH_active <- reactive({ blendedPools_r()$hitters })
+  AllP_active <- reactive({ blendedPools_r()$pitchers })
+
+  # Blend mode status indicator
+  output$blendStatus <- renderUI({
+    mode <- input$valMode
+    if (is.null(mode) || mode == "proj") {
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#d4edda;",
+               tags$small(style = "color:#155724;", "Using projections only"))
+    } else if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#fff3cd;",
+               tags$small(style = "color:#856404;", "Fetch leaderboards first to enable blend"))
+    } else {
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#cce5ff;",
+               tags$small(style = "color:#004085;", "Using blended (actual + projected) stats"))
+    }
+  })
 
   # --- Helper: split roster into H/P ---
   isPitcherPos <- function(pos) pos %in% c('P','SP','MR','CL','RP')
@@ -157,7 +264,7 @@ shinyServer(function(input, output, session) {
     roster <- rv$roster
     rH <- filter(roster, !isPitcherPos(Pos) | is.na(Pos))
     rH$playerid <- as.character(rH$playerid)
-    res <- left_join(rH, AllH_full, by = c('playerid'), copy = FALSE)
+    res <- left_join(rH, AllH_active(), by = c('playerid'), copy = FALSE)
     # Resolve .x/.y columns from join
     res <- res %>%
       mutate(Pos = coalesce(Pos.y, Pos.x),
@@ -172,7 +279,7 @@ shinyServer(function(input, output, session) {
     roster <- rv$roster
     rP <- filter(roster, isPitcherPos(Pos))
     rP$playerid <- as.character(rP$playerid)
-    res <- left_join(rP, AllP_full, by = c('playerid'), copy = FALSE)
+    res <- left_join(rP, AllP_active(), by = c('playerid'), copy = FALSE)
     res <- res %>%
       mutate(Pos = coalesce(Pos.y, Pos.x),
              Player = coalesce(Player.y, Player.x)) %>%
@@ -280,12 +387,12 @@ shinyServer(function(input, output, session) {
   # --- Available player pools (remove rostered) ---
   AllH_avail <- reactive({
     roster <- rv$roster
-    anti_join(AllH_full, roster, by = c('playerid')) %>% arrange(-pDFL)
+    anti_join(AllH_active(), roster, by = c('playerid')) %>% arrange(-pDFL)
   })
 
   AllP_avail <- reactive({
     roster <- rv$roster
-    anti_join(AllP_full, roster, by = c('playerid')) %>% arrange(-pDFL)
+    anti_join(AllP_active(), roster, by = c('playerid')) %>% arrange(-pDFL)
   })
 
   # --- Buy Now gauge data ---
@@ -302,8 +409,8 @@ shinyServer(function(input, output, session) {
     }
 
     valueLookup <- bind_rows(
-      AllH_full %>% select(playerid, pDFL),
-      AllP_full %>% select(playerid, pDFL)
+      AllH_active() %>% select(playerid, pDFL),
+      AllP_active() %>% select(playerid, pDFL)
     ) %>% distinct(playerid, .keep_all = TRUE)
     df <- left_join(df, valueLookup, by = "playerid")
     df$pDFL <- replace_na(df$pDFL, 0)
@@ -555,8 +662,8 @@ shinyServer(function(input, output, session) {
     salary <- input$draftSalary
 
     # Look up player in full pools
-    hMatch <- AllH_full %>% filter(playerid == pid)
-    pMatch <- AllP_full %>% filter(playerid == pid)
+    hMatch <- AllH_active() %>% filter(playerid == pid)
+    pMatch <- AllP_active() %>% filter(playerid == pid)
 
     if (nrow(hMatch) > 0) {
       pInfo <- hMatch[1,]
@@ -873,7 +980,7 @@ shinyServer(function(input, output, session) {
     # Remove rostered players
     h <- anti_join(h, roster, by = "playerid")
     # Add pDFL from projection pool
-    pDFL_lookup <- AllH_full %>% select(playerid, pDFL) %>% distinct()
+    pDFL_lookup <- AllH_active() %>% select(playerid, pDFL) %>% distinct()
     h <- left_join(h, pDFL_lookup, by = "playerid")
     h$pDFL <- replace_na(h$pDFL, 0)
     h %>% arrange(-pDFL)
@@ -887,7 +994,7 @@ shinyServer(function(input, output, session) {
     # Remove rostered players
     p <- anti_join(p, roster, by = "playerid")
     # Add pDFL from projection pool
-    pDFL_lookup <- AllP_full %>% select(playerid, pDFL) %>% distinct()
+    pDFL_lookup <- AllP_active() %>% select(playerid, pDFL) %>% distinct()
     p <- left_join(p, pDFL_lookup, by = "playerid")
     p$pDFL <- replace_na(p$pDFL, 0)
     p %>% arrange(-pDFL)
@@ -932,8 +1039,8 @@ shinyServer(function(input, output, session) {
 
     # Lookup projection data (Age, pDFL)
     allLookup <- bind_rows(
-      AllH_full %>% select(playerid, Age, pDFL, posEl) %>% mutate(playerid = as.character(playerid)),
-      AllP_full %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid), posEl = NA_character_)
+      AllH_active() %>% select(playerid, Age, pDFL, posEl) %>% mutate(playerid = as.character(playerid)),
+      AllP_active() %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid), posEl = NA_character_)
     ) %>% distinct(playerid, .keep_all = TRUE)
 
     roster <- left_join(roster, allLookup, by = "playerid")
