@@ -9,7 +9,7 @@ Add a new "Create Protection Lists" tab to the ProtectionTrades Shiny app that l
 **Sidebar:**
 - Team dropdown (same team list used in "by Team" tab)
 - "X/12 selected" reactive counter
-- Submit button — disabled or shows validation error if >12 rows selected
+- Submit button — disabled via `shinyjs` when >12 rows selected
 
 **Main panel:**
 - DataTable of all players on the selected team
@@ -19,7 +19,7 @@ Add a new "Create Protection Lists" tab to the ProtectionTrades Shiny app that l
 ## Behavior
 
 1. **Team selection** loads that team's players from `rpreds` into the DataTable.
-2. **Pre-selection:** On load, if `{cyear}ProtectionLists.csv` exists, rows matching players already protected for the selected team are pre-selected.
+2. **Pre-selection:** On load, if `{cyear}ProtectionLists.csv` exists, rows matching players already protected for the selected team are pre-selected (matched by `playerid`). Players in the CSV but no longer on the team's roster in `rpreds` are silently skipped.
 3. **Row selection** highlights rows. Counter updates reactively.
 4. **Submit** validates ≤12 selected, then:
    - Reads existing `{cyear}ProtectionLists.csv` (or creates empty data frame if file doesn't exist)
@@ -47,8 +47,8 @@ rpreds (loaded in server) → filter by selected team → display in DT
                                                           ↓
                                               validate ≤12 selections
                                                           ↓
-                                    join selected players back to roster data
-                                    to get Rosters.csv column schema
+                                    re-read {cyear}Rosters.csv in server.R,
+                                    join selected playerids to get output columns
                                                           ↓
                                     read existing CSV → remove team rows → append → write
 ```
@@ -56,13 +56,14 @@ rpreds (loaded in server) → filter by selected team → display in DT
 ## Key Implementation Details
 
 - `cyear` is already loaded via `daflFunctions.r` — use it to construct the filename dynamically.
-- The roster data (`{cyear}Rosters.csv`) is already loaded in `protectionList.r` — join selected `rpreds` rows back to roster data by `playerid` to get the correct output columns.
-- DT's `selection = list(mode = 'multiple', selected = <pre-selected indices>)` handles pre-selection.
-- Use `reactiveVal` for the counter and selection state.
+- **Roster data for output:** `rpreds` lacks the `MLB` column needed for the output schema. On submit, server.R reads `{cyear}Rosters.csv` directly (via `read.csv(paste0("../", cyear, "Rosters.csv"))`) and joins selected `playerid`s to extract the output columns. This avoids modifying `loadData()` or `protectionList.r`.
+- **File I/O working directory:** All reads/writes to `{cyear}ProtectionLists.csv` happen in the `observeEvent` handler (working directory = `ProtectionTrades/`), not inside `loadData()`.
+- DT's `selection = list(mode = 'multiple', selected = <pre-selected indices>)` handles pre-selection. Index computation (`which(team_df$playerid %in% protected_ids)`) must be reactive when the team changes.
+- Use `shinyjs` for disabling the Submit button when >12 selected.
 
 ## Files Modified
 
-- `ProtectionTrades/ui.R` — Add new tabPanel
+- `ProtectionTrades/ui.R` — Add new tabPanel, add `shinyjs::useShinyjs()` if not present
 - `ProtectionTrades/server.R` — Add server logic for the new tab
 
 ## No Changes To
