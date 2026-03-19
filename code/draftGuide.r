@@ -238,7 +238,7 @@ injOrig$playerid <- as.character(injOrig$playerid)
 injOrig <- left_join(injOrig,pscores,by=c('playerid'))
 injOrig <- injOrig %>% rename(pDFL=zDFL)
 injOrig$pDFL <- replace(injOrig$pDFL,is.na(injOrig$pDFL),0)
-injOrig <- injOrig %>% select(Player,MLB,position,pDFL,`Injury / Surgery Date`,Injury,status,`Latest Update`)
+injOrig <- injOrig %>% select(Player,MLB,position,pDFL,`Injury / Surgery Date`,Injury,status,`Latest Update`,playerid)
 injOrig <- arrange(injOrig,position,-pDFL)
 
 # Save full injury list before removing protected players (used by LiveDraftTool)

@@ -1,7 +1,7 @@
 library("bslib")
 library("DT")
 
-shinyUI(navbarPage("DAFL Live Draft Tool",
+shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    theme = bs_theme(bootswatch = "flatly"),
                    tabPanel("Draft",
                             fluidRow(
@@ -18,6 +18,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                                                     style = 'width:100%; margin-bottom:10px;'),
                                        actionButton('undoBtn', 'Undo Last Pick',
                                                     class = 'btn-warning btn-block',
+                                                    style = 'width:100%;'),
+                                       tags$hr(),
+                                       actionButton('targetBtn', 'Toggle Target',
+                                                    class = 'btn-info btn-block',
                                                     style = 'width:100%;')
                                      ),
                                      h4("Draft Market", style = "margin-top:15px;"),
@@ -43,12 +47,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                               sidebarPanel(
                                 selectizeInput('rosterTeam', 'Select Team', choices = NULL),
                                 uiOutput("rosterBudget"),
-                                h4("Goals"),
-                                DT::dataTableOutput("rosterGoals"),
+                                tabsetPanel(type = "pills",
+                                  tabPanel("Balance", plotOutput("spiderChart", height = "280px")),
+                                  tabPanel("Goals", DT::dataTableOutput("rosterGoals"))
+                                ),
                                 width = 3
                               ),
                               mainPanel(
-                                h3(textOutput("rosterTeamTitle")),
+                                fluidRow(
+                                  column(6, h3(textOutput("rosterTeamTitle"))),
+                                  column(6, uiOutput("budgetAllocation"),
+                                         div(style = "text-align:right;",
+                                             actionButton('clearBudget', 'Clear Budget',
+                                                          class = 'btn-danger btn-sm')))
+                                ),
                                 h4("Hitters"),
                                 DT::dataTableOutput("rosterH"),
                                 h4("Pitchers"),
@@ -89,7 +101,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                             sidebarLayout(fluid=FALSE,
                               sidebarPanel(
                                 selectizeInput(
-                                  'e2', 'Select Position', choices=NULL)
+                                  'e2', 'Select Position', choices=NULL),
+                                actionButton('targetHBtn', 'Toggle Target',
+                                             class = 'btn-info btn-sm',
+                                             style = 'width:100%; margin-top:10px;')
                                   ,width=2),
                                 mainPanel(
                                   h2(textOutput("hpos")),
@@ -100,7 +115,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                             sidebarLayout(fluid=FALSE,
                                           sidebarPanel(
                                             selectizeInput(
-                                              'e3', 'Select Role', choices=NULL)
+                                              'e3', 'Select Role', choices=NULL),
+                                            actionButton('targetPBtn', 'Toggle Target',
+                                                         class = 'btn-info btn-sm',
+                                                         style = 'width:100%; margin-top:10px;')
                                             ,width=2),
                                           mainPanel(
                                             h2(textOutput("ppos")),
@@ -109,12 +127,18 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                    ),
                    tabPanel("Bullpen Depth Charts",
                             verticalLayout(fluid=FALSE,
+                                           actionButton('targetBPBtn', 'Toggle Target',
+                                                        class = 'btn-info btn-sm',
+                                                        style = 'margin-bottom:10px;'),
                                            DT::dataTableOutput("rrcResults")
                             )
                    ),
                    tabPanel("Prospects",
                             mainPanel(
-                              tabsetPanel(type='tabs',
+                              actionButton('targetProspBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
+                              tabsetPanel(id = 'prospectTab', type='tabs',
                                           tabPanel('Hitters',
                                                    DT::dataTableOutput("prospectH")),
                                           tabPanel('Pitchers',
@@ -129,7 +153,15 @@ shinyUI(navbarPage("DAFL Live Draft Tool",
                    ),
                    tabPanel("Injured",
                             verticalLayout(
+                              actionButton('targetInjBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
                               DT::dataTableOutput("injOrig")
+                            )
+                   ),
+                   tabPanel("My Targets",
+                            verticalLayout(
+                              DT::dataTableOutput("targetTable")
                             )
                    ),
                    tabPanel("Leaderboards",

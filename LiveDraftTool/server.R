@@ -22,6 +22,8 @@ AllP_orig <- AllP_full
 
 # --- Roster file initialization ---
 rosterFile <- str_c("../", cyear, "DraftRosters.csv")
+budgetFile <- str_c("../", cyear, "DraftBudgets.csv")
+targetFile <- str_c("../", cyear, "DraftTargets.csv")
 
 if (!file.exists(rosterFile)) {
   # Seed from protection list
@@ -64,7 +66,22 @@ shinyServer(function(input, output, session) {
         list()
       }
     },
-    pendingPick = NULL
+    pendingPick = NULL,
+    pendingBudgetEdit = NULL,
+    targets = {
+      if (file.exists(targetFile)) {
+        as.character(read.csv(targetFile, stringsAsFactors = FALSE)$playerid)
+      } else {
+        character()
+      }
+    },
+    budgets = {
+      if (file.exists(budgetFile)) {
+        read.csv(budgetFile, stringsAsFactors = FALSE)
+      } else {
+        data.frame(Team = character(), Slot = character(), Budget = numeric(), stringsAsFactors = FALSE)
+      }
+    }
   )
 
   # --- Blended player pools (actual stats + projections) ---
@@ -173,6 +190,180 @@ shinyServer(function(input, output, session) {
   # --- Helper: split roster into H/P ---
   isPitcherPos <- function(pos) pos %in% c('P','SP','MR','CL','RP')
 
+  # --- Helper: mark target players with star + hidden flag ---
+  markTargets <- function(df, targets) {
+    df$isTarget <- as.integer(df$playerid %in% targets)
+    tIdx <- which(df$isTarget == 1)
+    if (length(tIdx) > 0) {
+      df$Player[tIdx] <- paste0("\u2605 ", df$Player[tIdx])
+    }
+    df
+  }
+
+  # --- Target toggle (Draft tab player search) ---
+  observeEvent(input$targetBtn, {
+    req(input$playerSearch)
+    pid <- input$playerSearch
+    allPlayers <- bind_rows(
+      AllH_active() %>% select(playerid, Player),
+      AllP_active() %>% select(playerid, Player)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    pName <- allPlayers$Player[allPlayers$playerid == pid]
+    if (length(pName) == 0) pName <- "Player"
+
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- Target toggle (Hitters tab row selection) ---
+  observeEvent(input$targetHBtn, {
+    sel <- input$hpbpos_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    data <- hitPlayersbyPos(input$e2)
+    pid <- as.character(data$playerid[sel])
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- Target toggle (Pitchers tab row selection) ---
+  observeEvent(input$targetPBtn, {
+    sel <- input$ppbpos_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    data <- pitPlayersbyPos(input$e3)
+    pid <- as.character(data$playerid[sel])
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- Target toggle (Prospects tab — one button, checks active subtab) ---
+  observeEvent(input$targetProspBtn, {
+    tab <- input$prospectTab
+    if (!is.null(tab) && tab == "Pitchers") {
+      sel <- input$prospectP_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        showNotification("Select a player row first", type = "warning")
+        return()
+      }
+      data <- prospectP_r()
+      pid <- as.character(data$playerid[sel])
+      pName <- data$Player[sel]
+    } else {
+      sel <- input$prospectH_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        showNotification("Select a player row first", type = "warning")
+        return()
+      }
+      data <- prospectH_r()
+      pid <- as.character(data$playerid[sel])
+      pName <- data$Player[sel]
+    }
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- Target toggle (Injuries tab) ---
+  observeEvent(input$targetInjBtn, {
+    sel <- input$injOrig_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    data <- injOrig_r()
+    pid <- as.character(data$playerid[sel])
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- Target toggle (Bullpen Depth Charts tab) ---
+  observeEvent(input$targetBPBtn, {
+    sel <- input$rrcResults_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    pid <- as.character(rrcResults$playerid[sel])
+    pName <- rrcResults$Player[sel]
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
+  # --- My Targets tab: table + remove ---
+  output$targetTable <- DT::renderDataTable({
+    allPlayers <- bind_rows(
+      AllH_active() %>% select(playerid, Player, Pos, MLB, Age, pDFL),
+      AllP_active() %>% select(playerid, Player, Pos, MLB, Age, pDFL)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    info <- allPlayers %>% filter(playerid %in% rv$targets) %>%
+      mutate(Player = fgLink(Player, playerid)) %>%
+      arrange(-pDFL) %>%
+      select(Player, Pos, MLB, Age, pDFL)
+    datatable(info, selection = 'single',
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE),
+              escape = FALSE) %>%
+      formatCurrency('pDFL') %>%
+      formatRound('Age', 0)
+  })
+
+  observeEvent(input$targetTable_rows_selected, {
+    sel <- input$targetTable_rows_selected
+    if (is.null(sel) || length(sel) == 0) return()
+    allPlayers <- bind_rows(
+      AllH_active() %>% select(playerid, Player, pDFL),
+      AllP_active() %>% select(playerid, Player, pDFL)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
+    if (sel <= nrow(info)) {
+      pid <- info$playerid[sel]
+      pName <- info$Player[sel]
+      rv$targets <- rv$targets[rv$targets != pid]
+      write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    }
+  })
+
   # --- Build roster card for a team (slot assignment) ---
   buildTeamRoster <- function(hitters, pitchers) {
     makeRow <- function(slot, p) {
@@ -216,12 +407,18 @@ shinyServer(function(input, output, session) {
 
     # DH + 4 bench
     remaining <- hitters %>% filter(!playerid %in% usedIds) %>% arrange(-pDFL)
-    benchH <- c("DH", "BN", "BN", "BN", "BN")
+    benchH <- c("DH", "BN1", "BN2", "BN3", "BN4")
     for (k in seq_along(benchH)) {
       if (k <= nrow(remaining)) {
         hRows[[length(hRows) + 1]] <- makeRow(benchH[k], remaining[k, ])
       } else {
         hRows[[length(hRows) + 1]] <- emptyRow(benchH[k])
+      }
+    }
+    # Overflow hitters beyond defined slots
+    if (nrow(remaining) > length(benchH)) {
+      for (k in (length(benchH) + 1):nrow(remaining)) {
+        hRows[[length(hRows) + 1]] <- makeRow(paste0("EX", k - length(benchH)), remaining[k, ])
       }
     }
 
@@ -250,13 +447,34 @@ shinyServer(function(input, output, session) {
     remaining <- pitchers %>% filter(!playerid %in% usedIds) %>% arrange(-pDFL)
     for (k in 1:1) {
       if (k <= nrow(remaining)) {
-        pRows[[length(pRows) + 1]] <- makeRow("BN", remaining[k, ])
+        pRows[[length(pRows) + 1]] <- makeRow("BNP", remaining[k, ])
       } else {
-        pRows[[length(pRows) + 1]] <- emptyRow("BN")
+        pRows[[length(pRows) + 1]] <- emptyRow("BNP")
+      }
+    }
+    # Overflow pitchers beyond defined slots
+    if (nrow(remaining) > 1) {
+      for (k in 2:nrow(remaining)) {
+        pRows[[length(pRows) + 1]] <- makeRow(paste0("EXP", k - 1), remaining[k, ])
       }
     }
 
     list(hitters = bind_rows(hRows), pitchers = bind_rows(pRows))
+  }
+
+  # Merge budget values into empty roster slots
+  applyBudgets <- function(rosterDf, team, budgets) {
+    tb <- budgets %>% filter(Team == team)
+    if (nrow(tb) == 0) return(rosterDf)
+    for (i in seq_len(nrow(rosterDf))) {
+      if (rosterDf$Player[i] == "") {
+        brow <- tb %>% filter(Slot == rosterDf$Slot[i])
+        if (nrow(brow) > 0) {
+          rosterDf$Salary[i] <- brow$Budget[1]
+        }
+      }
+    }
+    rosterDf
   }
 
   # --- Derived reactive: roster joined with projections ---
@@ -566,21 +784,21 @@ shinyServer(function(input, output, session) {
     AllH_avail() %>% arrange(-pDFL) %>% head(40) %>%
       mutate(Player = fgLink(Player, playerid)) %>%
       select(Player, MLB, posEl, Age, pDFL, ADP = pADP, rankDiff, Skew = pSkew,
-             HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG)
+             HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG, playerid)
   })
 
   # --- prospects (reactive to remove drafted players) ---
   prospectH_r <- reactive({
     AllH_avail() %>% inner_join(hplist, by = 'playerid') %>%
       mutate(Player = fgLink(Name, playerid)) %>%
-      select(Player, MLB = Org, Pos = Pos.y, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, Game = Game.Pwr, Raw = Raw.Pwr, Spd) %>%
+      select(Player, MLB = Org, Pos = Pos.y, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, Game = Game.Pwr, Raw = Raw.Pwr, Spd, playerid) %>%
       arrange(desc(FV))
   })
 
   prospectP_r <- reactive({
     AllP_avail() %>% inner_join(pplist, by = 'playerid') %>%
       mutate(Player = fgLink(Name, playerid)) %>%
-      select(Player, MLB = Org, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, FB, SL, CB, CH, CMD, Sits, Tops) %>%
+      select(Player, MLB = Org, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, FB, SL, CB, CH, CMD, Sits, Tops, playerid) %>%
       arrange(desc(FV))
   })
 
@@ -637,7 +855,7 @@ shinyServer(function(input, output, session) {
                     aRPV(res, nrow(filter(res, DFL > 0))))
     res <- mutate(res, Player = fgLink(Player, playerid))
     select(res, Player, MLB, posEl, Age, DFL, RPV, SGP, orank, ADP = pADP, rankDiff, Skew = pSkew,
-           HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG, Injury, Expected.Return)
+           HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG, Injury, Expected.Return, playerid)
   }
 
   pitPlayersbyPos <- function(pos) {
@@ -648,7 +866,7 @@ shinyServer(function(input, output, session) {
                     aRPV(res, nrow(filter(res, DFL > 0))))
     res <- mutate(res, Player = fgLink(Player, playerid))
     select(res, Player, MLB, Age, DFL, RPV, SGP, orank, ADP = pADP, rankDiff, Skew = pSkew,
-           W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, Injury, Expected.Return)
+           W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, Injury, Expected.Return, playerid)
   }
 
   # ============================
@@ -865,12 +1083,18 @@ shinyServer(function(input, output, session) {
 
   output$hpbpos <- DT::renderDataTable({
     req(input$e2)
-    datatable(hitPlayersbyPos(input$e2),
+    data <- markTargets(hitPlayersbyPos(input$e2), rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
+                             searching = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','AVG'), 3)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   # Pitcher role selector
@@ -879,12 +1103,18 @@ shinyServer(function(input, output, session) {
 
   output$ppbpos <- DT::renderDataTable({
     req(input$e3)
-    datatable(pitPlayersbyPos(input$e3),
+    data <- markTargets(pitPlayersbyPos(input$e3), rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE), filter = 'top', escape = FALSE) %>%
+                             info = FALSE),
+              filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','W','SV','HLD','SO'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','ERA'), 3)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   # Protect by position
@@ -915,35 +1145,60 @@ shinyServer(function(input, output, session) {
 
   # Static outputs that don't change with drafting
   output$rrcResults <- DT::renderDataTable({
-    datatable(rrcResults %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid),
+    data <- rrcResults %>% mutate(Player = fgLink(Player, playerid))
+    data <- markTargets(data, rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('pADP','pW','pSV','pHLD','pSO'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('pSGP','pERA','pK/9','pBB/9'), 3)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   output$injOrig <- DT::renderDataTable({
-    datatable(injOrig_r(),
+    data <- injOrig_r()
+    data$playerid <- as.character(data$playerid)
+    data <- markTargets(data, rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE), filter = 'top') %>%
       formatCurrency('pDFL')
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   output$topHitters <- DT::renderDataTable({
-    datatable(topHitters_r(),
+    data <- markTargets(topHitters_r(), rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), escape = FALSE) %>%
+                             searching = FALSE, info = FALSE),
+              escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('Skew','AVG'), 3)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   output$prospectH <- DT::renderDataTable({
-    datatable(prospectH_r(),
+    data <- markTargets(prospectH_r(), rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
+                             searching = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   # ============================
@@ -1002,29 +1257,45 @@ shinyServer(function(input, output, session) {
 
   output$leaderH <- DT::renderDataTable({
     h <- leaderH_avail() %>% mutate(Player = fgLink(Player, playerid))
-    datatable(h %>% select(-playerid),
+    h <- markTargets(h, rv$targets)
+    tRows <- which(h$isTarget == 1)
+    h <- h %>% select(-playerid, -isTarget)
+    dt <- datatable(h,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
       formatRound(c('wRC+','WAR'), 1)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   output$leaderP <- DT::renderDataTable({
     p <- leaderP_avail() %>% mutate(Player = fgLink(Player, playerid))
-    datatable(p %>% select(-playerid),
+    p <- markTargets(p, rv$targets)
+    tRows <- which(p$isTarget == 1)
+    p <- p %>% select(-playerid, -isTarget)
+    dt <- datatable(p,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
       formatRound('WAR', 1)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   output$prospectP <- DT::renderDataTable({
-    datatable(prospectP_r(),
+    data <- markTargets(prospectP_r(), rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE), filter = 'top', escape = FALSE) %>%
+                             searching = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
   })
 
   # ============================
@@ -1055,37 +1326,288 @@ shinyServer(function(input, output, session) {
 
   output$rosterTeamTitle <- renderText({ input$rosterTeam })
 
+  # Positional strength: league-wide average pDFL per roster slot
+  posStrColors <- c("#b7e4c7", "#d4edda", "#fff3cd", "#f8d7da")
+
+  slotAvgs_r <- reactive({
+    roster <- rv$roster
+    roster$playerid <- as.character(roster$playerid)
+    allLookup <- bind_rows(
+      AllH_active() %>% select(playerid, Age, pDFL, posEl) %>% mutate(playerid = as.character(playerid)),
+      AllP_active() %>% select(playerid, Age, pDFL) %>% mutate(playerid = as.character(playerid), posEl = NA_character_)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+
+    allSlots <- list()
+    for (tm in teams) {
+      tmRoster <- roster %>% filter(Team == tm)
+      tmRoster <- left_join(tmRoster, allLookup, by = "playerid")
+      tmRoster$pDFL <- replace_na(tmRoster$pDFL, 0)
+      tmRoster$Value <- tmRoster$pDFL - tmRoster$Salary
+      hitters <- tmRoster %>% filter(!isPitcherPos(Pos)) %>% arrange(-pDFL)
+      pitchers <- tmRoster %>% filter(isPitcherPos(Pos)) %>% arrange(-pDFL)
+      built <- buildTeamRoster(hitters, pitchers)
+      allSlots[[length(allSlots) + 1]] <- bind_rows(built$hitters, built$pitchers)
+    }
+    bind_rows(allSlots) %>%
+      filter(Player != "") %>%
+      group_by(Slot) %>%
+      summarise(slotAvg = mean(pDFL, na.rm = TRUE), .groups = 'drop')
+  })
+
   output$rosterH <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$hitters %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid), rownames = FALSE,
-              options = list(paging = FALSE, searching = FALSE, info = FALSE,
-                             ordering = FALSE, autoWidth = FALSE), escape = FALSE) %>%
+    hDisplay <- applyBudgets(tr$hitters, input$rosterTeam, rv$budgets)
+    # Track which rows are empty (for styling budget cells)
+    emptyRows <- which(hDisplay$Player == "")
+
+    # Positional strength heatmap: compare player pDFL to league avg at same slot
+    hDisplay <- left_join(hDisplay, slotAvgs_r(), by = "Slot")
+    hDisplay$slotBg <- case_when(
+      hDisplay$Player == "" | is.na(hDisplay$slotAvg) | hDisplay$slotAvg <= 0 ~ "",
+      hDisplay$pDFL / hDisplay$slotAvg >= 1.2 ~ posStrColors[1],
+      hDisplay$pDFL / hDisplay$slotAvg >= 0.9 ~ posStrColors[2],
+      hDisplay$pDFL / hDisplay$slotAvg >= 0.7 ~ posStrColors[3],
+      TRUE ~ posStrColors[4]
+    )
+
+    dt <- datatable(
+      hDisplay %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid, -slotAvg),
+      rownames = FALSE,
+      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9))),
+      options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                     ordering = FALSE, autoWidth = FALSE,
+                     columnDefs = list(list(visible = FALSE, targets = 9))),
+      escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%
       formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
       formatStyle('Player', target = 'row',
-                  backgroundColor = styleEqual("", "#f5f5f5"))
+                  backgroundColor = styleEqual("", "#f5f5f5")) %>%
+      formatStyle('Slot', valueColumns = 'slotBg',
+                  backgroundColor = styleEqual(posStrColors, posStrColors))
+    # Style budget cells in empty rows with italic + muted color
+    if (length(emptyRows) > 0) {
+      dt <- dt %>% formatStyle('Salary', target = 'cell',
+                               color = styleRow(emptyRows, '#999999'),
+                               fontStyle = styleRow(emptyRows, 'italic'))
+    }
+    dt
+  })
+
+  # Helper: save a budget entry (called directly or after confirmation)
+  saveBudgetEntry <- function(team, slot, newVal) {
+    budgets <- rv$budgets
+    budgets <- budgets %>% filter(!(Team == team & Slot == slot))
+    if (newVal > 0) {
+      budgets <- bind_rows(budgets, data.frame(Team = team, Slot = slot, Budget = newVal, stringsAsFactors = FALSE))
+    }
+    rv$budgets <- budgets
+    write.csv(budgets, budgetFile, row.names = FALSE)
+  }
+
+  # Helper: check budget and either save or prompt for confirmation
+  checkAndSaveBudget <- function(team, slot, newVal, side) {
+    tr <- teamRoster_r()
+    if (side == "H") {
+      actualSpend <- sum(tr$hitters$Salary[tr$hitters$Player != ""], na.rm = TRUE)
+      sideBudget <- round(cap * (1 - hpratio))
+    } else {
+      actualSpend <- sum(tr$pitchers$Salary[tr$pitchers$Player != ""], na.rm = TRUE)
+      sideBudget <- round(cap * hpratio)
+    }
+    # Sum existing budget entries for this team/side, excluding the slot being edited
+    existingBudgets <- rv$budgets %>% filter(Team == team, Slot != slot)
+    if (side == "H") {
+      hSlotNames <- tr$hitters$Slot
+      existingBudgets <- existingBudgets %>% filter(Slot %in% hSlotNames)
+    } else {
+      pSlotNames <- tr$pitchers$Slot
+      existingBudgets <- existingBudgets %>% filter(Slot %in% pSlotNames)
+    }
+    budgetAllocated <- sum(existingBudgets$Budget, na.rm = TRUE)
+    totalPlanned <- actualSpend + budgetAllocated + newVal
+    remaining <- sideBudget - actualSpend - budgetAllocated
+
+    if (newVal > 0 && totalPlanned > sideBudget) {
+      sideLabel <- if (side == "H") "Hitting" else "Pitching"
+      rv$pendingBudgetEdit <- list(team = team, slot = slot, newVal = newVal)
+      showModal(modalDialog(
+        title = "Over Budget",
+        tags$p(paste0("This would put your ", sideLabel, " budget allocations at $",
+                       totalPlanned, " / $", sideBudget, ".")),
+        tags$p(paste0("You have $", remaining, " remaining but are entering $", newVal, ".")),
+        tags$p("Accept anyway?"),
+        footer = tagList(
+          actionButton("budgetOverrideYes", "Yes, accept", class = "btn-warning"),
+          modalButton("Cancel")
+        )
+      ))
+    } else {
+      saveBudgetEntry(team, slot, newVal)
+    }
+  }
+
+  # Confirm over-budget entry
+  observeEvent(input$budgetOverrideYes, {
+    pending <- rv$pendingBudgetEdit
+    if (!is.null(pending)) {
+      saveBudgetEntry(pending$team, pending$slot, pending$newVal)
+      rv$pendingBudgetEdit <- NULL
+    }
+    removeModal()
+  })
+
+  observeEvent(input$clearBudget, {
+    team <- input$rosterTeam
+    tr <- teamRoster_r()
+    allSlots <- c(tr$hitters$Slot, tr$pitchers$Slot)
+    # Remove all budget entries for this team
+    budgets <- rv$budgets %>% filter(!(Team == team & Slot %in% allSlots))
+    # Set every empty slot to $1
+    emptyH <- tr$hitters %>% filter(Player == "")
+    emptyP <- tr$pitchers %>% filter(Player == "")
+    for (sl in c(emptyH$Slot, emptyP$Slot)) {
+      budgets <- bind_rows(budgets, data.frame(Team = team, Slot = sl, Budget = 1, stringsAsFactors = FALSE))
+    }
+    rv$budgets <- budgets
+    write.csv(budgets, budgetFile, row.names = FALSE)
+  })
+
+  observeEvent(input$rosterH_cell_edit, {
+    info <- input$rosterH_cell_edit
+    tr <- teamRoster_r()
+    # DT uses 0-based column indices; Salary is column 6 (0-based)
+    if (info$col == 6 && tr$hitters$Player[info$row] == "") {
+      newVal <- suppressWarnings(as.numeric(info$value))
+      if (!is.na(newVal)) {
+        checkAndSaveBudget(input$rosterTeam, tr$hitters$Slot[info$row], newVal, "H")
+      }
+    }
   })
 
   output$rosterP <- DT::renderDataTable({
     tr <- teamRoster_r()
-    datatable(tr$pitchers %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid), rownames = FALSE,
-              options = list(paging = FALSE, searching = FALSE, info = FALSE,
-                             ordering = FALSE, autoWidth = FALSE), escape = FALSE) %>%
+    pDisplay <- applyBudgets(tr$pitchers, input$rosterTeam, rv$budgets)
+    emptyRows <- which(pDisplay$Player == "")
+
+    # Positional strength heatmap: compare player pDFL to league avg at same slot
+    pDisplay <- left_join(pDisplay, slotAvgs_r(), by = "Slot")
+    pDisplay$slotBg <- case_when(
+      pDisplay$Player == "" | is.na(pDisplay$slotAvg) | pDisplay$slotAvg <= 0 ~ "",
+      pDisplay$pDFL / pDisplay$slotAvg >= 1.2 ~ posStrColors[1],
+      pDisplay$pDFL / pDisplay$slotAvg >= 0.9 ~ posStrColors[2],
+      pDisplay$pDFL / pDisplay$slotAvg >= 0.7 ~ posStrColors[3],
+      TRUE ~ posStrColors[4]
+    )
+
+    dt <- datatable(
+      pDisplay %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid, -slotAvg),
+      rownames = FALSE,
+      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9))),
+      options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                     ordering = FALSE, autoWidth = FALSE,
+                     columnDefs = list(list(visible = FALSE, targets = 9))),
+      escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%
       formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
       formatStyle('Player', target = 'row',
-                  backgroundColor = styleEqual("", "#f5f5f5"))
+                  backgroundColor = styleEqual("", "#f5f5f5")) %>%
+      formatStyle('Slot', valueColumns = 'slotBg',
+                  backgroundColor = styleEqual(posStrColors, posStrColors))
+    if (length(emptyRows) > 0) {
+      dt <- dt %>% formatStyle('Salary', target = 'cell',
+                               color = styleRow(emptyRows, '#999999'),
+                               fontStyle = styleRow(emptyRows, 'italic'))
+    }
+    dt
   })
+
+  observeEvent(input$rosterP_cell_edit, {
+    info <- input$rosterP_cell_edit
+    tr <- teamRoster_r()
+    if (info$col == 6 && tr$pitchers$Player[info$row] == "") {
+      newVal <- suppressWarnings(as.numeric(info$value))
+      if (!is.na(newVal)) {
+        checkAndSaveBudget(input$rosterTeam, tr$pitchers$Slot[info$row], newVal, "P")
+      }
+    }
+  })
+
+  output$spiderChart <- renderPlot({
+    req(input$rosterTeam)
+    tr <- teamRoster_r()
+    hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    rh <- rhitters_r() %>% filter(playerid %in% hStarterIds)
+    rp <- rpitchers_r() %>% filter(playerid %in% pStarterIds)
+    goals <- calcGoals(rp, rh, targets, input$rosterTeam)
+
+    # Cap display at 150% so one outlier doesn't flatten everything
+    goals$pct <- pmin(goals$pc, 1.5)
+    maxVal <- max(1.2, max(goals$pct, na.rm = TRUE))
+
+    n <- nrow(goals)
+    angles <- seq(0, 2 * pi, length.out = n + 1)[1:n] - pi / 2  # first point at top
+
+    # Cartesian coordinates for data polygon
+    goals$x <- goals$pct * cos(angles)
+    goals$y <- goals$pct * sin(angles)
+    poly_df <- rbind(goals, goals[1, ])
+
+    # Reference circle helper
+    circle_df <- function(r, npts = 100) {
+      theta <- seq(0, 2 * pi, length.out = npts)
+      data.frame(x = r * cos(theta), y = r * sin(theta))
+    }
+
+    # Spoke endpoints
+    spokes <- data.frame(xend = maxVal * cos(angles), yend = maxVal * sin(angles))
+
+    # Category labels positioned outside
+    labelR <- maxVal + 0.15
+    labels_df <- data.frame(
+      x = labelR * cos(angles), y = labelR * sin(angles),
+      label = as.character(goals$statistic)
+    )
+
+    # Pct labels near each point
+    pctR <- goals$pct + maxVal * 0.1
+    pct_df <- data.frame(
+      x = pctR * cos(angles), y = pctR * sin(angles),
+      label = paste0(round(goals$pc * 100), "%")
+    )
+
+    ggplot() +
+      # Reference circles
+      geom_path(data = circle_df(0.5), aes(x, y), color = "gray88", linetype = "dotted", linewidth = 0.3) +
+      geom_path(data = circle_df(0.75), aes(x, y), color = "gray83", linetype = "dotted", linewidth = 0.3) +
+      geom_path(data = circle_df(1.0), aes(x, y), color = "gray75", linetype = "dashed", linewidth = 0.4) +
+      # Spokes
+      geom_segment(data = spokes, aes(x = 0, y = 0, xend = xend, yend = yend),
+                   color = "gray90", linewidth = 0.3) +
+      # Filled data polygon
+      geom_polygon(data = poly_df, aes(x, y),
+                   fill = "#3498db", alpha = 0.25, color = "#2980b9", linewidth = 1.2) +
+      # Points
+      geom_point(data = goals, aes(x, y, color = pct >= 1.0), size = 3) +
+      scale_color_manual(values = c("TRUE" = "#2ecc71", "FALSE" = "#e74c3c"), guide = "none") +
+      # Pct labels
+      geom_text(data = pct_df, aes(x, y, label = label), size = 2.8, fontface = "bold") +
+      # Category labels
+      geom_text(data = labels_df, aes(x, y, label = label), size = 3.5) +
+      coord_equal(clip = "off") +
+      theme_void() +
+      theme(plot.margin = margin(10, 10, 10, 10))
+  }, height = 280, bg = "transparent")
 
   output$rosterGoals <- DT::renderDataTable({
     req(input$rosterTeam)
     tr <- teamRoster_r()
     # Only count starters toward goals
-    hStarterIds <- tr$hitters %>% filter(!Slot %in% c("BN")) %>% pull(playerid)
+    hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
     pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
     rh <- rhitters_r() %>% filter(playerid %in% hStarterIds)
     rp <- rpitchers_r() %>% filter(playerid %in% pStarterIds)
@@ -1113,7 +1635,7 @@ shinyServer(function(input, output, session) {
         tags$tr(tags$td("Hitting"), tags$td(style = "text-align:right;", paste0("$", hSpend, " / $", hBudget))),
         tags$tr(tags$td("Pitching"), tags$td(style = "text-align:right;", paste0("$", pSpend, " / $", pBudget))),
         tags$tr(tags$td(tags$strong("Total")), tags$td(style = "text-align:right;", tags$strong(paste0("$", total, " / $", cap)))),
-        tags$tr(tags$td("Remaining"), tags$td(style = "text-align:right;", paste0("$", cap - total))),
+        tags$tr(tags$td("Remaining"), tags$td(style = "text-align:right;", paste0("$", cap - total, " ($", hBudget - hSpend, "/$", pBudget - pSpend, ")"))),
         tags$tr(tags$td(tags$strong("Max Bid")), tags$td(style = "text-align:right;", tags$strong(paste0("$", cap - total - (25 - hFilled - pFilled - 1)))))
       ),
       tags$h4("Roster"),
@@ -1121,6 +1643,48 @@ shinyServer(function(input, output, session) {
         tags$tr(tags$td("Hitters"), tags$td(style = "text-align:right;", paste0(hFilled, " / ", nhitters))),
         tags$tr(tags$td("Pitchers"), tags$td(style = "text-align:right;", paste0(pFilled, " / ", npitchers))),
         tags$tr(tags$td(tags$strong("Total")), tags$td(style = "text-align:right;", tags$strong(paste0(hFilled + pFilled, " / 25"))))
+      )
+    )
+  })
+
+  output$budgetAllocation <- renderUI({
+    tr <- teamRoster_r()
+    team <- input$rosterTeam
+    budgets <- rv$budgets %>% filter(Team == team)
+
+    hBudgetCap <- round(cap * (1 - hpratio))
+    pBudgetCap <- round(cap * hpratio)
+    hSpend <- sum(tr$hitters$Salary[tr$hitters$Player != ""], na.rm = TRUE)
+    pSpend <- sum(tr$pitchers$Salary[tr$pitchers$Player != ""], na.rm = TRUE)
+    hRemaining <- hBudgetCap - hSpend
+    pRemaining <- pBudgetCap - pSpend
+
+    hAllocated <- sum(budgets$Budget[budgets$Slot %in% tr$hitters$Slot], na.rm = TRUE)
+    pAllocated <- sum(budgets$Budget[budgets$Slot %in% tr$pitchers$Slot], na.rm = TRUE)
+    hUnallocated <- hRemaining - hAllocated
+    pUnallocated <- pRemaining - pAllocated
+
+    colorVal <- function(v) if (v < 0) "#e74c3c" else "#2ecc71"
+
+    tags$div(style = "text-align:right; margin-top:10px;",
+      tags$table(class = "table table-condensed table-bordered", style = "width:auto; margin-left:auto; font-size:13px;",
+        tags$thead(tags$tr(
+          tags$th(""), tags$th("Remaining"), tags$th("Allocated"), tags$th("Unallocated")
+        )),
+        tags$tbody(
+          tags$tr(
+            tags$td(tags$strong("Hitters")),
+            tags$td(style = "text-align:right;", paste0("$", hRemaining)),
+            tags$td(style = "text-align:right;", paste0("$", hAllocated)),
+            tags$td(style = paste0("text-align:right; font-weight:bold; color:", colorVal(hUnallocated)), paste0("$", hUnallocated))
+          ),
+          tags$tr(
+            tags$td(tags$strong("Pitchers")),
+            tags$td(style = "text-align:right;", paste0("$", pRemaining)),
+            tags$td(style = "text-align:right;", paste0("$", pAllocated)),
+            tags$td(style = paste0("text-align:right; font-weight:bold; color:", colorVal(pUnallocated)), paste0("$", pUnallocated))
+          )
+        )
       )
     )
   })
