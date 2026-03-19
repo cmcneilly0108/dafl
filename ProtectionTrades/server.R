@@ -268,7 +268,44 @@ shinyServer(function(input, output,session) {
   
   
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
+  updateSelectizeInput(session, 'protTeam', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
+
+  # --- Create Protection Lists tab ---
+
+  # Build the protection list file path
+  protFilePath <- paste0("../", cyear, "ProtectionLists.csv")
+
+  # Reactive: players for selected team (for DT display)
+  protPlayers <- reactive({
+    req(input$protTeam)
+    rv$rpreds %>%
+      filter(Team == input$protTeam) %>%
+      mutate(PlayerName = gsub("<[^>]+>", "", Player)) %>%
+      select(playerid, PlayerName, Pos, Age, Salary, Contract, pDFL, netValue) %>%
+      arrange(-netValue)
+  })
+
+  # Reactive: pre-selected row indices from existing CSV
+  protPreSelected <- reactive({
+    req(input$protTeam)
+    if (!file.exists(protFilePath)) return(integer(0))
+    existing <- read.csv(protFilePath, stringsAsFactors = FALSE)
+    teamExisting <- existing %>% filter(Team == input$protTeam)
+    if (nrow(teamExisting) == 0) return(integer(0))
+    players <- protPlayers()
+    which(players$playerid %in% teamExisting$playerid)
+  })
+
+  output$protTable <- DT::renderDataTable({
+    players <- protPlayers()
+    displayDf <- players %>% select(-playerid)
+    datatable(displayDf,
+              selection = list(mode = 'multiple', selected = protPreSelected()),
+              options = list(pageLength = 30, paging = FALSE, searching = FALSE, info = FALSE)) %>%
+      formatCurrency(c('pDFL', 'netValue')) %>%
+      formatRound('Age', 0)
+  })
 
   dtPlayers <- reactive({df <- datatable(pullPlayers(input$e1, rv$rpreds),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE), escape = FALSE) %>%
     formatRound(c('Age','pADP','rankDiff','s1','s2','s3','s4'),0) %>%
