@@ -243,7 +243,8 @@ lc2 <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-netValue) %>%
 # Add Fangraphs links to player names
 rpreds <- rpreds %>% mutate(Player=paste0("<a target='_blank' href='//www.fangraphs.com/players/x/",playerid,"/stats'>",Player,"</a>"))
 
-rpreds <- select(rpreds,-playerid)
+# Keep playerid for protection list CSV joins
+# rpreds <- select(rpreds,-playerid)
 
 #lc <- filter(rpreds,Team == 'Liquor Crickets') %>% arrange(-Value)
 lcp <- filter(rpreds,Team == 'Liquor Crickets',Value > 1) %>% arrange(-netValue) %>%
