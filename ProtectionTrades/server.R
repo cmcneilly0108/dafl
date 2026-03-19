@@ -307,6 +307,66 @@ shinyServer(function(input, output,session) {
       formatRound('Age', 0)
   })
 
+  output$protCounter <- renderText({
+    sel <- input$protTable_rows_selected
+    n <- length(sel)
+    paste0(n, " / 12 selected")
+  })
+
+  observe({
+    sel <- input$protTable_rows_selected
+    if (length(sel) > 12 || length(sel) == 0) {
+      shinyjs::disable("protSubmit")
+    } else {
+      shinyjs::enable("protSubmit")
+    }
+  })
+
+  observeEvent(input$protSubmit, {
+    sel <- input$protTable_rows_selected
+    if (length(sel) > 12) {
+      showNotification("Cannot protect more than 12 players.", type = "error")
+      return()
+    }
+    if (length(sel) == 0) {
+      showNotification("No players selected.", type = "warning")
+      return()
+    }
+
+    # Get selected playerids
+    players <- protPlayers()
+    selectedIds <- players$playerid[sel]
+
+    # Read full roster to get output columns matching Rosters.csv schema
+    rosterFile <- paste0("../", cyear, "Rosters.csv")
+    rosters <- read.csv(rosterFile, stringsAsFactors = FALSE)
+    selectedRoster <- rosters %>% filter(playerid %in% selectedIds)
+
+    # Safety check: ensure join actually matched
+    if (nrow(selectedRoster) == 0) {
+      showNotification("Error: could not match selected players to roster file.", type = "error")
+      return()
+    }
+
+    # Read existing protection list (or create empty)
+    if (file.exists(protFilePath)) {
+      existingProt <- read.csv(protFilePath, stringsAsFactors = FALSE)
+      # Remove this team's old entries
+      existingProt <- existingProt %>% filter(Team != input$protTeam)
+    } else {
+      existingProt <- rosters[0, ]  # Empty df with same columns
+    }
+
+    # Append new selections and write
+    updatedProt <- rbind(existingProt, selectedRoster)
+    write.csv(updatedProt, protFilePath)
+
+    showNotification(
+      paste0("Saved ", length(sel), " players for ", input$protTeam, "!"),
+      type = "message", duration = 4
+    )
+  })
+
   dtPlayers <- reactive({df <- datatable(pullPlayers(input$e1, rv$rpreds),options = list(pageLength = 20,autoWidth = FALSE, paging = FALSE, searching = FALSE, info = FALSE), escape = FALSE) %>%
     formatRound(c('Age','pADP','rankDiff','s1','s2','s3','s4'),0) %>%
     formatRound(c('valueRatio'),3) %>%
