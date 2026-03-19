@@ -779,6 +779,151 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # ============================
+  # Nominations tab
+  # ============================
+  updateSelectInput(session, 'nomTeam', choices = teams, selected = 'Liquor Crickets')
+
+  # --- Positional Inflation table ---
+  posInflation_r <- reactive({
+    positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
+    ps <- pstandings_r()
+    dollarsLeft <- sum(ps$CashLeft)
+    spotsLeft <- sum(ps$Needed)
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+
+    # Value lookup for surplus from draft log
+    valueLookup <- bind_rows(
+      AllH_active() %>% select(playerid, pDFL),
+      AllP_active() %>% select(playerid, pDFL)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    log <- rv$draftLog
+    logDf <- if (length(log) > 0) bind_rows(log) else data.frame()
+
+    rows <- lapply(positions, function(pos) {
+      if (pos %in% c('SP','MR','CL')) {
+        pool <- ap %>% filter(Pos == pos) %>% select(playerid, pDFL)
+      } else {
+        pool <- ah %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos))) %>% select(playerid, pDFL)
+      }
+      pool <- pool %>% filter(pDFL > 0) %>% arrange(-pDFL)
+      topN <- head(pool, spotsLeft)
+      valueLeft <- sum(topN$pDFL)
+      inflation <- if (valueLeft > 0) dollarsLeft / valueLeft else NA
+
+      # Trend: avg surplus from picks at this position
+      trend <- NA
+      if (nrow(logDf) > 0) {
+        posPicks <- logDf %>% filter(Pos == pos)
+        if (nrow(posPicks) > 0) {
+          posPicks <- left_join(posPicks, valueLookup, by = "playerid")
+          posPicks$pDFL <- replace_na(posPicks$pDFL, 0)
+          trend <- mean(posPicks$Salary - posPicks$pDFL)
+        }
+      }
+
+      data.frame(Position = pos, Available = nrow(pool),
+                 Inflation = inflation, Trend = trend,
+                 stringsAsFactors = FALSE)
+    })
+    bind_rows(rows)
+  })
+
+  output$posInflation <- DT::renderDataTable({
+    datatable(posInflation_r(),
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE)) %>%
+      formatRound('Inflation', 2) %>%
+      formatRound('Trend', 1) %>%
+      formatStyle('Inflation',
+                  color = styleInterval(c(1.0, 1.3), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
+      formatStyle('Trend',
+                  color = styleInterval(0, c('#2ecc71', '#e74c3c')))
+  })
+
+  # --- Nomination Targets table ---
+  nomTargets_r <- reactive({
+    req(input$nomTeam)
+    myTeam <- input$nomTeam
+    ps <- pstandings_r()
+    pc <- protClean_r()
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+
+    # My filled positions
+    myPositions <- pc %>% filter(Team == myTeam) %>% pull(Pos) %>% unique()
+
+    otherTeams <- ps %>% filter(Team != myTeam)
+
+    rows <- lapply(seq_len(nrow(otherTeams)), function(i) {
+      tm <- otherTeams$Team[i]
+      tmRow <- otherTeams[i, ]
+
+      # Compute their spending status
+      others <- ps %>% filter(Team != tm, Needed > 0)
+      leagueAvgDPP <- if (sum(others$Needed) > 0) sum(others$CashLeft) / sum(others$Needed) else 0
+      ratio <- if (leagueAvgDPP > 0 && tmRow$Needed > 0) tmRow$DPP / leagueAvgDPP else NA
+      status <- case_when(
+        is.na(ratio) || tmRow$Needed <= 0 ~ "Full",
+        ratio >= 1.3 ~ "Strong Buy",
+        ratio >= 1.0 ~ "Lean Buy",
+        ratio >= 0.8 ~ "Neutral",
+        TRUE ~ "Wait"
+      )
+
+      # Positions I have but they don't
+      theirPositions <- pc %>% filter(Team == tm) %>% pull(Pos) %>% unique()
+      targetPositions <- setdiff(myPositions, theirPositions)
+
+      # Find best nominee across target positions (highest pDFL)
+      bestPos <- ""
+      bestPlayer <- ""
+      bestPid <- NA_character_
+      bestDFL <- NA_real_
+
+      for (tp in targetPositions) {
+        if (tp %in% c('SP','MR','CL')) {
+          pool <- ap %>% filter(Pos == tp) %>% arrange(-pDFL)
+        } else {
+          pool <- ah %>% filter(Pos == tp | (!is.na(posEl) & str_detect(posEl, tp))) %>% arrange(-pDFL)
+        }
+        if (nrow(pool) > 0 && (is.na(bestDFL) || pool$pDFL[1] > bestDFL)) {
+          bestDFL <- pool$pDFL[1]
+          bestPos <- tp
+          bestPlayer <- pool$Player[1]
+          bestPid <- pool$playerid[1]
+        }
+      }
+
+      data.frame(
+        Team = tm, Status = status,
+        CashLeft = tmRow$CashLeft, Needed = tmRow$Needed, DPP = tmRow$DPP,
+        TargetPos = bestPos,
+        Nominee = if (bestPlayer != "") fgLink(bestPlayer, bestPid) else "",
+        pDFL = bestDFL,
+        stringsAsFactors = FALSE
+      )
+    })
+
+    result <- bind_rows(rows)
+    statusOrd <- c("Strong Buy" = 1, "Lean Buy" = 2, "Neutral" = 3, "Wait" = 4, "Full" = 5)
+    result %>% mutate(ord = statusOrd[Status]) %>% arrange(ord, -DPP) %>% select(-ord)
+  })
+
+  output$nomTargets <- DT::renderDataTable({
+    datatable(nomTargets_r(),
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE),
+              escape = FALSE) %>%
+      formatRound(c('CashLeft', 'DPP'), 0) %>%
+      formatCurrency('pDFL') %>%
+      formatStyle('Status',
+                  backgroundColor = styleEqual(
+                    c('Strong Buy', 'Lean Buy', 'Neutral', 'Wait', 'Full'),
+                    c('#d4edda', '#d4edda', '#fff3cd', '#f8d7da', '#e9ecef')))
+  })
+
   # --- topHitters ---
   topHitters_r <- reactive({
     AllH_avail() %>% arrange(-pDFL) %>% head(40) %>%

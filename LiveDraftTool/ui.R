@@ -42,6 +42,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
+                   tabPanel("Nominations",
+                            sidebarLayout(fluid = FALSE,
+                              sidebarPanel(
+                                selectInput('nomTeam', 'My Team', choices = NULL),
+                                width = 2
+                              ),
+                              mainPanel(
+                                h3("Positional Inflation"),
+                                DT::dataTableOutput("posInflation"),
+                                h3("Nomination Targets"),
+                                DT::dataTableOutput("nomTargets")
+                              )
+                            )
+                   ),
                    tabPanel("Rosters",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(

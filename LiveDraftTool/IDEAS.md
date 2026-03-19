@@ -17,7 +17,7 @@ Draft date: ~April 8, 2026
 ## Draft Page
 
 - [ ] **Draft ticker/log** — a scrolling banner showing the last 5-10 picks across all teams
-- [ ] **Nomination suggestions** — highlight players that other teams need but you don't, good candidates to nominate to drain their budgets
+- [x] **Nomination suggestions** — highlight players that other teams need but you don't, good candidates to nominate to drain their budgets
 - [ ] **Price alerts** — flash when a player goes for significantly above or below their pDFL
 
 ## Overview/Analytics
