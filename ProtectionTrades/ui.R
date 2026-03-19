@@ -1,10 +1,12 @@
 # 1st Tool - pullTeam
 library("bslib")
 library("DT")
+library("shinyjs")
 
 
-shinyUI(navbarPage("Offseason Trade Evaluator, v1.13",
+shinyUI(navbarPage("Offseason Trade Evaluator, v2.0",
         theme = bs_theme(bootswatch = "flatly"),
+        shinyjs::useShinyjs(),
         tabPanel("Overview",
                  verticalLayout(
                    fluidRow(
@@ -68,6 +70,23 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v1.13",
                      sliderInput("hdfl", "Min DFL", min=0, max=30, value=10),
                      dataTableOutput("bh")
                    )
-          )
+          ),
+        tabPanel("Create Protection Lists",
+                 sidebarLayout(
+                   sidebarPanel(
+                     selectizeInput('protTeam', 'Select Team', choices = NULL),
+                     h4(textOutput("protCounter")),
+                     actionButton("protSubmit", "Submit Protection List",
+                                  icon = icon("save"),
+                                  class = "btn-success",
+                                  style = "margin-top: 15px;"),
+                     width = 3
+                   ),
+                   mainPanel(
+                     DT::dataTableOutput("protTable"),
+                     width = 9
+                   )
+                 )
+        )
 )
 )
