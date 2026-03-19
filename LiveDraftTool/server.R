@@ -1229,17 +1229,27 @@ shinyServer(function(input, output, session) {
   output$hpbpos <- DT::renderDataTable({
     req(input$e2)
     data <- markTargets(hitPlayersbyPos(input$e2), rv$targets)
-    tRows <- which(data$isTarget == 1)
+    tierColors <- c('#e8f4fd', '#edf7ee', '#fef9e7', '#f5f5f5')
+    data$rowBg <- case_when(
+      data$DFL >= 30 ~ '#e8f4fd',
+      data$DFL >= 15 ~ '#edf7ee',
+      data$DFL >= 5  ~ '#fef9e7',
+      data$DFL >= 1  ~ '#f5f5f5',
+      TRUE ~ ''
+    )
     data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    visibleCols <- setdiff(names(data), 'rowBg')
+
+    datatable(data, selection = 'single', rownames = FALSE,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE),
+                             searching = FALSE, info = FALSE,
+                             columnDefs = list(list(visible = FALSE, targets = ncol(data) - 1))),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('DFL') %>%
-      formatRound(c('RPV','SGP','Skew','AVG'), 3)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
+      formatRound(c('RPV','SGP','Skew','AVG'), 3) %>%
+      formatStyle(visibleCols, valueColumns = 'rowBg',
+                  backgroundColor = styleEqual(tierColors, tierColors))
   })
 
   # Pitcher role selector
@@ -1249,17 +1259,27 @@ shinyServer(function(input, output, session) {
   output$ppbpos <- DT::renderDataTable({
     req(input$e3)
     data <- markTargets(pitPlayersbyPos(input$e3), rv$targets)
-    tRows <- which(data$isTarget == 1)
+    tierColors <- c('#e8f4fd', '#edf7ee', '#fef9e7', '#f5f5f5')
+    data$rowBg <- case_when(
+      data$DFL >= 30 ~ '#e8f4fd',
+      data$DFL >= 15 ~ '#edf7ee',
+      data$DFL >= 5  ~ '#fef9e7',
+      data$DFL >= 1  ~ '#f5f5f5',
+      TRUE ~ ''
+    )
     data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    visibleCols <- setdiff(names(data), 'rowBg')
+
+    datatable(data, selection = 'single', rownames = FALSE,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE),
+                             info = FALSE,
+                             columnDefs = list(list(visible = FALSE, targets = ncol(data) - 1))),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','W','SV','HLD','SO'), 0) %>%
       formatCurrency('DFL') %>%
-      formatRound(c('RPV','SGP','Skew','ERA'), 3)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
+      formatRound(c('RPV','SGP','Skew','ERA'), 3) %>%
+      formatStyle(visibleCols, valueColumns = 'rowBg',
+                  backgroundColor = styleEqual(tierColors, tierColors))
   })
 
   # Protect by position

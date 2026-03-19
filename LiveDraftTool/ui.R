@@ -118,7 +118,14 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                   'e2', 'Select Position', choices=NULL),
                                 actionButton('targetHBtn', 'Toggle Target',
                                              class = 'btn-info btn-sm',
-                                             style = 'width:100%; margin-top:10px;')
+                                             style = 'width:100%; margin-top:10px;'),
+                                tags$div(style = 'margin-top:15px; font-size:12px; line-height:1.8;',
+                                  tags$strong('Price Tiers'),
+                                  tags$div(style = 'background:#e8f4fd; padding:2px 6px; margin-top:4px;', 'Elite $30+'),
+                                  tags$div(style = 'background:#edf7ee; padding:2px 6px;', 'Solid $15+'),
+                                  tags$div(style = 'background:#fef9e7; padding:2px 6px;', 'Value $5+'),
+                                  tags$div(style = 'background:#f5f5f5; padding:2px 6px;', 'Dollar $1+')
+                                )
                                   ,width=2),
                                 mainPanel(
                                   h2(textOutput("hpos")),
@@ -132,7 +139,14 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                               'e3', 'Select Role', choices=NULL),
                                             actionButton('targetPBtn', 'Toggle Target',
                                                          class = 'btn-info btn-sm',
-                                                         style = 'width:100%; margin-top:10px;')
+                                                         style = 'width:100%; margin-top:10px;'),
+                                            tags$div(style = 'margin-top:15px; font-size:12px; line-height:1.8;',
+                                              tags$strong('Price Tiers'),
+                                              tags$div(style = 'background:#e8f4fd; padding:2px 6px; margin-top:4px;', 'Elite $30+'),
+                                              tags$div(style = 'background:#edf7ee; padding:2px 6px;', 'Solid $15+'),
+                                              tags$div(style = 'background:#fef9e7; padding:2px 6px;', 'Value $5+'),
+                                              tags$div(style = 'background:#f5f5f5; padding:2px 6px;', 'Dollar $1+')
+                                            )
                                             ,width=2),
                                           mainPanel(
                                             h2(textOutput("ppos")),
