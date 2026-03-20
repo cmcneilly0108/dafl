@@ -44,8 +44,8 @@ if (dt > 14) {
 
 
 #official file
-#protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
-protected <- read.csv("../2026fakeprotected.csv",stringsAsFactors=FALSE)
+protected <- read.csv(str_c('../',as.character(cyear),'ProtectionLists.csv',sep=''),stringsAsFactors=FALSE)
+#protected <- read.csv("../2026fakeprotected.csv",stringsAsFactors=FALSE)
 protected$playerid <- as.character(protected$playerid)
 
 

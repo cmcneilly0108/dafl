@@ -4,7 +4,7 @@ Draft date: ~April 8, 2026
 
 ## Hitters/Pitchers Tabs - Tiers & Draft Strategy
 
-- [ ] **Price tiers with color bands** — cluster players by pDFL value into tiers (e.g., elite $30+, solid $15-29, value $5-14, dollar days $1-4) with alternating background colors so you can quickly scan which tier you're shopping in
+- [x] **Price tiers with color bands** — cluster players by pDFL value into tiers (e.g., elite $30+, solid $15-29, value $5-14, dollar days $1-4) with alternating background colors so you can quickly scan which tier you're shopping in
 - [x] **"My targets" flagging** — let you star/bookmark players pre-draft so they're highlighted when they come up in any tab
 - [ ] **Scarcity indicator** — show how many players remain at each position tier, so you know when a run is happening (e.g., "3 OF left in Tier 2")
 
