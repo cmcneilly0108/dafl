@@ -24,21 +24,45 @@ AllP_orig <- AllP_full
 rosterFile <- str_c("../", cyear, "DraftRosters.csv")
 budgetFile <- str_c("../", cyear, "DraftBudgets.csv")
 targetFile <- str_c("../", cyear, "DraftTargets.csv")
+protFile   <- str_c("../", cyear, "ProtectionLists.csv")
 
-if (!file.exists(rosterFile)) {
-  # Seed from protection list
-  initRoster <- read.csv("../2026fakeprotected.csv", stringsAsFactors = FALSE)
+needSeed <- !file.exists(rosterFile)
+
+# Re-seed if protection list is newer and no picks have been made yet
+if (!needSeed && file.exists(protFile)) {
+  protMtime <- file.info(protFile)$mtime
+  rostMtime <- file.info(rosterFile)$mtime
+  if (!is.na(protMtime) && !is.na(rostMtime) && protMtime > rostMtime) {
+    existingRoster <- read.csv(rosterFile, stringsAsFactors = FALSE)
+    if (all(is.na(existingRoster$DraftOrder))) {
+      needSeed <- TRUE
+    }
+  }
+}
+
+if (needSeed) {
+  # Seed from official protection list
+  initRoster <- read.csv(protFile, stringsAsFactors = FALSE)
   initRoster$playerid <- as.character(initRoster$playerid)
   # Remove row-number column if present
   if ("X" %in% names(initRoster)) initRoster$X <- NULL
 
-  # Look up MLB team from full player pools
+  # Look up MLB team from full player pools (fills in any missing MLB values)
   hLookup <- AllH_full %>% select(playerid, MLB) %>% distinct()
   pLookup <- AllP_full %>% select(playerid, MLB) %>% distinct()
   mlbLookup <- bind_rows(hLookup, pLookup) %>% distinct(playerid, .keep_all = TRUE)
-  initRoster <- left_join(initRoster, mlbLookup, by = "playerid")
+  if (!"MLB" %in% names(initRoster)) {
+    initRoster <- left_join(initRoster, mlbLookup, by = "playerid")
+  } else {
+    # Fill missing MLB values from lookup
+    initRoster <- left_join(initRoster, mlbLookup, by = "playerid", suffix = c("", ".lookup"))
+    initRoster$MLB <- ifelse(is.na(initRoster$MLB) | initRoster$MLB == "",
+                             initRoster$MLB.lookup, initRoster$MLB)
+    initRoster$MLB.lookup <- NULL
+  }
   initRoster$MLB <- replace_na(initRoster$MLB, "")
 
+  if (!"orank" %in% names(initRoster)) initRoster$orank <- NA
   initRoster$DraftOrder <- NA
   initRoster <- initRoster %>% select(Player, Pos, Team, Salary, Contract, MLB, playerid, orank, DraftOrder)
   write.csv(initRoster, rosterFile, row.names = FALSE)

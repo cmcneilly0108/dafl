@@ -359,6 +359,14 @@ shinyServer(function(input, output,session) {
     rosters <- read.csv(rosterFile, stringsAsFactors = FALSE) %>% select(-any_of("X"))
     selectedRoster <- rosters %>% filter(playerid %in% selectedIds)
 
+    # Preserve detailed pitching positions (SP, MR, CL) from predictions
+    # Rosters.csv flattens all pitchers to 'P'
+    detailedPos <- players %>% select(playerid, Pos) %>% rename(DetailedPos = Pos)
+    selectedRoster <- selectedRoster %>%
+      left_join(detailedPos, by = "playerid") %>%
+      mutate(Pos = DetailedPos) %>%
+      select(-DetailedPos)
+
     # Safety check: ensure join actually matched
     if (nrow(selectedRoster) == 0) {
       showNotification("Error: could not match selected players to roster file.", type = "error")
