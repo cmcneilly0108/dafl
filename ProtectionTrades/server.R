@@ -290,7 +290,7 @@ shinyServer(function(input, output,session) {
   protPreSelected <- reactive({
     req(input$protTeam)
     if (!file.exists(protFilePath)) return(integer(0))
-    existing <- read.csv(protFilePath, stringsAsFactors = FALSE)
+    existing <- read.csv(protFilePath, stringsAsFactors = FALSE) %>% select(-any_of("X"))
     teamExisting <- existing %>% filter(Team == input$protTeam)
     if (nrow(teamExisting) == 0) return(integer(0))
     players <- protPlayers()
@@ -303,7 +303,7 @@ shinyServer(function(input, output,session) {
     datatable(displayDf,
               selection = list(mode = 'multiple', selected = protPreSelected()),
               options = list(pageLength = 30, paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatCurrency(c('pDFL', 'netValue')) %>%
+      formatCurrency(c('Salary', 'pDFL', 'netValue')) %>%
       formatRound('Age', 0)
   })
 
@@ -339,7 +339,7 @@ shinyServer(function(input, output,session) {
 
     # Read full roster to get output columns matching Rosters.csv schema
     rosterFile <- paste0("../", cyear, "Rosters.csv")
-    rosters <- read.csv(rosterFile, stringsAsFactors = FALSE)
+    rosters <- read.csv(rosterFile, stringsAsFactors = FALSE) %>% select(-any_of("X"))
     selectedRoster <- rosters %>% filter(playerid %in% selectedIds)
 
     # Safety check: ensure join actually matched
@@ -350,7 +350,7 @@ shinyServer(function(input, output,session) {
 
     # Read existing protection list (or create empty)
     if (file.exists(protFilePath)) {
-      existingProt <- read.csv(protFilePath, stringsAsFactors = FALSE)
+      existingProt <- read.csv(protFilePath, stringsAsFactors = FALSE) %>% select(-any_of("X"))
       # Remove this team's old entries
       existingProt <- existingProt %>% filter(Team != input$protTeam)
     } else {
@@ -359,10 +359,10 @@ shinyServer(function(input, output,session) {
 
     # Append new selections and write
     updatedProt <- rbind(existingProt, selectedRoster)
-    write.csv(updatedProt, protFilePath)
+    write.csv(updatedProt, protFilePath, row.names = FALSE)
 
     showNotification(
-      paste0("Saved ", length(sel), " players for ", input$protTeam, "!"),
+      paste0("Saved ", nrow(selectedRoster), " players for ", input$protTeam, "!"),
       type = "message", duration = 4
     )
   })
