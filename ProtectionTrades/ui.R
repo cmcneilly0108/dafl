@@ -80,6 +80,9 @@ shinyUI(navbarPage("Offseason Trade Evaluator, v2.0",
                                   icon = icon("save"),
                                   class = "btn-success",
                                   style = "margin-top: 15px;"),
+                     hr(),
+                     h5("Protection Summary"),
+                     DT::dataTableOutput("protSummary"),
                      width = 3
                    ),
                    mainPanel(

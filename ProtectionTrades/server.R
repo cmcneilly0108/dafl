@@ -276,6 +276,23 @@ shinyServer(function(input, output,session) {
   # Build the protection list file path
   protFilePath <- paste0("../", cyear, "ProtectionLists.csv")
 
+  # Trigger to refresh summary after submit
+  protSummaryTrigger <- reactiveVal(0)
+
+  # Reactive: team-by-count summary from protection list CSV
+  protSummaryData <- reactive({
+    protSummaryTrigger()  # re-run when submit happens
+    if (!file.exists(protFilePath)) return(data.frame(Team = character(), Protected = integer()))
+    prot <- read.csv(protFilePath, stringsAsFactors = FALSE) %>% select(-any_of("X"))
+    prot %>% group_by(Team) %>% summarize(Protected = n(), .groups = "drop") %>% arrange(Team)
+  })
+
+  output$protSummary <- DT::renderDataTable({
+    datatable(protSummaryData(),
+              options = list(pageLength = 20, paging = FALSE, searching = FALSE, info = FALSE, dom = 't'),
+              rownames = FALSE)
+  })
+
   # Reactive: players for selected team (for DT display)
   protPlayers <- reactive({
     req(input$protTeam)
@@ -360,6 +377,8 @@ shinyServer(function(input, output,session) {
     # Append new selections and write
     updatedProt <- rbind(existingProt, selectedRoster)
     write.csv(updatedProt, protFilePath, row.names = FALSE)
+
+    protSummaryTrigger(protSummaryTrigger() + 1)
 
     showNotification(
       paste0("Saved ", nrow(selectedRoster), " players for ", input$protTeam, "!"),
