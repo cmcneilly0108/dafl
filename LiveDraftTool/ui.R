@@ -3,6 +3,10 @@ library("DT")
 
 shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    theme = bs_theme(bootswatch = "flatly"),
+                   header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
+                     actionButton('resetDraftBtn', 'Reset Draft',
+                                  class = 'btn-danger btn-sm')
+                   ),
                    tabPanel("Draft",
                             fluidRow(
                               column(4,

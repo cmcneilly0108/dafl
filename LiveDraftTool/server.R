@@ -1308,6 +1308,35 @@ shinyServer(function(input, output, session) {
   })
 
   # ============================
+  # Reset Draft handler
+  # ============================
+  observeEvent(input$resetDraftBtn, {
+    showModal(modalDialog(
+      title = "Reset Draft",
+      tags$p(tags$strong("Are you sure?"), " This will delete all draft data:"),
+      tags$ul(
+        tags$li("All drafted rosters"),
+        tags$li("All budget allocations"),
+        tags$li("All saved targets")
+      ),
+      tags$p("The app will reload with a fresh state."),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton('confirmResetBtn', 'Yes, Reset Draft',
+                     class = 'btn-danger')
+      )
+    ))
+  })
+
+  observeEvent(input$confirmResetBtn, {
+    removeModal()
+    if (file.exists(rosterFile)) file.remove(rosterFile)
+    if (file.exists(budgetFile)) file.remove(budgetFile)
+    if (file.exists(targetFile)) file.remove(targetFile)
+    session$reload()
+  })
+
+  # ============================
   # Player search updater
   # ============================
   observe({
