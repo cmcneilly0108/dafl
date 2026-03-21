@@ -1297,15 +1297,6 @@ shinyServer(function(input, output, session) {
   # ============================
   # Existing outputs — now reactive
   # ============================
-  output$pstandings <- DT::renderDataTable({
-    ps <- pstandings_r()
-    datatable(ps, options = list(pageLength = 20, autoWidth = FALSE,
-                                 paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatCurrency(c('TotalValue','Earned','VPPlayer','DPP','FullValue')) %>%
-      formatRound('CashLeft', 0) %>%
-      formatRound(c('ValueRatio','zScore'), 2)
-  })
-
   output$protectSummary <- DT::renderDataTable({
     datatable(protectSummary_r(),
               options = list(pageLength = 20, autoWidth = FALSE,

@@ -98,11 +98,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
-                   tabPanel("Overview",
-                            verticalLayout(
-                              DT::dataTableOutput("pstandings")
-                            )
-                   ),
                    tabPanel("Auction Stats",
                             splitLayout(
                               verticalLayout(
