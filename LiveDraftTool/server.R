@@ -839,7 +839,7 @@ shinyServer(function(input, output, session) {
     ) %>% distinct(playerid, .keep_all = TRUE)
     df <- left_join(df, valueLookup, by = "playerid")
     df$pDFL <- replace_na(df$pDFL, 0)
-    df$surplus <- df$pDFL - df$Salary
+    df$surplus <- df$Salary - df$pDFL
     df$pickNum <- seq_len(nrow(df))
     window <- 5
     df$rollingAvg <- sapply(seq_len(nrow(df)), function(i) {
@@ -860,8 +860,8 @@ shinyServer(function(input, output, session) {
       geom_col(aes(fill = surplus > 0), width = 0.7) +
       geom_line(aes(y = rollingAvg), color = "#3498db", linewidth = 1.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-      scale_fill_manual(values = c("TRUE" = "#2ecc71", "FALSE" = "#e74c3c"), guide = "none") +
-      labs(x = "Pick #", y = "Surplus ($)") +
+      scale_fill_manual(values = c("TRUE" = "#e74c3c", "FALSE" = "#2ecc71"), guide = "none") +
+      labs(x = "Pick #", y = "Overpay ($)") +
       theme_minimal(base_size = 12) +
       theme(plot.margin = margin(5, 10, 5, 10))
   }, height = 200)
@@ -873,12 +873,12 @@ shinyServer(function(input, output, session) {
     currentAvg <- data$rollingAvg[n]
     prevAvg <- if (n >= 6) data$rollingAvg[max(1, n - 5)] else 0
     trending_up <- currentAvg > prevAvg
-    if (currentAvg >= 0 && trending_up) {
+    if (currentAvg <= 0 && !trending_up) {
       label <- "Bargain Zone"; color <- "#2ecc71"
-    } else if (currentAvg >= 0 && !trending_up) {
-      label <- "Cooling Off"; color <- "#f39c12"
-    } else if (currentAvg < 0 && trending_up) {
+    } else if (currentAvg <= 0 && trending_up) {
       label <- "Warming Up"; color <- "#f39c12"
+    } else if (currentAvg > 0 && !trending_up) {
+      label <- "Cooling Off"; color <- "#f39c12"
     } else {
       label <- "Overpay Zone"; color <- "#e74c3c"
     }
