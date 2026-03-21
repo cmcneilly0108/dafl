@@ -1076,8 +1076,8 @@ shinyServer(function(input, output, session) {
     ap <- AllP_avail()
     hChoices <- setNames(ah$playerid, paste0(ah$Player, " (", ah$Pos, " $", round(ah$pDFL), ")"))
     pChoices <- setNames(ap$playerid, paste0(ap$Player, " (", ap$Pos, " $", round(ap$pDFL), ")"))
-    choices <- c("" = "", hChoices, pChoices)
-    updateSelectizeInput(session, 'compPlayer', choices = choices, server = TRUE)
+    allChoices <- c(hChoices, pChoices)
+    updateSelectizeInput(session, 'compPlayer', choices = allChoices, server = TRUE)
   })
 
   output$competitionReport <- renderUI({
