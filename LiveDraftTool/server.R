@@ -1382,6 +1382,56 @@ shinyServer(function(input, output, session) {
   })
 
 
+  # Protect by position — new intelligence view
+  updateSelectizeInput(session, 'e4', choices = allpos, selected = 'OF')
+
+  output$posNeedHeader <- renderText({
+    req(input$e4)
+    paste("Teams That Need", input$e4)
+  })
+
+  output$posSummaryCard <- renderUI({
+    req(input$e4)
+    pos <- input$e4
+    pc <- protClean_r()
+    atPos <- pc %>% filter(Pos == pos)
+    nProtected <- nrow(atPos)
+    posThresholds <- c('OF' = 3, 'SP' = 5)
+    threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
+    posCounts <- atPos %>% group_by(Team) %>% summarize(have = n(), .groups = 'drop')
+    allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
+    nTeamsNeed <- left_join(allteams, posCounts, by = 'Team') %>%
+      mutate(have = replace_na(have, 0)) %>%
+      filter(have < threshold) %>% nrow()
+    avgSal <- if (nProtected > 0) round(mean(atPos$Salary, na.rm = TRUE)) else 0
+    avgVal <- if (nProtected > 0) round(mean(atPos$pDFL, na.rm = TRUE)) else 0
+
+    tags$div(style = "margin-top:15px; background:#f8f9fa; border-radius:6px; padding:12px;",
+      tags$div(style = "font-weight:bold; margin-bottom:8px; border-bottom:1px solid #dee2e6; padding-bottom:6px;",
+               "Position Summary"),
+      tags$table(class = "table table-condensed", style = "margin-bottom:0; font-size:12px;",
+        tags$tr(tags$td("Protected"), tags$td(style = "text-align:right; font-weight:bold;", nProtected)),
+        tags$tr(tags$td("Teams Need"), tags$td(style = "text-align:right; font-weight:bold; color:#e74c3c;", nTeamsNeed)),
+        tags$tr(tags$td("Avg Salary"), tags$td(style = "text-align:right; font-weight:bold;", paste0("$", avgSal))),
+        tags$tr(tags$td("Avg Value"), tags$td(style = "text-align:right; font-weight:bold;", paste0("$", avgVal)))
+      )
+    )
+  })
+
+  output$posNeedTable <- DT::renderDataTable({
+    req(input$e4)
+    data <- posNeed_r()
+    datatable(data, escape = FALSE, rownames = FALSE,
+              options = list(pageLength = 20, autoWidth = FALSE,
+                             paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE)) %>%
+      formatRound('$/Player', 0) %>%
+      formatStyle('Market',
+                  backgroundColor = styleEqual(
+                    c('Strong Buy', 'Lean Buy', 'Neutral', 'Wait', 'Full'),
+                    c('#d4edda', '#d4edda', '#fff3cd', '#f8d7da', '#e9ecef')))
+  })
+
   # Static outputs that don't change with drafting
   output$rrcResults <- DT::renderDataTable({
     data <- rrcResults %>% mutate(Player = fgLink(Player, playerid))
