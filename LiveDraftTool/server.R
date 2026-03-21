@@ -1293,6 +1293,12 @@ shinyServer(function(input, output, session) {
       rv$draftLog <- c(rv$draftLog, list(newRow))
       rv$roster <- bind_rows(rv$roster, newRow)
       write.csv(rv$roster, rosterFile, row.names = FALSE)
+      # Remove from targets if present
+      pid_char <- as.character(newRow$playerid)
+      if (pid_char %in% rv$targets) {
+        rv$targets <- rv$targets[rv$targets != pid_char]
+        write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+      }
       updateSelectizeInput(session, 'playerSearch', selected = "")
       showNotification(paste0("Drafted ", playerName, " to ", team, " for $", salary),
                        type = "message")
@@ -1314,6 +1320,12 @@ shinyServer(function(input, output, session) {
     rv$draftLog <- c(rv$draftLog, list(newRow))
     rv$roster <- bind_rows(rv$roster, newRow)
     write.csv(rv$roster, rosterFile, row.names = FALSE)
+    # Remove from targets if present
+    pid_char <- as.character(newRow$playerid)
+    if (pid_char %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid_char]
+      write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+    }
     updateSelectizeInput(session, 'playerSearch', selected = "")
     removeModal()
     showNotification(paste0("Drafted ", newRow$Player, " to ", newRow$Team, " for $", newRow$Salary),
