@@ -11,6 +11,7 @@ teams <- sort(unique(pstandings$Team))
 hpos <- list('C','1B','2B','SS','3B','OF')
 ppos <- list('SP','MR','CL')
 allpos <- c(hpos,list('SP','MR','CL'))
+posThresholds <- c('OF' = 3, 'SP' = 5)  # positions needing >1 protected
 cap <- 260
 nteams <- 13
 nhitters <- 13
@@ -629,8 +630,7 @@ shinyServer(function(input, output, session) {
     rh <- rhitters_r()
     rp <- rpitchers_r()
 
-    # Position thresholds
-    posThresholds <- c('OF' = 3, 'SP' = 5)
+    # Position thresholds (from global constant)
     threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
 
     # Count protected per team at this position (using Pos column only)
@@ -645,13 +645,13 @@ shinyServer(function(input, output, session) {
       filter(StillNeed > 0)
 
     if (nrow(need) == 0) return(data.frame(
-      Team = character(), StillNeed = integer(), Market = character(),
-      CashLeft = numeric(), DPP = numeric(), WeakestStats = character(),
-      stringsAsFactors = FALSE
+      Team = character(), `Still Need` = integer(), Market = character(),
+      `Cash Left` = numeric(), `$/Player` = numeric(), `Weakest Stats` = character(),
+      stringsAsFactors = FALSE, check.names = FALSE
     ))
 
     # Market label from pstandings DPP ratio
-    need <- left_join(need, ps %>% select(Team, CashLeft_total = CashLeft, Needed, DPP), by = 'Team')
+    need <- left_join(need, ps %>% select(Team, Needed, DPP), by = 'Team')
 
     need$Market <- sapply(seq_len(nrow(need)), function(i) {
       tm <- need$Team[i]
@@ -1396,13 +1396,7 @@ shinyServer(function(input, output, session) {
     pc <- protClean_r()
     atPos <- pc %>% filter(Pos == pos)
     nProtected <- nrow(atPos)
-    posThresholds <- c('OF' = 3, 'SP' = 5)
-    threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
-    posCounts <- atPos %>% group_by(Team) %>% summarize(have = n(), .groups = 'drop')
-    allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
-    nTeamsNeed <- left_join(allteams, posCounts, by = 'Team') %>%
-      mutate(have = replace_na(have, 0)) %>%
-      filter(have < threshold) %>% nrow()
+    nTeamsNeed <- nrow(posNeed_r())
     avgSal <- if (nProtected > 0) round(mean(atPos$Salary, na.rm = TRUE)) else 0
     avgVal <- if (nProtected > 0) round(mean(atPos$pDFL, na.rm = TRUE)) else 0
 
