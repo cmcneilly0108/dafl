@@ -10,7 +10,7 @@ setwd("../LiveDraftTool")
 teams <- sort(unique(pstandings$Team))
 hpos <- list('C','1B','2B','SS','3B','OF')
 ppos <- list('SP','MR','CL')
-allpos <- c(hpos,list('SP','RP'))
+allpos <- c(hpos,list('SP','MR','CL'))
 cap <- 260
 nteams <- 13
 nhitters <- 13
