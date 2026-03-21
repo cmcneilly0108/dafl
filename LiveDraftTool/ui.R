@@ -98,16 +98,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
-                   tabPanel("Auction Stats",
-                            splitLayout(
-                              verticalLayout(
-                                h2("Inflation Summary"),
-                                DT::dataTableOutput("protectSummary")),
-                              verticalLayout(
-                                h2("Protection by Position"),
-                                DT::dataTableOutput("ppp"))
-                            )
-                   ),
                    tabPanel("Protect by Pos",
                             sidebarLayout(fluid=FALSE,
                                           sidebarPanel(

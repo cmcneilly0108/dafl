@@ -1362,21 +1362,6 @@ shinyServer(function(input, output, session) {
   # ============================
   # Existing outputs — now reactive
   # ============================
-  output$protectSummary <- DT::renderDataTable({
-    datatable(protectSummary_r(),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatPercentage(c('playersProt','dollarsSpent','valueTaken'), 2) %>%
-      formatRound(c('ToFill'), 0)
-  })
-
-  output$ppp <- DT::renderDataTable({
-    datatable(ppp_r(),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE))
-  })
-
-
   # Position selector
   updateSelectizeInput(session, 'e2', choices = hpos, selected = 'OF')
   output$hpos <- renderText({ input$e2 })
