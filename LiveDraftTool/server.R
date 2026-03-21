@@ -703,6 +703,71 @@ shinyServer(function(input, output, session) {
     need
   })
 
+  # --- pressure: positional scarcity indicator ---
+  pressure_r <- reactive({
+    pc <- protClean_r()
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+    positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
+    hitterPositions <- c('C','1B','2B','SS','3B','OF')
+
+    # Tier assignment
+    priceTier <- function(dfl) {
+      case_when(dfl >= 30 ~ "Elite", dfl >= 15 ~ "Solid", dfl >= 5 ~ "Value", TRUE ~ "Dollar")
+    }
+
+    rows <- lapply(positions, function(pos) {
+      # How many does the league need?
+      threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
+      posCounts <- pc %>% filter(Pos == pos) %>%
+        group_by(Team) %>% summarize(have = n(), .groups = 'drop')
+      allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
+      leagueNeed <- left_join(allteams, posCounts, by = 'Team') %>%
+        mutate(have = replace_na(have, 0)) %>%
+        mutate(still = pmax(0, threshold - have)) %>%
+        pull(still) %>% sum()
+
+      if (leagueNeed == 0) {
+        return(data.frame(Pos = pos, Need = 0, Pressure = "No", stringsAsFactors = FALSE))
+      }
+
+      # Get top N available players at this position
+      if (pos %in% hitterPositions) {
+        pool <- ah %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos))) %>%
+          arrange(-pDFL) %>% head(leagueNeed)
+      } else {
+        pool <- ap %>% filter(Pos == pos) %>% arrange(-pDFL) %>% head(leagueNeed)
+      }
+
+      if (nrow(pool) == 0) {
+        return(data.frame(Pos = pos, Need = leagueNeed, Pressure = "High", stringsAsFactors = FALSE))
+      }
+
+      pool$tier <- priceTier(pool$pDFL)
+      topTier <- pool$tier[1]
+      nTopTier <- sum(pool$tier == topTier)
+      nTiers <- length(unique(pool$tier))
+      topVal <- pool$pDFL[1]
+      botVal <- pool$pDFL[nrow(pool)]
+
+      pressure <- if (nTopTier == 1) {
+        "High"
+      } else if (nTiers >= 3) {
+        "Medium"
+      } else if (topVal - botVal > 5) {
+        "Low"
+      } else {
+        "No"
+      }
+
+      data.frame(Pos = pos, Need = leagueNeed, Pressure = pressure, stringsAsFactors = FALSE)
+    })
+
+    result <- bind_rows(rows)
+    pressureOrd <- c("High" = 1, "Medium" = 2, "Low" = 3, "No" = 4)
+    result %>% mutate(ord = pressureOrd[Pressure]) %>% arrange(ord, -Need) %>% select(-ord)
+  })
+
   # --- FanGraphs link helper ---
   fgLink <- function(name, pid) {
     ifelse(is.na(pid) | name == "",
@@ -1415,6 +1480,19 @@ shinyServer(function(input, output, session) {
                   backgroundColor = styleEqual(
                     c('Strong Buy', 'Lean Buy', 'Neutral', 'Wait', 'Full'),
                     c('#d4edda', '#d4edda', '#fff3cd', '#f8d7da', '#e9ecef')))
+  })
+
+  output$pressureTable <- DT::renderDataTable({
+    data <- pressure_r()
+    datatable(data, rownames = FALSE,
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE),
+              selection = 'none') %>%
+      formatStyle('Pressure',
+                  backgroundColor = styleEqual(
+                    c('High', 'Medium', 'Low', 'No'),
+                    c('#f8d7da', '#fff3cd', '#d4edda', '#e9ecef')),
+                  fontWeight = styleEqual('High', 'bold'))
   })
 
   # Static outputs that don't change with drafting

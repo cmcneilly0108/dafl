@@ -114,7 +114,9 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                             selectizeInput(
                                               'e4', 'Select Position', choices=NULL),
                                             uiOutput("posSummaryCard"),
-                                            width=2),
+                                            h4("Pressure", style = "margin-top:15px;"),
+                                            DT::dataTableOutput("pressureTable"),
+                                            width=3),
                                           mainPanel(
                                             h3(textOutput("posNeedHeader")),
                                             DT::dataTableOutput("posNeedTable")
