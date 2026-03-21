@@ -1297,31 +1297,6 @@ shinyServer(function(input, output, session) {
                   backgroundColor = styleEqual(tierColors, tierColors))
   })
 
-  # Protect by position
-  updateSelectizeInput(session, 'e4', choices = allpos, selected = 'OF')
-  output$allpos <- renderText({ input$e4 })
-  output$uniquePos <- renderText({
-    req(input$e4)
-    uniqueProtect(input$e4)
-  })
-
-  output$posProtect <- DT::renderDataTable({
-    req(input$e4)
-    datatable(posProtect(input$e4),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE), filter = 'top') %>%
-      formatCurrency('pDFL') %>%
-      formatRound(c('Age','rankDiff'), 0) %>%
-      formatRound('Skew', 3)
-  })
-
-  output$tNeed <- DT::renderDataTable({
-    req(input$e4)
-    datatable(teamsInterested(input$e4),
-              options = list(pageLength = 20, autoWidth = FALSE,
-                             paging = FALSE, searching = FALSE, info = FALSE)) %>%
-      formatRound('salleft', 0)
-  })
 
   # Static outputs that don't change with drafting
   output$rrcResults <- DT::renderDataTable({
