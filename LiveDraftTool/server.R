@@ -672,8 +672,9 @@ shinyServer(function(input, output, session) {
     isHitterPos <- pos %in% c('C','1B','2B','SS','3B','OF')
     csGroup <- if (isHitterPos) 'hitting' else 'pitching'
     csSub <- cs %>% filter(group == csGroup) %>% select(Team, salleft)
+    fullBudget <- if (isHitterPos) cap * (1 - hpratio) else cap * hpratio
     need <- left_join(need, csSub, by = 'Team')
-    need$CashLeft <- round(need$salleft, 0)
+    need$CashLeft <- round(replace_na(need$salleft, fullBudget), 0)
 
     # Weakest stats per team
     hitterStats <- c('HR','RBI','R','SB')
