@@ -711,34 +711,19 @@ shinyServer(function(input, output, session) {
   # --- Inflation rate ---
   inflationData_r <- reactive({
     pos <- input$marketPos
-    ps <- pstandings_r()
-    dollarsLeft <- sum(ps$CashLeft)
-    spotsLeft <- sum(ps$Needed)
-
-    ah <- AllH_avail()
-    ap <- AllP_avail()
+    pc <- protClean_r()
 
     if (!is.null(pos) && pos != "All") {
-      if (pos %in% c('SP','MR','CL')) {
-        ah <- ah[0, ]
-        ap <- ap %>% filter(Pos == pos)
-      } else {
-        ah <- ah %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos)))
-        ap <- ap[0, ]
-      }
+      pc <- pc %>% filter(Pos == pos)
     }
 
-    allAvail <- bind_rows(
-      ah %>% select(playerid, pDFL),
-      ap %>% select(playerid, pDFL)
-    ) %>% filter(pDFL > 0) %>% arrange(-pDFL)
+    totalSalary <- sum(pc$Salary)
+    totalValue  <- sum(pc$pDFL)
+    inflation   <- if (totalValue > 0) totalSalary / totalValue else NA
+    nRostered   <- nrow(pc)
 
-    topN <- head(allAvail, spotsLeft)
-    valueLeft <- sum(topN$pDFL)
-
-    inflationMult <- if (valueLeft > 0) dollarsLeft / valueLeft else NA
-    list(dollarsLeft = dollarsLeft, valueLeft = valueLeft,
-         spotsLeft = spotsLeft, inflation = inflationMult)
+    list(totalSalary = totalSalary, totalValue = totalValue,
+         nRostered = nRostered, inflation = inflation)
   })
 
   output$inflationDisplay <- renderUI({
@@ -746,19 +731,16 @@ shinyServer(function(input, output, session) {
     if (is.na(d$inflation)) return(tags$span("No data yet", style = "color:gray;"))
 
     pct <- (d$inflation - 1) * 100
-    color <- if (pct > 10) "#e74c3c" else if (pct > 0) "#f39c12" else "#2ecc71"
-    sign <- if (pct >= 0) "+" else ""
+    color <- if (pct > 30) "#e74c3c" else if (pct > 0) "#f39c12" else "#2ecc71"
 
     tags$div(
       style = "text-align:center; padding:8px; border-radius:4px; background:#f8f9fa; margin-bottom:10px;",
       tags$strong(style = paste0("font-size:22px; color:", color, ";"),
-                  paste0(sprintf("%.1f", d$inflation), "x")),
-      tags$span(style = paste0("font-size:14px; color:", color, ";"),
-                paste0(" (", sign, sprintf("%.0f", pct), "%)")),
+                  paste0(sprintf("%.2f", pct), "%")),
       tags$br(),
       tags$small(style = "color:gray;",
-                 paste0("$", round(d$dollarsLeft), " left / $", round(d$valueLeft),
-                        " value / ", d$spotsLeft, " spots"))
+                 paste0("$", round(d$totalSalary), " spent / $", round(d$totalValue),
+                        " value / ", d$nRostered, " rostered"))
     )
   })
 
@@ -808,14 +790,50 @@ shinyServer(function(input, output, session) {
   # ============================
   updateSelectInput(session, 'nomTeam', choices = teams, selected = 'Liquor Crickets')
 
+  output$nomSpendingPower <- renderUI({
+    req(input$nomTeam)
+    ps <- pstandings_r()
+    me <- ps %>% filter(Team == input$nomTeam)
+    if (nrow(me) == 0) return(tags$span("Team not found", style = "color:gray;"))
+
+    myDPP <- me$DPP
+    others <- ps %>% filter(Team != input$nomTeam, Needed > 0)
+    if (nrow(others) == 0) return(tags$span("No other teams with needs", style = "color:gray;"))
+
+    leagueAvgDPP <- sum(others$CashLeft) / sum(others$Needed)
+    ratio <- if (leagueAvgDPP > 0) myDPP / leagueAvgDPP else NA
+    myRank <- sum(ps$DPP <= myDPP, na.rm = TRUE)
+    myRank <- nteams - myRank + 1
+
+    if (is.na(ratio) || me$Needed <= 0) {
+      label <- "Roster Full"; color <- "gray"
+    } else if (ratio >= 1.3) {
+      label <- "Strong Buy"; color <- "#2ecc71"
+    } else if (ratio >= 1.0) {
+      label <- "Lean Buy"; color <- "#27ae60"
+    } else if (ratio >= 0.8) {
+      label <- "Neutral"; color <- "#f39c12"
+    } else {
+      label <- "Wait"; color <- "#e74c3c"
+    }
+
+    tags$div(
+      style = "text-align:center; padding:8px; border-radius:4px; background:#f8f9fa; margin-bottom:10px;",
+      tags$strong(style = paste0("font-size:18px; color:", color, ";"), label),
+      tags$br(),
+      tags$span(style = "font-size:14px;",
+                paste0("$", round(myDPP, 1), "/player vs $", round(leagueAvgDPP, 1), " avg")),
+      tags$br(),
+      tags$small(style = "color:gray;",
+                 paste0("Rank: ", myRank, "/", nteams,
+                        " | $", round(me$CashLeft), " left, ", me$Needed, " spots"))
+    )
+  })
+
   # --- Positional Inflation table ---
   posInflation_r <- reactive({
     positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
-    ps <- pstandings_r()
-    dollarsLeft <- sum(ps$CashLeft)
-    spotsLeft <- sum(ps$Needed)
-    ah <- AllH_avail()
-    ap <- AllP_avail()
+    pc <- protClean_r()
 
     # Value lookup for surplus from draft log
     valueLookup <- bind_rows(
@@ -826,44 +844,43 @@ shinyServer(function(input, output, session) {
     logDf <- if (length(log) > 0) bind_rows(log) else data.frame()
 
     rows <- lapply(positions, function(pos) {
-      if (pos %in% c('SP','MR','CL')) {
-        pool <- ap %>% filter(Pos == pos) %>% select(playerid, pDFL)
-      } else {
-        pool <- ah %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos))) %>% select(playerid, pDFL)
-      }
-      pool <- pool %>% filter(pDFL > 0) %>% arrange(-pDFL)
-      topN <- head(pool, spotsLeft)
-      valueLeft <- sum(topN$pDFL)
-      inflation <- if (valueLeft > 0) dollarsLeft / valueLeft else NA
+      posPc <- pc %>% filter(Pos == pos)
+      totalSalary <- sum(posPc$Salary)
+      totalValue  <- sum(posPc$pDFL)
+      inflation   <- if (totalValue > 0) (totalSalary / totalValue - 1) * 100 else NA
 
-      # Trend: avg surplus from picks at this position
+      # Trend: inflation % for last 5 drafted at this position
       trend <- NA
       if (nrow(logDf) > 0) {
         posPicks <- logDf %>% filter(Pos == pos)
         if (nrow(posPicks) > 0) {
           posPicks <- left_join(posPicks, valueLookup, by = "playerid")
           posPicks$pDFL <- replace_na(posPicks$pDFL, 0)
-          trend <- mean(posPicks$Salary - posPicks$pDFL)
+          last5 <- tail(posPicks, 5)
+          trendValue <- sum(last5$pDFL)
+          trend <- if (trendValue > 0) (sum(last5$Salary) / trendValue - 1) * 100 else NA
         }
       }
 
-      data.frame(Position = pos, Available = nrow(pool),
-                 Inflation = inflation, Trend = trend,
+      data.frame(Position = pos, Rostered = nrow(posPc),
+                 InflationNum = inflation, TrendNum = trend,
+                 Inflation = if (!is.na(inflation)) paste0(sprintf("%.2f", inflation), "%") else NA,
+                 Trend = if (!is.na(trend)) paste0(sprintf("%.2f", trend), "%") else NA,
                  stringsAsFactors = FALSE)
     })
     bind_rows(rows)
   })
 
   output$posInflation <- DT::renderDataTable({
-    datatable(posInflation_r(),
+    df <- posInflation_r()
+    datatable(df %>% select(Position, Rostered, Inflation, Trend, InflationNum, TrendNum),
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
-                             ordering = FALSE, autoWidth = FALSE)) %>%
-      formatRound('Inflation', 2) %>%
-      formatRound('Trend', 1) %>%
-      formatStyle('Inflation',
-                  color = styleInterval(c(1.0, 1.3), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
-      formatStyle('Trend',
-                  color = styleInterval(0, c('#2ecc71', '#e74c3c')))
+                             ordering = FALSE, autoWidth = FALSE,
+                             columnDefs = list(list(visible = FALSE, targets = c(5, 6))))) %>%
+      formatStyle('Inflation', valueColumns = 'InflationNum',
+                  color = styleInterval(c(0, 30), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
+      formatStyle('Trend', valueColumns = 'TrendNum',
+                  color = styleInterval(c(0, 30), c('#2ecc71', '#f39c12', '#e74c3c')))
   })
 
   # --- Nomination Targets table ---

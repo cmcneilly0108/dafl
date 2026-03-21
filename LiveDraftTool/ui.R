@@ -46,11 +46,27 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(
                                 selectInput('nomTeam', 'My Team', choices = NULL),
+                                uiOutput("nomSpendingPower"),
                                 width = 2
                               ),
                               mainPanel(
                                 h3("Positional Inflation"),
                                 DT::dataTableOutput("posInflation"),
+                                tags$div(style = "margin-top:8px; margin-bottom:16px; font-size:12px; color:#666; line-height:1.6;",
+                                  tags$strong("Inflation%"), " = how much more (or less) owners are paying vs projected value at position.",
+                                  tags$br(),
+                                  tags$span(style="color:#2ecc71;", "< 0% bargains"),
+                                  " | ",
+                                  tags$span(style="color:#f39c12;", "0\u201330% moderate"),
+                                  " | ",
+                                  tags$span(style="color:#e74c3c;", "> 30% inflated"),
+                                  tags$br(),
+                                  tags$strong("Trend"), " = same calc for last 5 drafted at position.",
+                                  tags$br(),
+                                  tags$span(style="color:#2ecc71;", "Negative = bargains"),
+                                  " | ",
+                                  tags$span(style="color:#e74c3c;", "Positive = overpay")
+                                ),
                                 h3("Nomination Targets"),
                                 DT::dataTableOutput("nomTargets")
                               )
