@@ -198,6 +198,11 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
+                   tabPanel("Top Hitters",
+                            verticalLayout(
+                              DT::dataTableOutput("topHitters")
+                            )
+                   ),
                    tabPanel("Prospects",
                             mainPanel(
                               actionButton('targetProspBtn', 'Toggle Target',
@@ -209,11 +214,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                           tabPanel('Pitchers',
                                                    DT::dataTableOutput("prospectP"))
                               )
-                            )
-                   ),
-                   tabPanel("Top Hitters",
-                            verticalLayout(
-                              DT::dataTableOutput("topHitters")
                             )
                    ),
                    tabPanel("Injured",
