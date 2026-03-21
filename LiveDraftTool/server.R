@@ -619,6 +619,90 @@ shinyServer(function(input, output, session) {
     group_by(pc, Position) %>% summarize(Count = n(), .groups = 'drop')
   })
 
+  # --- posNeed: position intelligence table ---
+  posNeed_r <- reactive({
+    req(input$e4)
+    pos <- input$e4
+    pc <- protClean_r()
+    ps <- pstandings_r()
+    cs <- currentSummary_r()
+    rh <- rhitters_r()
+    rp <- rpitchers_r()
+
+    # Position thresholds
+    posThresholds <- c('OF' = 3, 'SP' = 5)
+    threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
+
+    # Count protected per team at this position (using Pos column only)
+    posCounts <- pc %>% filter(Pos == pos) %>%
+      group_by(Team) %>% summarize(have = n(), .groups = 'drop')
+
+    # All teams, join counts, compute Still Need
+    allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
+    need <- left_join(allteams, posCounts, by = 'Team') %>%
+      mutate(have = replace_na(have, 0),
+             StillNeed = pmax(0, threshold - have)) %>%
+      filter(StillNeed > 0)
+
+    if (nrow(need) == 0) return(data.frame(
+      Team = character(), StillNeed = integer(), Market = character(),
+      CashLeft = numeric(), DPP = numeric(), WeakestStats = character(),
+      stringsAsFactors = FALSE
+    ))
+
+    # Market label from pstandings DPP ratio
+    need <- left_join(need, ps %>% select(Team, CashLeft_total = CashLeft, Needed, DPP), by = 'Team')
+
+    need$Market <- sapply(seq_len(nrow(need)), function(i) {
+      tm <- need$Team[i]
+      tmRow <- need[i, ]
+      others <- ps %>% filter(Team != tm, Needed > 0)
+      leagueAvgDPP <- if (sum(others$Needed) > 0) sum(others$CashLeft) / sum(others$Needed) else 0
+      ratio <- if (leagueAvgDPP > 0 && tmRow$Needed > 0) tmRow$DPP / leagueAvgDPP else NA
+      case_when(
+        is.na(ratio) || tmRow$Needed <= 0 ~ "Full",
+        ratio >= 1.3 ~ "Strong Buy",
+        ratio >= 1.0 ~ "Lean Buy",
+        ratio >= 0.8 ~ "Neutral",
+        TRUE ~ "Wait"
+      )
+    })
+
+    # Position-adjusted cash left from currentSummary
+    isHitterPos <- pos %in% c('C','1B','2B','SS','3B','OF')
+    csGroup <- if (isHitterPos) 'hitting' else 'pitching'
+    csSub <- cs %>% filter(group == csGroup) %>% select(Team, salleft)
+    need <- left_join(need, csSub, by = 'Team')
+    need$CashLeft <- round(need$salleft, 0)
+
+    # Weakest stats per team
+    hitterStats <- c('HR','RBI','R','SB')
+    pitcherStats <- c('W','K','SV','HLD')
+    relevantStats <- if (isHitterPos) hitterStats else pitcherStats
+
+    need$WeakestStats <- sapply(need$Team, function(tm) {
+      goals <- calcGoals(rp, rh, targets, tm)
+      goals <- goals %>% filter(statistic %in% relevantStats, pc < 0.65) %>%
+        arrange(pc) %>% head(3)
+      if (nrow(goals) == 0) return('<span style="color:#2ecc71;">On track</span>')
+      paste(sapply(seq_len(nrow(goals)), function(j) {
+        pct <- round(goals$pc[j] * 100)
+        color <- if (goals$pc[j] < 0.50) '#e74c3c' else '#f39c12'
+        paste0('<span style="color:', color, ';">', goals$statistic[j], ' ', pct, '%</span>')
+      }), collapse = ', ')
+    })
+
+    # Sort by market label priority, then DPP descending
+    statusOrd <- c("Strong Buy" = 1, "Lean Buy" = 2, "Neutral" = 3, "Wait" = 4, "Full" = 5)
+    need <- need %>%
+      mutate(ord = statusOrd[Market]) %>%
+      arrange(ord, -DPP) %>%
+      select(Team, StillNeed, Market, CashLeft, DPP, WeakestStats) %>%
+      dplyr::rename(`Still Need` = StillNeed, `$/Player` = DPP, `Cash Left` = CashLeft,
+                     `Weakest Stats` = WeakestStats)
+    need
+  })
+
   # --- FanGraphs link helper ---
   fgLink <- function(name, pid) {
     ifelse(is.na(pid) | name == "",
