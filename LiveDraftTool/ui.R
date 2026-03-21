@@ -52,7 +52,13 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 selectInput('nomTeam', 'My Team', choices = NULL),
                                 uiOutput("nomSpendingPower"),
                                 uiOutput("nomStrategyCard"),
-                                width = 2
+                                tags$hr(),
+                                h4("Competition Check"),
+                                selectizeInput('compPlayer', 'Select Player',
+                                               choices = NULL,
+                                               options = list(placeholder = 'Type player name...')),
+                                uiOutput("competitionReport"),
+                                width = 3
                               ),
                               mainPanel(
                                 h3("Positional Inflation"),

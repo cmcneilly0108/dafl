@@ -1070,6 +1070,91 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Competition Check dropdown ---
+  observe({
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+    hChoices <- setNames(ah$playerid, paste0(ah$Player, " (", ah$Pos, " $", round(ah$pDFL), ")"))
+    pChoices <- setNames(ap$playerid, paste0(ap$Player, " (", ap$Pos, " $", round(ap$pDFL), ")"))
+    choices <- c("" = "", hChoices, pChoices)
+    updateSelectizeInput(session, 'compPlayer', choices = choices, server = TRUE)
+  })
+
+  output$competitionReport <- renderUI({
+    req(input$compPlayer, input$nomTeam)
+    pid <- input$compPlayer
+    if (pid == "") return(NULL)
+    myTeam <- input$nomTeam
+    ps <- pstandings_r()
+    pc <- protClean_r()
+
+    # Find the player
+    ah <- AllH_avail()
+    ap <- AllP_avail()
+    playerH <- ah %>% filter(playerid == pid)
+    playerP <- ap %>% filter(playerid == pid)
+    isHitter <- nrow(playerH) > 0
+    if (!isHitter && nrow(playerP) == 0) return(tags$span("Player not found", style = "color:gray;"))
+    player <- if (isHitter) playerH[1,] else playerP[1,]
+    playerPos <- player$Pos
+
+    # My max bid
+    me <- ps %>% filter(Team == myTeam)
+    if (nrow(me) == 0 || me$Needed <= 0) return(NULL)
+    myMaxBid <- me$CashLeft - (me$Needed - 1)
+
+    # Check each other team
+    otherTeams <- ps %>% filter(Team != myTeam, Needed > 0)
+    if (nrow(otherTeams) == 0) return(tags$div(style = "color:#2ecc71;", "No competitors left!"))
+
+    competitors <- lapply(seq_len(nrow(otherTeams)), function(i) {
+      tm <- otherTeams$Team[i]
+      tmRow <- otherTeams[i,]
+      theirMaxBid <- tmRow$CashLeft - (tmRow$Needed - 1)
+
+      if (theirMaxBid <= myMaxBid) return(NULL)
+
+      # Do they need this position as a starter?
+      theirPosCounts <- pc %>% filter(Team == tm, Pos == playerPos) %>% nrow()
+      threshold <- ifelse(playerPos %in% names(posThresholds), posThresholds[playerPos], 1)
+      needsStarter <- theirPosCounts < threshold
+
+      # Do they have bench room? (Needed > 0 means open slots somewhere)
+      hasBenchRoom <- tmRow$Needed > 0
+
+      if (!needsStarter && !hasBenchRoom) return(NULL)
+
+      reason <- if (needsStarter) paste0("needs ", playerPos) else "bench"
+      data.frame(Team = tm, MaxBid = theirMaxBid, Reason = reason, stringsAsFactors = FALSE)
+    })
+
+    competitors <- bind_rows(competitors)
+    nComp <- nrow(competitors)
+
+    color <- if (nComp <= 1) "#2ecc71" else if (nComp <= 3) "#f39c12" else "#e74c3c"
+    headline <- paste0(nComp, " team", if (nComp != 1) "s", " can outbid you")
+
+    if (nComp > 0) {
+      competitors <- competitors %>% arrange(-MaxBid)
+      teamLines <- lapply(seq_len(nComp), function(j) {
+        tags$div(style = "font-size:12px; padding:2px 0;",
+          paste0(competitors$Team[j], " ($", competitors$MaxBid[j], " max, ", competitors$Reason[j], ")"))
+      })
+    } else {
+      teamLines <- list(tags$div(style = "font-size:12px; color:#2ecc71;", "No one can outbid you!"))
+    }
+
+    myBidLine <- tags$div(style = "font-size:11px; color:#888; margin-bottom:6px;",
+                          paste0("Your max bid: $", myMaxBid))
+
+    tagList(myBidLine,
+      tags$div(style = paste0("padding:8px; border-radius:6px; background:", color, "15;"),
+        tags$strong(style = paste0("color:", color, "; font-size:14px;"), headline),
+        tags$div(style = "margin-top:6px;", teamLines)
+      )
+    )
+  })
+
   # --- Positional Inflation table ---
   posInflation_r <- reactive({
     positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
