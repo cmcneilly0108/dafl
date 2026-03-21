@@ -1001,32 +1001,6 @@ shinyServer(function(input, output, session) {
       select(Player, Pos, Age, pDFL, Salary, Contract, rankDiff, Skew = pSkew) %>% arrange(-pDFL)
   }
 
-  posProtect <- function(pos) {
-    pc <- protClean_r()
-    filter(pc, Pos == pos) %>%
-      select(Player, Team, Age, pDFL, Salary, Contract, rankDiff, Skew = pSkew) %>% arrange(Team)
-  }
-
-  uniqueProtect <- function(pos) {
-    pc <- protClean_r()
-    res <- filter(pc, Pos == pos) %>% select(Team) %>% unique() %>% nrow()
-    paste("Unique Teams = ", res)
-  }
-
-  teamsInterested <- function(pos) {
-    pc <- protClean_r()
-    cs <- currentSummary_r()
-    allteams <- data.frame(Team = teams)
-    have <- filter(pc, Pos == pos) %>% select(Team) %>% unique()
-    need <- anti_join(allteams, have, by = 'Team')
-    need <- inner_join(need, cs, by = 'Team')
-    if (pos %in% c('SP','RP')) {
-      need <- filter(need, group == 'pitching')
-    } else {
-      need <- filter(need, group == 'hitting')
-    }
-    arrange(need, -salleft)
-  }
 
   tpSummary <- function(tm) {
     cs <- currentSummary_r()
