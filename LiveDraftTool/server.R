@@ -727,8 +727,8 @@ shinyServer(function(input, output, session) {
         mutate(still = pmax(0, threshold - have)) %>%
         pull(still) %>% sum()
 
-      if (leagueNeed == 0) {
-        return(data.frame(Pos = pos, Need = 0, Pressure = "No", stringsAsFactors = FALSE))
+      if (leagueNeed <= 1) {
+        return(data.frame(Pos = pos, Need = leagueNeed, Pressure = "No", stringsAsFactors = FALSE))
       }
 
       # Get top N available players at this position
