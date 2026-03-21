@@ -102,7 +102,7 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
-                   tabPanel("Protect by Pos",
+                   tabPanel("Positional Pressure",
                             sidebarLayout(fluid=FALSE,
                                           sidebarPanel(
                                             selectizeInput(
