@@ -570,7 +570,7 @@ shinyServer(function(input, output, session) {
     rh <- rhitters_r()
     rp <- rpitchers_r()
     # Use common columns
-    cols <- c('Team','Player','Contract','Salary','pDFL','pADP','pSkew','rankDiff','Age','Pos','playerid')
+    cols <- c('Team','Player','Contract','Salary','pDFL','pADP','pSkew','rankDiff','Age','Pos','playerid','DraftOrder')
     hcols <- intersect(cols, names(rh))
     pcols <- intersect(cols, names(rp))
     pc <- bind_rows(
@@ -894,7 +894,7 @@ shinyServer(function(input, output, session) {
   # --- Inflation rate ---
   inflationData_r <- reactive({
     pos <- input$marketPos
-    pc <- protClean_r()
+    pc <- protClean_r() %>% filter(!is.na(DraftOrder))
 
     if (!is.null(pos) && pos != "All") {
       pc <- pc %>% filter(Pos == pos)
@@ -923,7 +923,7 @@ shinyServer(function(input, output, session) {
       tags$br(),
       tags$small(style = "color:gray;",
                  paste0("$", round(d$totalSalary), " spent / $", round(d$totalValue),
-                        " value / ", d$nRostered, " rostered"))
+                        " value / ", d$nRostered, " drafted"))
     )
   })
 
@@ -1016,7 +1016,7 @@ shinyServer(function(input, output, session) {
   # --- Positional Inflation table ---
   posInflation_r <- reactive({
     positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
-    pc <- protClean_r()
+    pc <- protClean_r() %>% filter(!is.na(DraftOrder))
 
     # Value lookup for surplus from draft log
     valueLookup <- bind_rows(
@@ -1045,7 +1045,7 @@ shinyServer(function(input, output, session) {
         }
       }
 
-      data.frame(Position = pos, Rostered = nrow(posPc),
+      data.frame(Position = pos, Drafted = nrow(posPc),
                  InflationNum = inflation, TrendNum = trend,
                  Inflation = if (!is.na(inflation)) paste0(sprintf("%.2f", inflation), "%") else NA,
                  Trend = if (!is.na(trend)) paste0(sprintf("%.2f", trend), "%") else NA,
@@ -1056,7 +1056,7 @@ shinyServer(function(input, output, session) {
 
   output$posInflation <- DT::renderDataTable({
     df <- posInflation_r()
-    datatable(df %>% select(Position, Rostered, Inflation, Trend, InflationNum, TrendNum),
+    datatable(df %>% select(Position, Drafted, Inflation, Trend, InflationNum, TrendNum),
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE,
                              columnDefs = list(list(visible = FALSE, targets = c(5, 6))))) %>%
