@@ -1010,6 +1010,66 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Nomination Strategy Card ---
+  output$nomStrategyCard <- renderUI({
+    req(input$nomTeam)
+    myTeam <- input$nomTeam
+    ps <- pstandings_r()
+    me <- ps %>% filter(Team == myTeam)
+    if (nrow(me) == 0 || me$Needed <= 0) return(NULL)
+
+    # My market status
+    others <- ps %>% filter(Team != myTeam, Needed > 0)
+    leagueAvgDPP <- if (sum(others$Needed) > 0) sum(others$CashLeft) / sum(others$Needed) else 0
+    ratio <- if (leagueAvgDPP > 0 && me$Needed > 0) me$DPP / leagueAvgDPP else NA
+
+    # Positions I still need
+    pc <- protClean_r()
+    allPositions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
+    posCounts <- pc %>% filter(Team == myTeam) %>%
+      group_by(Pos) %>% summarize(have = n(), .groups = 'drop')
+    neededPositions <- sapply(allPositions, function(p) {
+      threshold <- ifelse(p %in% names(posThresholds), posThresholds[p], 1)
+      have <- sum(posCounts$Pos == p)
+      threshold - have > 0
+    })
+    neededPositions <- allPositions[neededPositions]
+
+    # Pressure on my needed positions
+    press <- pressure_r()
+    myPressure <- press %>% filter(Pos %in% neededPositions)
+    lowPressureCount <- sum(myPressure$Pressure %in% c("Low", "No"))
+
+    # Decision
+    isBuyer <- !is.na(ratio) && ratio >= 1.0
+    hasLowPressure <- lowPressureCount > 0
+
+    if (isBuyer && hasLowPressure) {
+      label <- "Nominate someone you WANT"
+      color <- "#2ecc71"
+      bgColor <- "#d4edda"
+      rationale <- paste0("You're ", if (ratio >= 1.3) "Strong Buy" else "Lean Buy",
+                          " ($", round(me$DPP), "/player vs $", round(leagueAvgDPP), " avg)")
+    } else if (!isBuyer) {
+      label <- "Nominate someone you DON'T want"
+      color <- "#e74c3c"
+      bgColor <- "#f8d7da"
+      rationale <- paste0("You're in ", if (is.na(ratio) || ratio >= 0.8) "Neutral" else "Wait",
+                          " mode \u2014 drain budget from stronger teams")
+    } else {
+      label <- "Nominate someone you DON'T want"
+      color <- "#f39c12"
+      bgColor <- "#fff3cd"
+      rationale <- "All your needed positions have high pressure \u2014 let others overpay first"
+    }
+
+    tags$div(style = paste0("margin-top:15px; padding:10px; border-radius:6px; background:", bgColor, ";"),
+      tags$strong(style = paste0("color:", color, ";"), label),
+      tags$br(),
+      tags$small(style = "color:#555;", rationale)
+    )
+  })
+
   # --- Positional Inflation table ---
   posInflation_r <- reactive({
     positions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')

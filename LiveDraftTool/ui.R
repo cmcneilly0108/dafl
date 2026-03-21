@@ -51,6 +51,7 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               sidebarPanel(
                                 selectInput('nomTeam', 'My Team', choices = NULL),
                                 uiOutput("nomSpendingPower"),
+                                uiOutput("nomStrategyCard"),
                                 width = 2
                               ),
                               mainPanel(
