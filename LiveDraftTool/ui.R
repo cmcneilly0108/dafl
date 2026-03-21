@@ -117,13 +117,12 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                             sidebarLayout(fluid=FALSE,
                                           sidebarPanel(
                                             selectizeInput(
-                                              'e4', 'Select Position', choices=NULL)
-                                            ,width=2),
+                                              'e4', 'Select Position', choices=NULL),
+                                            uiOutput("posSummaryCard"),
+                                            width=2),
                                           mainPanel(
-                                            h2(textOutput("allpos")),
-                                            h2(textOutput("uniquePos")),
-                                            DT::dataTableOutput("tNeed"),
-                                            DT::dataTableOutput("posProtect")
+                                            h3(textOutput("posNeedHeader")),
+                                            DT::dataTableOutput("posNeedTable")
                                           )
                             )
                    ),
