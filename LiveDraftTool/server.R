@@ -900,30 +900,27 @@ shinyServer(function(input, output, session) {
       pc <- pc %>% filter(Pos == pos)
     }
 
-    totalSalary <- sum(pc$Salary)
-    totalValue  <- sum(pc$pDFL)
-    inflation   <- if (totalValue > 0) totalSalary / totalValue else NA
-    nRostered   <- nrow(pc)
+    nDrafted <- nrow(pc)
+    avgOverpay <- if (nDrafted > 0) mean(pc$Salary - pc$pDFL) else NA
 
-    list(totalSalary = totalSalary, totalValue = totalValue,
-         nRostered = nRostered, inflation = inflation)
+    list(nDrafted = nDrafted, avgOverpay = avgOverpay)
   })
 
   output$inflationDisplay <- renderUI({
     d <- inflationData_r()
-    if (is.na(d$inflation)) return(tags$span("No data yet", style = "color:gray;"))
+    if (is.na(d$avgOverpay)) return(tags$span("No data yet", style = "color:gray;"))
 
-    pct <- (d$inflation - 1) * 100
-    color <- if (pct > 30) "#e74c3c" else if (pct > 0) "#f39c12" else "#2ecc71"
+    avg <- d$avgOverpay
+    color <- if (avg > 5) "#e74c3c" else if (avg > 0) "#f39c12" else "#2ecc71"
+    sign <- if (avg > 0) "+" else ""
 
     tags$div(
       style = "text-align:center; padding:8px; border-radius:4px; background:#f8f9fa; margin-bottom:10px;",
       tags$strong(style = paste0("font-size:22px; color:", color, ";"),
-                  paste0(sprintf("%.2f", pct), "%")),
+                  paste0(sign, "$", sprintf("%.1f", avg))),
       tags$br(),
       tags$small(style = "color:gray;",
-                 paste0("$", round(d$totalSalary), " spent / $", round(d$totalValue),
-                        " value / ", d$nRostered, " drafted"))
+                 paste0("avg $/player vs value (", d$nDrafted, " drafted)"))
     )
   })
 
@@ -1028,11 +1025,10 @@ shinyServer(function(input, output, session) {
 
     rows <- lapply(positions, function(pos) {
       posPc <- pc %>% filter(Pos == pos)
-      totalSalary <- sum(posPc$Salary)
-      totalValue  <- sum(posPc$pDFL)
-      inflation   <- if (totalValue > 0) (totalSalary / totalValue - 1) * 100 else NA
+      nDrafted <- nrow(posPc)
+      avgOverpay <- if (nDrafted > 0) mean(posPc$Salary - posPc$pDFL) else NA
 
-      # Trend: inflation % for last 5 drafted at this position
+      # Trend: avg overpay for last 5 drafted at this position
       trend <- NA
       if (nrow(logDf) > 0) {
         posPicks <- logDf %>% filter(Pos == pos)
@@ -1040,15 +1036,17 @@ shinyServer(function(input, output, session) {
           posPicks <- left_join(posPicks, valueLookup, by = "playerid")
           posPicks$pDFL <- replace_na(posPicks$pDFL, 0)
           last5 <- tail(posPicks, 5)
-          trendValue <- sum(last5$pDFL)
-          trend <- if (trendValue > 0) (sum(last5$Salary) / trendValue - 1) * 100 else NA
+          trend <- mean(last5$Salary - last5$pDFL)
         }
       }
 
-      data.frame(Position = pos, Drafted = nrow(posPc),
-                 InflationNum = inflation, TrendNum = trend,
-                 Inflation = if (!is.na(inflation)) paste0(sprintf("%.2f", inflation), "%") else NA,
-                 Trend = if (!is.na(trend)) paste0(sprintf("%.2f", trend), "%") else NA,
+      sign <- if (!is.na(avgOverpay) && avgOverpay > 0) "+" else ""
+      trendSign <- if (!is.na(trend) && trend > 0) "+" else ""
+
+      data.frame(Position = pos, Drafted = nDrafted,
+                 InflationNum = avgOverpay, TrendNum = trend,
+                 Inflation = if (!is.na(avgOverpay)) paste0(sign, "$", sprintf("%.1f", avgOverpay)) else NA,
+                 Trend = if (!is.na(trend)) paste0(trendSign, "$", sprintf("%.1f", trend)) else NA,
                  stringsAsFactors = FALSE)
     })
     bind_rows(rows)
@@ -1061,9 +1059,9 @@ shinyServer(function(input, output, session) {
                              ordering = FALSE, autoWidth = FALSE,
                              columnDefs = list(list(visible = FALSE, targets = c(5, 6))))) %>%
       formatStyle('Inflation', valueColumns = 'InflationNum',
-                  color = styleInterval(c(0, 30), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
+                  color = styleInterval(c(0, 5), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
       formatStyle('Trend', valueColumns = 'TrendNum',
-                  color = styleInterval(c(0, 30), c('#2ecc71', '#f39c12', '#e74c3c')))
+                  color = styleInterval(c(0, 5), c('#2ecc71', '#f39c12', '#e74c3c')))
   })
 
   # --- Nomination Targets table ---
