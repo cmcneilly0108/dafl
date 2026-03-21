@@ -1330,7 +1330,28 @@ shinyServer(function(input, output, session) {
 
   observeEvent(input$confirmResetBtn, {
     removeModal()
-    if (file.exists(rosterFile)) file.remove(rosterFile)
+    # Re-seed roster from protection list (don't delete — app needs it on reload)
+    if (file.exists(protFile)) {
+      initRoster <- read.csv(protFile, stringsAsFactors = FALSE)
+      initRoster$playerid <- as.character(initRoster$playerid)
+      if ("X" %in% names(initRoster)) initRoster$X <- NULL
+      hLookup <- AllH_full %>% select(playerid, MLB) %>% distinct()
+      pLookup <- AllP_full %>% select(playerid, MLB) %>% distinct()
+      mlbLookup <- bind_rows(hLookup, pLookup) %>% distinct(playerid, .keep_all = TRUE)
+      if (!"MLB" %in% names(initRoster)) {
+        initRoster <- left_join(initRoster, mlbLookup, by = "playerid")
+      } else {
+        initRoster <- left_join(initRoster, mlbLookup, by = "playerid", suffix = c("", ".lookup"))
+        initRoster$MLB <- ifelse(is.na(initRoster$MLB) | initRoster$MLB == "",
+                                 initRoster$MLB.lookup, initRoster$MLB)
+        initRoster$MLB.lookup <- NULL
+      }
+      initRoster$MLB <- replace_na(initRoster$MLB, "")
+      if (!"orank" %in% names(initRoster)) initRoster$orank <- NA
+      initRoster$DraftOrder <- NA
+      initRoster <- initRoster %>% select(Player, Pos, Team, Salary, Contract, MLB, playerid, orank, DraftOrder)
+      write.csv(initRoster, rosterFile, row.names = FALSE)
+    }
     if (file.exists(budgetFile)) file.remove(budgetFile)
     if (file.exists(targetFile)) file.remove(targetFile)
     session$reload()
