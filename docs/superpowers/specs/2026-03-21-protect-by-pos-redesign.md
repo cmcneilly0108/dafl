@@ -49,9 +49,11 @@ A team "still needs" a position based on how many they have protected vs the req
 
 `Still Need = max(0, required - count_protected_at_position)`. Teams with Still Need = 0 are excluded from the table.
 
+**Position counting**: Use the `Pos` column from `protClean_r()` only — not `posEl` multi-eligibility. A player with `Pos = "OF"` counts only toward OF, even if they have additional eligibility elsewhere. This matches how protection lists assign a single position per player.
+
 ## Market Label Computation
 
-Uses the same DPP-ratio logic already in `nomTargets_r()`:
+Uses the same DPP-ratio logic already in `nomTargets_r()`. This uses total-team DPP from `pstandings_r()` (not position-adjusted cash). The Cash Left column in the table uses position-split `salleft` from `currentSummary_r()` — these are intentionally different measures.
 
 ```
 leagueAvgDPP = sum(CashLeft of all other teams with Needed > 0) / sum(Needed of those teams)
@@ -90,7 +92,7 @@ All data sources already exist as reactives in `server.R`:
 1. `protClean_r()` — combined roster of all protected players with Pos, Team, Salary, pDFL
 2. `pstandings_r()` — team-level standings with CashLeft, Needed, DPP
 3. `currentSummary_r()` — team budget split by hitting/pitching with `salleft`
-4. `calcGoals(rp, rh, targets, team)` — stat goal completion per team
+4. `calcGoals(rp, rh, targets, team)` — stat goal completion per team. `targets` is a global data frame from `draftGuide.r` (not a reactive), already available in the server environment.
 5. `rhitters_r()` / `rpitchers_r()` — reactive roster data for hitters/pitchers
 
 New reactive needed: `posNeed_r()` that, for the selected position:
@@ -104,8 +106,7 @@ New reactive needed: `posNeed_r()` that, for the selected position:
 
 ## Changes Summary
 
-### ui.R
-- Update position choices: replace `'SP','RP'` with `'SP','MR','CL'`
+### ui.R (choices are set server-side, not in ui.R)
 - Replace `mainPanel` contents: remove `allpos`, `uniquePos`, `tNeed`, `posProtect` outputs
 - Add `uiOutput("posSummaryCard")` to sidebar
 - Add single `DT::dataTableOutput("posNeedTable")` to main panel with dynamic header
@@ -113,6 +114,7 @@ New reactive needed: `posNeed_r()` that, for the selected position:
 ### server.R
 - Remove: `posProtect()`, `uniqueProtect()`, `teamsInterested()` functions
 - Remove: `output$allpos`, `output$uniquePos`, `output$tNeed`, `output$posProtect` renderers
+- Update: `allpos` constant (line 13) to replace `'SP','RP'` with `'SP','MR','CL'`
 - Update: `updateSelectizeInput` for `e4` to use new position list
 - Add: `posNeed_r()` reactive
 - Add: `output$posSummaryCard` renderUI
