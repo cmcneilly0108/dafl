@@ -354,6 +354,39 @@ shinyServer(function(input, output, session) {
     write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
   })
 
+  # --- Target toggle (Leaderboards tab) ---
+  observeEvent(input$targetLBBtn, {
+    tab <- input$leaderTab
+    if (is.null(tab)) return()
+    if (tab == 'Hitters') {
+      sel <- input$leaderH_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        showNotification("Select a player row first", type = "warning")
+        return()
+      }
+      data <- leaderH_avail()
+      pid <- as.character(data$playerid[sel])
+      pName <- data$Player[sel]
+    } else {
+      sel <- input$leaderP_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        showNotification("Select a player row first", type = "warning")
+        return()
+      }
+      data <- leaderP_avail()
+      pid <- as.character(data$playerid[sel])
+      pName <- data$Player[sel]
+    }
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
   # --- My Targets tab: table + remove ---
   output$targetTable <- DT::renderDataTable({
     allPlayers <- bind_rows(
