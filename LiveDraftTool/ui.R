@@ -167,37 +167,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                            DT::dataTableOutput("rrcResults")
                             )
                    ),
-                   tabPanel("Prospects",
-                            mainPanel(
-                              actionButton('targetProspBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
-                              tabsetPanel(id = 'prospectTab', type='tabs',
-                                          tabPanel('Hitters',
-                                                   DT::dataTableOutput("prospectH")),
-                                          tabPanel('Pitchers',
-                                                   DT::dataTableOutput("prospectP"))
-                              )
-                            )
-                   ),
-                   tabPanel("Top Hitters",
-                            verticalLayout(
-                              DT::dataTableOutput("topHitters")
-                            )
-                   ),
-                   tabPanel("Injured",
-                            verticalLayout(
-                              actionButton('targetInjBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
-                              DT::dataTableOutput("injOrig")
-                            )
-                   ),
-                   tabPanel("My Targets",
-                            verticalLayout(
-                              DT::dataTableOutput("targetTable")
-                            )
-                   ),
                    tabPanel("Leaderboards",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(
@@ -227,6 +196,37 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                            DT::dataTableOutput("leaderP"))
                                 )
                               )
+                            )
+                   ),
+                   tabPanel("Prospects",
+                            mainPanel(
+                              actionButton('targetProspBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
+                              tabsetPanel(id = 'prospectTab', type='tabs',
+                                          tabPanel('Hitters',
+                                                   DT::dataTableOutput("prospectH")),
+                                          tabPanel('Pitchers',
+                                                   DT::dataTableOutput("prospectP"))
+                              )
+                            )
+                   ),
+                   tabPanel("Top Hitters",
+                            verticalLayout(
+                              DT::dataTableOutput("topHitters")
+                            )
+                   ),
+                   tabPanel("Injured",
+                            verticalLayout(
+                              actionButton('targetInjBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
+                              DT::dataTableOutput("injOrig")
+                            )
+                   ),
+                   tabPanel("My Targets",
+                            verticalLayout(
+                              DT::dataTableOutput("targetTable")
                             )
                    )
 )
