@@ -1803,18 +1803,33 @@ shinyServer(function(input, output, session) {
     }
   })
 
+  # Compute hotScores once (shared by both hitter/pitcher leaderboard reactives)
+  leaderHotScores <- reactive({
+    h <- leaderboards$hitters
+    p <- leaderboards$pitchers
+    if (is.null(h) || is.null(p)) return(list(NULL, NULL))
+    p_hs <- p %>% rename(INN = IP, K = SO, HD = HLD, S = SV)
+    hotScores(h, p_hs)
+  })
+
   leaderH_avail <- reactive({
     req(leaderboards$hitters)
     roster <- rv$roster
     h <- leaderboards$hitters
     h$playerid <- as.character(h$playerid)
+    # Add hotscore
+    hs <- leaderHotScores()
+    if (!is.null(hs[[1]])) {
+      hsH <- hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      h <- left_join(h, hsH, by = "playerid")
+    }
     # Remove rostered players
     h <- anti_join(h, roster, by = "playerid")
     # Add pDFL from projection pool
     pDFL_lookup <- AllH_active() %>% select(playerid, pDFL) %>% distinct()
     h <- left_join(h, pDFL_lookup, by = "playerid")
     h$pDFL <- replace_na(h$pDFL, 0)
-    h %>% arrange(-pDFL)
+    if ("hotscore" %in% names(h)) h %>% arrange(-hotscore) else h %>% arrange(-pDFL)
   })
 
   leaderP_avail <- reactive({
@@ -1822,13 +1837,19 @@ shinyServer(function(input, output, session) {
     roster <- rv$roster
     p <- leaderboards$pitchers
     p$playerid <- as.character(p$playerid)
+    # Add hotscore
+    hs <- leaderHotScores()
+    if (!is.null(hs[[2]])) {
+      hsP <- hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      p <- left_join(p, hsP, by = "playerid")
+    }
     # Remove rostered players
     p <- anti_join(p, roster, by = "playerid")
     # Add pDFL from projection pool
     pDFL_lookup <- AllP_active() %>% select(playerid, pDFL) %>% distinct()
     p <- left_join(p, pDFL_lookup, by = "playerid")
     p$pDFL <- replace_na(p$pDFL, 0)
-    p %>% arrange(-pDFL)
+    if ("hotscore" %in% names(p)) p %>% arrange(-hotscore) else p %>% arrange(-pDFL)
   })
 
   output$leaderH <- DT::renderDataTable({
@@ -1842,6 +1863,7 @@ shinyServer(function(input, output, session) {
       formatCurrency('pDFL') %>%
       formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
       formatRound(c('wRC+','WAR'), 1)
+    if ('hotscore' %in% names(h)) dt <- dt %>% formatRound('hotscore', 2)
     if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
     dt
   })
@@ -1857,6 +1879,7 @@ shinyServer(function(input, output, session) {
       formatCurrency('pDFL') %>%
       formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
       formatRound('WAR', 1)
+    if ('hotscore' %in% names(p)) dt <- dt %>% formatRound('hotscore', 2)
     if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
     dt
   })
