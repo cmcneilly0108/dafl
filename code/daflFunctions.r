@@ -1146,7 +1146,8 @@ getMLBstandings <- function() {
   p2 <- page %>% html_nodes("table") %>% html_table()
   stand <- p2[[1]]
 
-  stand <- mutate(stand,Season=paste(W,L,sep='-'), LongMLB = `AL East`)
+  teamCol <- names(stand)[1]
+  stand <- mutate(stand,Season=paste(W,L,sep='-'), LongMLB = .data[[teamCol]])
   mlbmap <- read.csv("../data/MLBmap.csv",stringsAsFactors = FALSE)
   stand <- left_join(stand,mlbmap) 
   #%>% mutate(L10 = '0-0')
@@ -1625,7 +1626,7 @@ getFGProspects <- function(pos = "bat", draft = NULL) {
 }
 
 # Claude API wrapper for AI-powered team summaries
-callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY")) {
+callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max_tokens = 2048) {
   if (api_key == "" || is.na(api_key)) {
     return("Error: ANTHROPIC_API_KEY environment variable not set. Please set it with Sys.setenv(ANTHROPIC_API_KEY='your-key')")
   }
@@ -1635,7 +1636,7 @@ callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY")) {
       url = "https://api.anthropic.com/v1/messages",
       body = toJSON(list(
         model = "claude-sonnet-4-5-20250929",
-        max_tokens = 2048,
+        max_tokens = max_tokens,
         messages = list(list(role = "user", content = prompt))
       ), auto_unbox = TRUE),
       add_headers(

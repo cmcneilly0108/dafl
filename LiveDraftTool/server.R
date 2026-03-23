@@ -2294,24 +2294,42 @@ shinyServer(function(input, output, session) {
         'AVG, Pitching, Strikeouts, Saves, Speed, Ratios\n\n',
         'Only include players the author is specifically recommending or discussing ',
         'positively. Skip players mentioned only in passing or as comparisons.\n\n',
-        'Return ONLY the JSON array, no other text. Example:\n',
+        'Return ONLY the raw JSON array. No markdown, no code fences, no explanation. Example:\n',
         '[{"full_name": "Luis Arraez", "summary": "Hitting .340 in spring with strong ',
         'lineup protection boosting BA and R upside", "tags": "Sleeper, AVG, Value"}]\n\n',
         'Article text:\n', articleText
       )
 
-      response <- callClaudeAPI(prompt)
+      response <- callClaudeAPI(prompt, max_tokens = 4096)
 
-      # Step 3: Parse response
+      # Step 3: Parse response — strip markdown code fences if present
+      response <- gsub("^\\s*```json\\s*", "", response)
+      response <- gsub("^\\s*```\\s*", "", response)
+      response <- gsub("\\s*```\\s*$", "", response)
+      response <- trimws(response)
+
+      # If response got truncated (no closing ]), try to fix it
+      if (grepl("^\\[", response) && !grepl("\\]\\s*$", response)) {
+        # Find the last complete object (ends with })
+        lastBrace <- regexpr("\\}[^\\}]*$", response)
+        if (lastBrace > 0) {
+          response <- paste0(substr(response, 1, lastBrace), "]")
+        }
+      }
+
       if (!grepl("^\\s*\\[", response)) {
         # Might be an error string — retry with simplified prompt
         retryPrompt <- paste0(
-          'Return a JSON array of objects with fields: full_name, summary, tags. ',
+          'Return ONLY a raw JSON array (no markdown, no code fences) of objects with fields: full_name, summary, tags. ',
           'Example: [{"full_name":"Mike Trout","summary":"Still elite","tags":"Power"}]. ',
           'Extract players recommended in this article:\n\n',
           substr(articleText, 1, 4000)
         )
-        response <- callClaudeAPI(retryPrompt)
+        response <- callClaudeAPI(retryPrompt, max_tokens = 4096)
+        response <- gsub("^\\s*```json\\s*", "", response)
+        response <- gsub("^\\s*```\\s*", "", response)
+        response <- gsub("\\s*```\\s*$", "", response)
+        response <- trimws(response)
         if (!grepl("^\\s*\\[", response)) {
           removeNotification("researchMsg")
           cat("Research tab Claude API error:", substr(response, 1, 500), "\n")
