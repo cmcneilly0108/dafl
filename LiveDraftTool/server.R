@@ -1,6 +1,7 @@
 # LiveDraftTool server.R — reactive draft tool
 
 library(ggplot2)
+library(shinyjs)
 
 setwd("../code/")
 source("./draftGuide.r")

@@ -1,8 +1,10 @@
 library("bslib")
 library("DT")
+library("shinyjs")
 
 shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    theme = bs_theme(bootswatch = "flatly"),
+    useShinyjs(),
                    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
                      actionButton('resetDraftBtn', 'Reset Draft',
                                   class = 'btn-danger btn-sm')
@@ -225,6 +227,32 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                            class = 'btn-info btn-sm',
                                            style = 'margin-bottom:10px;'),
                               DT::dataTableOutput("injOrig")
+                            )
+                   ),
+                   tabPanel("Research",
+                            sidebarLayout(fluid = FALSE,
+                              sidebarPanel(
+                                textInput('researchUrl', 'Article URL',
+                                          placeholder = 'https://www.fangraphs.com/...'),
+                                actionButton('analyzeBtn', 'Analyze Article',
+                                             class = 'btn-primary',
+                                             style = 'width:100%; margin-bottom:10px;'),
+                                uiOutput('researchStatus'),
+                                tags$hr(),
+                                actionButton('targetResBtn', 'Toggle Target',
+                                             class = 'btn-info btn-sm',
+                                             style = 'width:100%;'),
+                                width = 3
+                              ),
+                              mainPanel(
+                                tabsetPanel(id = 'researchTab', type = 'tabs',
+                                  tabPanel('Hitters',
+                                           DT::dataTableOutput('researchH')),
+                                  tabPanel('Pitchers',
+                                           DT::dataTableOutput('researchP'))
+                                ),
+                                uiOutput('researchUnmatched')
+                              )
                             )
                    ),
                    tabPanel("My Targets",
