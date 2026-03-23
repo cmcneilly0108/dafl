@@ -107,7 +107,11 @@ shinyServer(function(input, output, session) {
       } else {
         data.frame(Team = character(), Slot = character(), Budget = numeric(), stringsAsFactors = FALSE)
       }
-    }
+    },
+    researchH = data.frame(),
+    researchP = data.frame(),
+    researchUnmatched = character(0),
+    researchTitle = ""
   )
 
   # --- Blended player pools (actual stats + projections) ---
@@ -2217,6 +2221,193 @@ shinyServer(function(input, output, session) {
               rownames = FALSE) %>%
       formatPercentage('pc', 2) %>%
       formatRound(c('collected', 'needed'), 0)
+  })
+
+  # --- Research tab: article scraping + LLM extraction ---
+  observeEvent(input$analyzeBtn, {
+    url <- trimws(input$researchUrl)
+    if (url == "" || !grepl("^https?://", url)) {
+      showNotification("Please enter a valid URL", type = "warning")
+      return()
+    }
+
+    # Disable button during processing
+    shinyjs::disable("analyzeBtn")
+    showNotification("Fetching article...", type = "message", duration = NULL, id = "researchMsg")
+
+    tryCatch({
+      # Step 1: Scrape article
+      page <- rvest::read_html(url)
+      articleText <- page %>%
+        rvest::html_nodes("p, h1, h2, h3, h4, li") %>%
+        rvest::html_text2() %>%
+        paste(collapse = "\n\n")
+
+      # Smart truncation: keep headings + first content after each
+      if (nchar(articleText) > 12000) {
+        articleText <- substr(articleText, 1, 12000)
+      }
+
+      # Extract title
+      pageTitle <- tryCatch(
+        page %>% rvest::html_node("title") %>% rvest::html_text2(),
+        error = function(e) "Unknown Article"
+      )
+      sourceDomain <- gsub("^https?://([^/]+).*", "\\1", url)
+
+      # Step 2: Call Claude API
+      removeNotification("researchMsg")
+      showNotification("Analyzing with Claude...", type = "message", duration = NULL, id = "researchMsg")
+
+      prompt <- paste0(
+        'You are a baseball fantasy analyst assistant. Extract all baseball players ',
+        'mentioned in the following article. For each player the author is highlighting ',
+        'as a target, sleeper, breakout, value pick, or otherwise recommending, return ',
+        'a JSON array with these fields:\n\n',
+        '- full_name: the player\'s full name (first and last)\n',
+        '- summary: one sentence describing why the author thinks this player is interesting\n',
+        '- tags: comma-separated list from these options: Sleeper, Breakout, Bounce-back, ',
+        'Value, Upside, Buy-low, Sell-high, Injury-risk, Closer, Holds, Steals, Power, ',
+        'AVG, Pitching, Strikeouts, Saves, Speed, Ratios\n\n',
+        'Only include players the author is specifically recommending or discussing ',
+        'positively. Skip players mentioned only in passing or as comparisons.\n\n',
+        'Return ONLY the JSON array, no other text. Example:\n',
+        '[{"full_name": "Luis Arraez", "summary": "Hitting .340 in spring with strong ',
+        'lineup protection boosting BA and R upside", "tags": "Sleeper, AVG, Value"}]\n\n',
+        'Article text:\n', articleText
+      )
+
+      response <- callClaudeAPI(prompt)
+
+      # Step 3: Parse response
+      if (!grepl("^\\s*\\[", response)) {
+        # Might be an error string — retry with simplified prompt
+        retryPrompt <- paste0(
+          'Return a JSON array of objects with fields: full_name, summary, tags. ',
+          'Example: [{"full_name":"Mike Trout","summary":"Still elite","tags":"Power"}]. ',
+          'Extract players recommended in this article:\n\n',
+          substr(articleText, 1, 4000)
+        )
+        response <- callClaudeAPI(retryPrompt)
+        if (!grepl("^\\s*\\[", response)) {
+          removeNotification("researchMsg")
+          showNotification(paste0("Claude API error: ", substr(response, 1, 200)), type = "error", duration = 10)
+          shinyjs::enable("analyzeBtn")
+          return()
+        }
+      }
+
+      extracted <- tryCatch(
+        jsonlite::fromJSON(response),
+        error = function(e) {
+          removeNotification("researchMsg")
+          showNotification(paste0("Failed to parse Claude response: ", e$message), type = "error", duration = 10)
+          shinyjs::enable("analyzeBtn")
+          return(NULL)
+        }
+      )
+
+      if (is.null(extracted) || nrow(extracted) == 0) {
+        removeNotification("researchMsg")
+        showNotification("No players found in this article", type = "warning")
+        rv$researchH <- data.frame()
+        rv$researchP <- data.frame()
+        rv$researchUnmatched <- character(0)
+        rv$researchTitle <- pageTitle
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
+      # Step 4: Match to player pools
+      removeNotification("researchMsg")
+      showNotification("Matching players...", type = "message", duration = NULL, id = "researchMsg")
+
+      availH <- AllH_avail()
+      availP <- AllP_avail()
+      allAvail <- bind_rows(
+        availH %>% mutate(poolType = "H"),
+        availP %>% mutate(poolType = "P")
+      )
+      cleanNames <- tolower(allAvail$Player)
+
+      matchedRows <- list()
+      unmatched <- character(0)
+
+      for (i in seq_len(nrow(extracted))) {
+        fname <- extracted$full_name[i]
+        fnameL <- tolower(fname)
+
+        # Exact match
+        exactIdx <- which(cleanNames == fnameL)
+        if (length(exactIdx) > 0) {
+          row <- allAvail[exactIdx[1], ]
+          row$Tags <- extracted$tags[i]
+          row$Summary <- extracted$summary[i]
+          row$fuzzy <- FALSE
+          matchedRows <- c(matchedRows, list(row))
+          next
+        }
+
+        # Fuzzy match
+        fuzzyIdx <- agrep(fnameL, cleanNames, max.distance = 0.15, ignore.case = TRUE)
+        if (length(fuzzyIdx) > 0) {
+          row <- allAvail[fuzzyIdx[1], ]
+          row$Tags <- extracted$tags[i]
+          row$Summary <- extracted$summary[i]
+          row$fuzzy <- TRUE
+          matchedRows <- c(matchedRows, list(row))
+        } else {
+          unmatched <- c(unmatched, fname)
+        }
+      }
+
+      if (length(matchedRows) == 0) {
+        removeNotification("researchMsg")
+        showNotification("No matched free agents found", type = "warning")
+        rv$researchH <- data.frame()
+        rv$researchP <- data.frame()
+        rv$researchUnmatched <- unmatched
+        rv$researchTitle <- pageTitle
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
+      matched <- bind_rows(matchedRows)
+
+      # Add fuzzy prefix
+      matched$Player <- ifelse(matched$fuzzy,
+                               paste0("~ ", matched$Player),
+                               matched$Player)
+
+      # Split into H and P
+      mH <- matched %>% filter(poolType == "H") %>%
+        mutate(Player = fgLink(Player, playerid)) %>%
+        arrange(-pDFL) %>%
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP, ADP = pADP,
+               HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG,
+               Injury, Expected.Return, playerid)
+
+      mP <- matched %>% filter(poolType == "P") %>%
+        mutate(Player = fgLink(Player, playerid)) %>%
+        arrange(-pDFL) %>%
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP, ADP = pADP,
+               W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, `K/9` = `pK/9`,
+               Injury, Expected.Return, playerid)
+
+      rv$researchH <- mH
+      rv$researchP <- mP
+      rv$researchUnmatched <- unmatched
+      rv$researchTitle <- paste0(pageTitle, " (", sourceDomain, ")")
+
+      removeNotification("researchMsg")
+      showNotification(paste0("Found ", nrow(matched), " free agent(s) from article"), type = "message")
+      shinyjs::enable("analyzeBtn")
+
+    }, error = function(e) {
+      removeNotification("researchMsg")
+      showNotification(paste0("Error: ", e$message), type = "error", duration = 10)
+      shinyjs::enable("analyzeBtn")
+    })
   })
 
   output$rosterBudget <- renderUI({
