@@ -2225,10 +2225,20 @@ shinyServer(function(input, output, session) {
 
   # --- Research tab: article scraping + LLM extraction ---
   observeEvent(input$analyzeBtn, {
-    url <- trimws(input$researchUrl)
-    if (url == "" || !grepl("^https?://", url)) {
-      showNotification("Please enter a valid URL", type = "warning")
-      return()
+    mode <- input$researchMode
+
+    if (mode == "url") {
+      url <- trimws(input$researchUrl)
+      if (url == "" || !grepl("^https?://", url)) {
+        showNotification("Please enter a valid URL", type = "warning")
+        return()
+      }
+    } else {
+      pastedText <- trimws(input$researchText)
+      if (pastedText == "" || nchar(pastedText) < 50) {
+        showNotification("Please paste article text (at least 50 characters)", type = "warning")
+        return()
+      }
     }
 
     # Disable button during processing
@@ -2236,24 +2246,37 @@ shinyServer(function(input, output, session) {
     showNotification("Fetching article...", type = "message", duration = NULL, id = "researchMsg")
 
     tryCatch({
-      # Step 1: Scrape article
-      page <- rvest::read_html(url)
-      articleText <- page %>%
-        rvest::html_nodes("p, h1, h2, h3, h4, li") %>%
-        rvest::html_text2() %>%
-        paste(collapse = "\n\n")
+      # Step 1: Get article text
+      if (mode == "url") {
+        page <- rvest::read_html(url)
+        # Try article-specific selectors first, fall back to generic
+        articleNodes <- page %>% rvest::html_nodes("article")
+        if (length(articleNodes) == 0) articleNodes <- page %>% rvest::html_nodes("#content")
+        if (length(articleNodes) == 0) articleNodes <- page %>% rvest::html_nodes(".post-content, .entry-content, .article-body")
+        if (length(articleNodes) > 0) {
+          articleText <- articleNodes %>% rvest::html_text2() %>% paste(collapse = "\n\n")
+        } else {
+          articleText <- page %>%
+            rvest::html_nodes("p, h1, h2, h3, h4, li") %>%
+            rvest::html_text2() %>%
+            paste(collapse = "\n\n")
+        }
 
-      # Smart truncation: keep headings + first content after each
+        pageTitle <- tryCatch(
+          page %>% rvest::html_node("title") %>% rvest::html_text2(),
+          error = function(e) "Unknown Article"
+        )
+        sourceDomain <- gsub("^https?://([^/]+).*", "\\1", url)
+      } else {
+        articleText <- pastedText
+        pageTitle <- "Pasted Article"
+        sourceDomain <- "manual"
+      }
+
+      # Smart truncation
       if (nchar(articleText) > 12000) {
         articleText <- substr(articleText, 1, 12000)
       }
-
-      # Extract title
-      pageTitle <- tryCatch(
-        page %>% rvest::html_node("title") %>% rvest::html_text2(),
-        error = function(e) "Unknown Article"
-      )
-      sourceDomain <- gsub("^https?://([^/]+).*", "\\1", url)
 
       # Step 2: Call Claude API
       removeNotification("researchMsg")
@@ -2291,7 +2314,8 @@ shinyServer(function(input, output, session) {
         response <- callClaudeAPI(retryPrompt)
         if (!grepl("^\\s*\\[", response)) {
           removeNotification("researchMsg")
-          showNotification(paste0("Claude API error: ", substr(response, 1, 200)), type = "error", duration = 10)
+          cat("Research tab Claude API error:", substr(response, 1, 500), "\n")
+          showNotification(paste0("Claude API error: ", substr(response, 1, 200)), type = "error", duration = 30)
           shinyjs::enable("analyzeBtn")
           return()
         }
@@ -2301,7 +2325,8 @@ shinyServer(function(input, output, session) {
         jsonlite::fromJSON(response),
         error = function(e) {
           removeNotification("researchMsg")
-          showNotification(paste0("Failed to parse Claude response: ", e$message), type = "error", duration = 10)
+          cat("Research tab JSON parse error:", e$message, "\n")
+          showNotification(paste0("Failed to parse Claude response: ", e$message), type = "error", duration = 30)
           shinyjs::enable("analyzeBtn")
           return(NULL)
         }
@@ -2405,7 +2430,8 @@ shinyServer(function(input, output, session) {
 
     }, error = function(e) {
       removeNotification("researchMsg")
-      showNotification(paste0("Error: ", e$message), type = "error", duration = 10)
+      cat("Research tab error:", e$message, "\n")
+      showNotification(paste0("Error: ", e$message), type = "error", duration = 30)
       shinyjs::enable("analyzeBtn")
     })
   })

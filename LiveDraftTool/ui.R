@@ -232,8 +232,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    tabPanel("Research",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(
-                                textInput('researchUrl', 'Article URL',
-                                          placeholder = 'https://www.fangraphs.com/...'),
+                                radioButtons('researchMode', 'Input Mode',
+                                             choices = c('Paste Article Text' = 'paste', 'Scrape URL' = 'url'),
+                                             selected = 'paste', inline = TRUE),
+                                conditionalPanel(
+                                  condition = "input.researchMode == 'url'",
+                                  textInput('researchUrl', 'Article URL',
+                                            placeholder = 'https://www.fangraphs.com/...')
+                                ),
+                                conditionalPanel(
+                                  condition = "input.researchMode == 'paste'",
+                                  textAreaInput('researchText', 'Article Text',
+                                                placeholder = 'Copy and paste article text here...',
+                                                rows = 8)
+                                ),
                                 actionButton('analyzeBtn', 'Analyze Article',
                                              class = 'btn-primary',
                                              style = 'width:100%; margin-bottom:10px;'),
