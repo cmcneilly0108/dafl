@@ -2480,4 +2480,57 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Research tab: render tables ---
+  output$researchH <- DT::renderDataTable({
+    df <- rv$researchH
+    if (is.null(df) || nrow(df) == 0) {
+      return(datatable(data.frame(Message = "No hitters found. Paste an article URL and click Analyze."),
+                       options = list(dom = 't'), selection = 'none'))
+    }
+    datatable(df, selection = 'single', escape = FALSE,
+              options = list(pageLength = 20, columnDefs = list(
+                list(visible = FALSE, targets = which(names(df) == "playerid") - 1)
+              ))) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('SGP', 'AVG'), 3) %>%
+      formatRound(c('Age', 'HR', 'RBI', 'R', 'SB'), 0)
+  })
+
+  output$researchP <- DT::renderDataTable({
+    df <- rv$researchP
+    if (is.null(df) || nrow(df) == 0) {
+      return(datatable(data.frame(Message = "No pitchers found. Paste an article URL and click Analyze."),
+                       options = list(dom = 't'), selection = 'none'))
+    }
+    datatable(df, selection = 'single', escape = FALSE,
+              options = list(pageLength = 20, columnDefs = list(
+                list(visible = FALSE, targets = which(names(df) == "playerid") - 1)
+              ))) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('SGP', 'ERA', 'K/9'), 3) %>%
+      formatRound(c('Age', 'W', 'SO', 'SV', 'HLD'), 0)
+  })
+
+  # --- Research tab: status display ---
+  output$researchStatus <- renderUI({
+    title <- rv$researchTitle
+    nH <- nrow(rv$researchH)
+    nP <- nrow(rv$researchP)
+    if (title == "" && nH == 0 && nP == 0) return(NULL)
+    tags$div(style = "margin-top:10px; font-size:13px; line-height:1.6;",
+      tags$strong(title),
+      tags$br(),
+      paste0(nH, " hitter(s), ", nP, " pitcher(s) found")
+    )
+  })
+
+  # --- Research tab: unmatched players ---
+  output$researchUnmatched <- renderUI({
+    um <- rv$researchUnmatched
+    if (length(um) == 0) return(NULL)
+    tags$div(style = "margin-top:10px; font-size:12px; color:#888;",
+      tags$em(paste0("Could not match: ", paste(um, collapse = ", ")))
+    )
+  })
+
 })
