@@ -929,6 +929,67 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Pre-Draft Summary (remaining pool inflation) ---
+  output$preDraftSummary <- renderUI({
+    pc <- protClean_r()
+    protected <- pc %>% filter(is.na(DraftOrder))
+    nProtected <- nrow(protected)
+    if (nProtected == 0) return(tags$span("No protected players", style = "color:gray;"))
+
+    protectedSalary <- sum(protected$Salary, na.rm = TRUE)
+    protectedValue <- sum(protected$pDFL, na.rm = TRUE)
+
+    # Total league dollars and roster spots
+    totalDollars <- cap * nteams
+    totalSpots <- (nhitters + npitchers) * nteams
+
+    # Remaining pool after protections
+    remainingDollars <- totalDollars - protectedSalary
+    remainingSpots <- totalSpots - nProtected
+
+    # Value of unprotected players: total pool value minus protected value
+    protectedIds <- protected$playerid
+    allPlayerValue <- sum(
+      AllH_active()$pDFL[AllH_active()$pDFL > 0],
+      AllP_active()$pDFL[AllP_active()$pDFL > 0],
+      na.rm = TRUE
+    )
+    remainingValue <- allPlayerValue - protectedValue
+
+    # Inflation: how much more dollars than value in the remaining pool
+    inflationRate <- if (remainingValue > 0) ((remainingDollars - remainingValue) / remainingValue) * 100 else 0
+
+    color <- if (inflationRate > 10) "#e74c3c" else if (inflationRate > 0) "#f39c12" else "#2ecc71"
+    sign <- if (inflationRate > 0) "+" else ""
+
+    tags$div(
+      style = "background:#f8f9fa; border-radius:6px; padding:12px; margin-top:10px; max-width:350px;",
+      tags$table(style = "width:100%; font-size:14px;",
+        tags$tr(
+          tags$td("Protected Players"),
+          tags$td(style = "text-align:right; font-weight:bold;", nProtected)
+        ),
+        tags$tr(
+          tags$td("Remaining $"),
+          tags$td(style = "text-align:right; font-weight:bold;", paste0("$", remainingDollars))
+        ),
+        tags$tr(
+          tags$td("Remaining Spots"),
+          tags$td(style = "text-align:right; font-weight:bold;", remainingSpots)
+        ),
+        tags$tr(
+          tags$td("Remaining Value"),
+          tags$td(style = "text-align:right; font-weight:bold;", paste0("$", round(remainingValue)))
+        ),
+        tags$tr(
+          tags$td("Draft Inflation"),
+          tags$td(style = paste0("text-align:right; font-weight:bold; font-size:18px; color:", color, ";"),
+                  paste0(sign, sprintf("%.1f", inflationRate), "%"))
+        )
+      )
+    )
+  })
+
   # --- Spending Power ---
   output$spendingPower <- renderUI({
     req(input$myTeam)
@@ -1043,18 +1104,77 @@ shinyServer(function(input, output, session) {
     # Pressure on my needed positions
     press <- pressure_r()
     myPressure <- press %>% filter(Pos %in% neededPositions)
-    lowPressureCount <- sum(myPressure$Pressure %in% c("Low", "No"))
+
+    # Budget per position: aggregate slot budgets (MR1+MR2 → MR total)
+    myBudgets <- rv$budgets %>% filter(Team == myTeam)
+    posBudget <- sapply(neededPositions, function(pos) {
+      matchSlots <- myBudgets %>% filter(grepl(paste0("^", pos), Slot))
+      sum(matchSlots$Budget, na.rm = TRUE)
+    })
+    names(posBudget) <- neededPositions
+
+    # Competition per position: how many teams still need it and can outbid $1
+    ps_others <- others
+    posCompetitors <- sapply(neededPositions, function(pos) {
+      threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
+      nComp <- 0
+      for (i in seq_len(nrow(ps_others))) {
+        tm <- ps_others$Team[i]
+        theirMax <- ps_others$CashLeft[i] - (ps_others$Needed[i] - 1)
+        if (theirMax <= 1) next
+        tmHave <- pc %>% filter(Team == tm, Pos == pos) %>% nrow()
+        if (tmHave < threshold) nComp <- nComp + 1
+      }
+      nComp
+    })
+    names(posCompetitors) <- neededPositions
 
     # Decision
-    isBuyer <- !is.na(ratio) && ratio >= 1.0
-    hasLowPressure <- lowPressureCount > 0
+    isStrongBuy <- !is.na(ratio) && ratio >= 1.3
+    isLeanBuy <- !is.na(ratio) && ratio >= 1.0 && !isStrongBuy
+    isBuyer <- isStrongBuy || isLeanBuy
 
-    if (isBuyer && hasLowPressure) {
+    # Three paths to WANT:
+    # Path 1: Strong Buy + budget > $3 + Low/No pressure
+    # Path 2: Lean Buy + budget > $3 + No pressure
+    # Path 3: Uncontested — budget <= $3 (or $1) AND 0 competitors needing the position
+    highValuePos <- neededPositions[as.numeric(posBudget) > 3]
+    uncontestedPos <- neededPositions[as.numeric(posCompetitors) == 0]
+
+    pressureOf <- function(pos) {
+      p <- myPressure$Pressure[myPressure$Pos == pos]
+      if (length(p) == 0) return("Unknown")
+      p[1]
+    }
+
+    path1Pos <- character(0)
+    path2Pos <- character(0)
+    path3Pos <- character(0)
+
+    if (isStrongBuy && length(highValuePos) > 0) {
+      path1Pos <- highValuePos[vapply(highValuePos, function(p) pressureOf(p) %in% c("Low", "No"), logical(1))]
+    }
+    if (isLeanBuy && length(highValuePos) > 0) {
+      path2Pos <- highValuePos[vapply(highValuePos, function(p) pressureOf(p) == "No", logical(1))]
+    }
+    # Path 3: uncontested positions I need, regardless of buyer status
+    path3Pos <- uncontestedPos[!uncontestedPos %in% c(path1Pos, path2Pos)]
+
+    qualifyingPos <- unique(c(path1Pos, path2Pos, path3Pos))
+
+    if (length(qualifyingPos) > 0) {
       label <- "Nominate someone you WANT"
       color <- "#2ecc71"
       bgColor <- "#d4edda"
-      rationale <- paste0("You're ", if (ratio >= 1.3) "Strong Buy" else "Lean Buy",
-                          " ($", round(me$DPP), "/player vs $", round(leagueAvgDPP), " avg)")
+      reasons <- c()
+      if (length(c(path1Pos, path2Pos)) > 0) {
+        reasons <- c(reasons, paste0(if (isStrongBuy) "Strong" else "Lean",
+                                     " Buy ($", round(me$DPP), "/player vs $", round(leagueAvgDPP), " avg)"))
+      }
+      if (length(path3Pos) > 0) {
+        reasons <- c(reasons, paste0("Uncontested: ", paste(path3Pos, collapse = ", ")))
+      }
+      rationale <- paste(reasons, collapse = " | ")
     } else if (!isBuyer) {
       label <- "Nominate someone you DON'T want"
       color <- "#e74c3c"
@@ -1065,13 +1185,30 @@ shinyServer(function(input, output, session) {
       label <- "Nominate someone you DON'T want"
       color <- "#f39c12"
       bgColor <- "#fff3cd"
-      rationale <- "All your needed positions have high pressure \u2014 let others overpay first"
+      rationale <- if (isStrongBuy) "Strong Buy but no qualifying positions \u2014 let others overpay first"
+                   else "Lean Buy but no qualifying positions \u2014 wait for a safer spot"
     }
+
+    # Build position display with budget amounts
+    posLine <- if (length(qualifyingPos) > 0) {
+      posLabels <- sapply(qualifyingPos, function(p) {
+        b <- posBudget[p]
+        comp <- posCompetitors[p]
+        extra <- c()
+        if (!is.na(b) && b > 0) extra <- c(extra, paste0("$", b))
+        if (comp == 0) extra <- c(extra, "uncontested")
+        if (length(extra) > 0) paste0(p, " (", paste(extra, collapse = ", "), ")") else p
+      })
+      tags$div(style = "margin-top:4px;",
+        tags$small(style = "color:#555; font-weight:bold;",
+                   paste0("Target positions: ", paste(posLabels, collapse = ", "))))
+    } else NULL
 
     tags$div(style = paste0("margin-top:15px; padding:10px; border-radius:6px; background:", bgColor, ";"),
       tags$strong(style = paste0("color:", color, ";"), label),
       tags$br(),
-      tags$small(style = "color:#555;", rationale)
+      tags$small(style = "color:#555;", rationale),
+      posLine
     )
   })
 
@@ -2199,7 +2336,7 @@ shinyServer(function(input, output, session) {
       geom_point(data = goals, aes(x, y, color = pct >= 1.0), size = 3) +
       scale_color_manual(values = c("TRUE" = "#2ecc71", "FALSE" = "#e74c3c"), guide = "none") +
       # Pct labels
-      geom_text(data = pct_df, aes(x, y, label = label), size = 2.8, fontface = "bold") +
+      geom_text(data = pct_df, aes(x, y, label = label), size = 4.5, fontface = "bold") +
       # Category labels
       geom_text(data = labels_df, aes(x, y, label = label), size = 3.5) +
       coord_equal(clip = "off") +

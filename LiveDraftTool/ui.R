@@ -44,7 +44,9 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                      h3("Recent Picks"),
                                      DT::dataTableOutput("recentPicks"),
                                      h3("Live Standings"),
-                                     DT::dataTableOutput("draftStandings")
+                                     DT::dataTableOutput("draftStandings"),
+                                     h3("Pre-Draft Summary"),
+                                     uiOutput("preDraftSummary")
                               )
                             )
                    ),
@@ -89,6 +91,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 tabsetPanel(type = "pills",
                                   tabPanel("Balance", plotOutput("spiderChart", height = "280px")),
                                   tabPanel("Goals", DT::dataTableOutput("rosterGoals"))
+                                ),
+                                tags$hr(),
+                                tags$div(style = "font-size:12px; line-height:1.8;",
+                                  tags$strong("Slot Colors (vs league avg)"),
+                                  tags$div(style = "background:#b7e4c7; padding:2px 6px; margin-top:4px; border-radius:3px;", "Elite (120%+)"),
+                                  tags$div(style = "background:#d4edda; padding:2px 6px; border-radius:3px;", "Above Avg (90%+)"),
+                                  tags$div(style = "background:#fff3cd; padding:2px 6px; border-radius:3px;", "Below Avg (70%+)"),
+                                  tags$div(style = "background:#f8d7da; padding:2px 6px; border-radius:3px;", "Weak (< 70%)"),
+                                  tags$div(style = "margin-top:6px;",
+                                    tags$strong("Value: "),
+                                    tags$span(style = "color:#2ecc71;", "Positive"),
+                                    " / ",
+                                    tags$span(style = "color:#e74c3c;", "Negative")
+                                  )
                                 ),
                                 width = 3
                               ),

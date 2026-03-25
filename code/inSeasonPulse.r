@@ -24,10 +24,10 @@ source("./daflFunctions.r")
 ### Set variables ###
 
 
-aWeek <- as.integer((as.integer(today() - as.Date("2025-03-28"))+1)/7) + 1
+aWeek <- as.integer((as.integer(today() - as.Date("2026-03-25"))+1)/7) + 1
 tWeeks <-30
-#computer <- 'mac'
-computer <- 'Windows'
+computer <- 'mac'
+#computer <- 'Windows'
 #computer <- Sys.info()['sysname']
 
 
@@ -39,12 +39,10 @@ dt <- as.integer(difftime(cd, fd, units = "hours"))
 if (dt > 10) {
   system("bash ../scripts/pullSteamerROS.sh")
   system("bash ../scripts/pullBatXROS.sh")
-  system("bash ../scripts/pullSteamer.sh")
   system("bash ../scripts/pullCBS.sh")
   system("bash ../scripts/pullCBS2.sh")
   system("bash ../scripts/salaryinfo.sh")
-  # fgInj is only used for prospect json files.  Run manually
-  system("bash ../scripts/fgInj.sh")
+  system("bash ../scripts/pullRRClosers.sh")
 }
 
 
@@ -206,8 +204,7 @@ AllP <- distinct(AllP)
 #Generate dollars
 #nlist <- preLPP(AllH,AllP,data.frame(),(1-(aWeek/tWeeks)),50,40)
 #nlist <- preLPP(AllH,AllP,data.frame(),1,50,40)
-# Adjusted for short season
-nlist <- preLPP(AllH,AllP,data.frame(),1,50,21)
+nlist <- preLPP(AllH,AllP,data.frame(),1,50,40)
 
 bhitters <- nlist[[1]]
 bpitchers <- nlist[[2]]
@@ -265,23 +262,52 @@ AllP <- AllP %>% addSalary()
 #AllP <- AllP %>% addInjuries() %>% addSalary()
 
 # Fetch injuries and Pitching+ data via API (no browser needed)
-fd <- file.info("../latestStuff.csv")$mtime
-cd <- Sys.time()
-dt <- as.integer(difftime(cd, fd, units = "hours"))
+# Check age of injuries file
+injFile <- file.info("../latestInjuries.csv")$mtime
+injAge <- if (is.na(injFile)) Inf else as.integer(difftime(Sys.time(), injFile, units = "hours"))
 
-if (dt < 20) {
-  # Use cached data if recent enough
+stuffFile <- file.info("../latestStuff.csv")$mtime
+stuffAge <- if (is.na(stuffFile)) Inf else as.integer(difftime(Sys.time(), stuffFile, units = "hours"))
+
+if (injAge < 20) {
+  cat("Using cached injuries file (", injAge, " hours old)\n")
   injOrig <- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`, `Injury / Surgery Date` = `Injury...Surgery.Date`)
+} else {
+  cat("Injuries file is", injAge, "hours old, fetching fresh data...\n")
+  tryCatch({
+    injOrig <- getInjuriesAPI()
+  }, error = function(e) {
+    cat("Error fetching injuries:", e$message, "\n")
+    cat("Falling back to cached injuries file\n")
+    injOrig <<- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
+    injOrig <<- injOrig %>% rename(`Latest Update` = `Latest.Update`, `Injury / Surgery Date` = `Injury...Surgery.Date`)
+  })
+}
 
+if (stuffAge < 20) {
+  cat("Using cached Stuff+ file (", stuffAge, " hours old)\n")
   stuff <- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
     rename(`Pitching+` = `Pitching.`)
-
 } else {
-  # Fetch fresh data from FanGraphs API
-  injOrig <- getInjuriesAPI()
-  stuff <- getStuffAPI()
+  cat("Stuff+ file is", stuffAge, "hours old, fetching fresh data...\n")
+  tryCatch({
+    stuff <- getStuffAPI()
+  }, error = function(e) {
+    cat("Error fetching Stuff+:", e$message, "\n")
+    cat("Falling back to cached Stuff+ file\n")
+    stuff <<- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
+      rename(`Pitching+` = `Pitching.`)
+  })
 }
+
+# Fix column names from corrupted cached CSV
+if ("playerid.x" %in% names(injOrig)) {
+  injOrig <- injOrig %>% rename(playerid = playerid.x) %>% select(-any_of("playerid.y"))
+}
+
+# Coerce playerid to character before joins
+injOrig$playerid <- as.character(injOrig$playerid)
 
 # Week before draft - manual download file
 # injOrig <- read.xlsx("../roster-resource-download.xlsx")
@@ -393,9 +419,9 @@ RTot$zScore <- as.numeric(scale(RTot$tDFL))
 #pplist <- getFGScouts("../fangraphs-the-board-dataP.json")
 
 #prospects from FanGraphs API
-hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId)
+hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
 hplist <- hplist %>% filter(Hit!="")
-pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId)
+pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
 pplist <- pplist %>% filter(FB.Type!="")
 
 

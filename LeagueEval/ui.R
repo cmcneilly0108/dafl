@@ -8,10 +8,15 @@ library("DT")
 shinyUI(
   navbarPage(
 #    theme = bs_theme(version = 4, bootswatch = "slate"),
-    # “cerulean”, “cosmo”, “cyborg”, “darkly”, “flatly”, “journal”, “litera”, “lumen”, “lux”, “materia”, “minty”, 
-    # “pulse”, “sandstone”, “simplex”, “sketchy”, “slate”, “solar”, “spacelab”, “superhero”, “united”, “yeti”
+    # "cerulean", "cosmo", "cyborg", "darkly", "flatly", "journal", "litera", "lumen", "lux", "materia", "minty",
+    # "pulse", "sandstone", "simplex", "sketchy", "slate", "solar", "spacelab", "superhero", "united", "yeti"
     theme = bs_theme(bootswatch = "flatly"),
-    "DAFL Evaluator, v2.0",
+    "DAFL Evaluator, v3.0",
+    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
+      actionButton('refreshBtn', 'Refresh Data',
+                    class = 'btn-success btn-sm',
+                    icon = icon('refresh'))
+    ),
     tabPanel("Standings",
              tabsetPanel(
                type = 'tabs',
@@ -44,11 +49,18 @@ shinyUI(
                  'Select Position',
                  choices = c('Hitters','C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
                ),
-               checkboxInput('fa','Free Agents Only'),value=TRUE,width = 1),
+               checkboxInput('fa','Free Agents Only'),
+               actionButton('targetPosBtn', 'Toggle Target',
+                            class = 'btn-info btn-sm',
+                            style = 'width:100%; margin-top:10px;'),
+               value=TRUE,width = 1),
                mainPanel(DT::dataTableOutput("topPlayers"))
              )),
     tabPanel("Reliever Detail",
-             mainPanel(
+             verticalLayout(
+               actionButton('targetRRBtn', 'Toggle Target',
+                            class = 'btn-info btn-sm',
+                            style = 'margin-bottom:10px;'),
                h2("Roster Resource"),
                DT::dataTableOutput("rrcResults")
              )
@@ -64,7 +76,7 @@ shinyUI(
         multiple = TRUE
       ),
       plotlyOutput("lcgraph",height="800px")
-      
+
     ),
     tabPanel("LC Trends",
              mainPanel(
@@ -124,7 +136,18 @@ shinyUI(
              )),
     tabPanel("Injured",
              verticalLayout(
+               actionButton('targetInjBtn', 'Toggle Target',
+                            class = 'btn-info btn-sm',
+                            style = 'margin-bottom:10px;'),
                DT::dataTableOutput("injOrig")
+             )),
+    tabPanel("My Targets",
+             verticalLayout(
+               actionButton('removeTargetBtn', 'Remove Selected',
+                            class = 'btn-warning btn-sm',
+                            style = 'margin-bottom:10px;'),
+               h2("Targeted Players"),
+               DT::dataTableOutput("targetTable")
              ))
   )
 )
