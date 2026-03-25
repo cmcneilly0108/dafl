@@ -11,6 +11,7 @@ The current protection list assumes all teams act rationally with perfect inform
 - Should we use historical actual inflation rates as a baseline?
 - Could we build a hybrid: start with theoretical, then adjust toward actual as protection lists come in?
 - Does this affect the `auctionROI` parameter (currently 0.80) or is it a separate adjustment?
+- **Important:** Hitting inflation is more extreme than pitching inflation in this league. May need to model H/P inflation rates separately rather than using a single league-wide number.
 
 ## 2. Nomination Strategy — MR / Compressed Value Positions
 

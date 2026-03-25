@@ -221,6 +221,9 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    ),
                    tabPanel("Top Hitters",
                             verticalLayout(
+                              actionButton('targetTopHBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
                               DT::dataTableOutput("topHitters")
                             )
                    ),

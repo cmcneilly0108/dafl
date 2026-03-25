@@ -321,6 +321,26 @@ shinyServer(function(input, output, session) {
     write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
   })
 
+  # --- Target toggle (Top Hitters tab) ---
+  observeEvent(input$targetTopHBtn, {
+    sel <- input$topHitters_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    data <- topHitters_r()
+    pid <- as.character(data$playerid[sel])
+    pName <- data$Player[sel]
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
   # --- Target toggle (Injuries tab) ---
   observeEvent(input$targetInjBtn, {
     sel <- input$injOrig_rows_selected
@@ -1895,7 +1915,7 @@ shinyServer(function(input, output, session) {
     data <- markTargets(topHitters_r(), rv$targets)
     tRows <- which(data$isTarget == 1)
     data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data,
+    dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
                              searching = FALSE, info = FALSE),
               escape = FALSE) %>%
