@@ -46,7 +46,8 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                      h3("Live Standings"),
                                      DT::dataTableOutput("draftStandings"),
                                      h3("Pre-Draft Summary"),
-                                     uiOutput("preDraftSummary")
+                                     uiOutput("preDraftSummary"),
+                                     uiOutput("protListComparison")
                               )
                             )
                    ),
@@ -192,7 +193,7 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(
                                 dateInput('lbStartDate', 'Start Date',
-                                          value = Sys.Date() - 30, format = "yyyy-mm-dd"),
+                                          value = as.Date("2026-03-25"), format = "yyyy-mm-dd"),
                                 dateInput('lbEndDate', 'End Date',
                                           value = Sys.Date(), format = "yyyy-mm-dd"),
                                 actionButton('fetchLeaders', 'Fetch Leaderboards',
@@ -200,7 +201,8 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 tags$hr(),
                                 radioButtons('valMode', 'Valuation Mode',
                                              choices = c('Projections Only' = 'proj',
-                                                         'Blended' = 'blend'),
+                                                         'Blended' = 'blend',
+                                                         'Leaderboard Only' = 'leaders'),
                                              selected = 'proj'),
                                 uiOutput("blendStatus"),
                                 tags$hr(),

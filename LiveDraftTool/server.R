@@ -131,32 +131,58 @@ shinyServer(function(input, output, session) {
     newH <- AllH_orig
     newP <- AllP_orig
 
-    # Blend hitter stats: actual counting stats + projected
-    actH <- lbH %>% select(playerid, aHR = HR, aR = R, aRBI = RBI, aSB = SB, aH = H, aAB = AB)
-    newH <- left_join(newH, actH, by = "playerid")
-    newH <- newH %>% mutate(
-      pHR = pHR + replace_na(aHR, 0),
-      pR = pR + replace_na(aR, 0),
-      pRBI = pRBI + replace_na(aRBI, 0),
-      pSB = pSB + replace_na(aSB, 0),
-      pH = pH + replace_na(aH, 0),
-      pAB = pAB + replace_na(aAB, 0),
-      pAVG = ifelse(pAB > 0, pH / pAB, 0)
-    ) %>% select(-aHR, -aR, -aRBI, -aSB, -aH, -aAB)
+    if (mode == "leaders") {
+      # Leaderboard Only: replace projected stats with actual stats (0 for players not on leaderboard)
+      actH <- lbH %>% select(playerid, aHR = HR, aR = R, aRBI = RBI, aSB = SB, aH = H, aAB = AB)
+      newH <- left_join(newH, actH, by = "playerid")
+      newH <- newH %>% mutate(
+        pHR = replace_na(aHR, 0),
+        pR = replace_na(aR, 0),
+        pRBI = replace_na(aRBI, 0),
+        pSB = replace_na(aSB, 0),
+        pH = replace_na(aH, 0),
+        pAB = replace_na(aAB, 0),
+        pAVG = ifelse(pAB > 0, pH / pAB, 0)
+      ) %>% select(-aHR, -aR, -aRBI, -aSB, -aH, -aAB)
 
-    # Blend pitcher stats: actual counting stats + projected
-    actP <- lbP %>% select(playerid, aW = W, aSO = SO, aHLD = HLD, aSV = SV, aIP = IP, aERA = ERA)
-    newP <- left_join(newP, actP, by = "playerid")
-    newP <- newP %>% mutate(
-      aER = replace_na(aERA, 0) * replace_na(aIP, 0) / 9,
-      pW = pW + replace_na(aW, 0),
-      pSO = pSO + replace_na(aSO, 0),
-      pHLD = pHLD + replace_na(aHLD, 0),
-      pSV = pSV + replace_na(aSV, 0),
-      pIP = pIP + replace_na(aIP, 0),
-      pER = pER + aER,
-      pERA = ifelse(pIP > 0, pER / pIP * 9, 0)
-    ) %>% select(-aW, -aSO, -aHLD, -aSV, -aIP, -aERA, -aER)
+      actP <- lbP %>% select(playerid, aW = W, aSO = SO, aHLD = HLD, aSV = SV, aIP = IP, aERA = ERA)
+      newP <- left_join(newP, actP, by = "playerid")
+      newP <- newP %>% mutate(
+        pW = replace_na(aW, 0),
+        pSO = replace_na(aSO, 0),
+        pHLD = replace_na(aHLD, 0),
+        pSV = replace_na(aSV, 0),
+        pIP = replace_na(aIP, 0),
+        pER = replace_na(aERA, 0) * replace_na(aIP, 0) / 9,
+        pERA = ifelse(pIP > 0, pER / pIP * 9, 0)
+      ) %>% select(-aW, -aSO, -aHLD, -aSV, -aIP, -aERA)
+    } else {
+      # Blended: add actual counting stats to projected
+      actH <- lbH %>% select(playerid, aHR = HR, aR = R, aRBI = RBI, aSB = SB, aH = H, aAB = AB)
+      newH <- left_join(newH, actH, by = "playerid")
+      newH <- newH %>% mutate(
+        pHR = pHR + replace_na(aHR, 0),
+        pR = pR + replace_na(aR, 0),
+        pRBI = pRBI + replace_na(aRBI, 0),
+        pSB = pSB + replace_na(aSB, 0),
+        pH = pH + replace_na(aH, 0),
+        pAB = pAB + replace_na(aAB, 0),
+        pAVG = ifelse(pAB > 0, pH / pAB, 0)
+      ) %>% select(-aHR, -aR, -aRBI, -aSB, -aH, -aAB)
+
+      actP <- lbP %>% select(playerid, aW = W, aSO = SO, aHLD = HLD, aSV = SV, aIP = IP, aERA = ERA)
+      newP <- left_join(newP, actP, by = "playerid")
+      newP <- newP %>% mutate(
+        aER = replace_na(aERA, 0) * replace_na(aIP, 0) / 9,
+        pW = pW + replace_na(aW, 0),
+        pSO = pSO + replace_na(aSO, 0),
+        pHLD = pHLD + replace_na(aHLD, 0),
+        pSV = pSV + replace_na(aSV, 0),
+        pIP = pIP + replace_na(aIP, 0),
+        pER = pER + aER,
+        pERA = ifelse(pIP > 0, pER / pIP * 9, 0)
+      ) %>% select(-aW, -aSO, -aHLD, -aSV, -aIP, -aERA, -aER)
+    }
 
     # Recompute SGP with blended stats
     newP$pSGP <- pitSGP(newP)
@@ -211,9 +237,12 @@ shinyServer(function(input, output, session) {
     } else if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
       tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#fff3cd;",
                tags$small(style = "color:#856404;", "Fetch leaderboards first to enable blend"))
-    } else {
+    } else if (mode == "blend") {
       tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#cce5ff;",
                tags$small(style = "color:#004085;", "Using blended (actual + projected) stats"))
+    } else {
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#e2d5f1;",
+               tags$small(style = "color:#4a235a;", "Using leaderboard stats only"))
     }
   })
 
@@ -1010,6 +1039,67 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  # --- Actual vs Optimal Protection List Comparison ---
+  output$protListComparison <- renderUI({
+    if (is.null(protComparison) || is.null(protPoolComparison)) return(NULL)
+
+    fmtVal <- function(val, isDollar) {
+      if (isDollar) paste0("$", val) else as.character(val)
+    }
+    makeRow <- function(label, a1, o1, a2, o2, bold = FALSE, dollar = FALSE) {
+      st <- if (bold) "font-weight:bold;" else ""
+      tags$tr(
+        tags$td(style = paste0("padding:3px 8px;", st), label),
+        tags$td(style = paste0("text-align:right; padding:3px 8px;", st), fmtVal(a1, dollar)),
+        tags$td(style = paste0("text-align:right; padding:3px 8px;", st), fmtVal(o1, dollar)),
+        tags$td(style = paste0("text-align:right; padding:3px 8px;", st), fmtVal(a2, dollar)),
+        tags$td(style = paste0("text-align:right; padding:3px 8px;", st), fmtVal(o2, dollar))
+      )
+    }
+
+    # Protection summary rows
+    pc <- protComparison
+    dollarMetrics <- c("Salary", "Value", "Surplus", "Avg $/Player")
+    protRows <- lapply(1:nrow(pc), function(i) {
+      isBold <- pc$Metric[i] == "Surplus"
+      isDollar <- pc$Metric[i] %in% dollarMetrics
+      makeRow(pc$Metric[i], pc$Actual_Hitters[i], pc$Optimal_Hitters[i],
+              pc$Actual_Pitchers[i], pc$Optimal_Pitchers[i], bold = isBold, dollar = isDollar)
+    })
+
+    # Draft pool rows
+    pp <- protPoolComparison
+    poolDollarMetrics <- c("Remaining $", "$/Spot")
+    poolRows <- lapply(1:nrow(pp), function(i) {
+      isDollar <- pp$Metric[i] %in% poolDollarMetrics
+      makeRow(pp$Metric[i], pp$Actual_Hitters[i], pp$Optimal_Hitters[i],
+              pp$Actual_Pitchers[i], pp$Optimal_Pitchers[i], dollar = isDollar)
+    })
+
+    tags$div(
+      style = "background:#f8f9fa; border-radius:6px; padding:12px; margin-top:14px; max-width:600px;",
+      tags$strong(style = "font-size:15px;", "Actual vs Optimal Protections"),
+      tags$table(style = "width:100%; font-size:13px; margin-top:8px; border-collapse:collapse;",
+        # Header
+        tags$tr(style = "border-bottom:2px solid #ddd;",
+          tags$th(style = "padding:3px 8px;", ""),
+          tags$th(style = "text-align:right; padding:3px 8px;", "Actual H"),
+          tags$th(style = "text-align:right; padding:3px 8px;", "Optimal H"),
+          tags$th(style = "text-align:right; padding:3px 8px;", "Actual P"),
+          tags$th(style = "text-align:right; padding:3px 8px;", "Optimal P")
+        ),
+        # Protected players section
+        tags$tr(tags$td(colspan = "5", style = "padding:6px 0 2px; font-weight:bold; font-size:12px; color:#666;",
+                        "Protected")),
+        protRows,
+        # Draft pool section
+        tags$tr(tags$td(colspan = "5", style = "padding:8px 0 2px; font-weight:bold; font-size:12px; color:#666; border-top:1px solid #ddd;",
+                        "Draft Pool")),
+        poolRows
+      )
+    )
+  })
+
   # --- Spending Power ---
   output$spendingPower <- renderUI({
     req(input$myTeam)
@@ -1465,14 +1555,14 @@ shinyServer(function(input, output, session) {
   prospectH_r <- reactive({
     AllH_avail() %>% inner_join(hplist, by = 'playerid') %>%
       mutate(Player = fgLink(Name, playerid)) %>%
-      select(Player, MLB = Org, Pos = Pos.y, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, Game = Game.Pwr, Raw = Raw.Pwr, Spd, playerid) %>%
+      select(Player, MLB = Org, Pos = Pos.y, Age = Age.x, Level = mlevel, DFL = pDFL, ADP = pADP, FV, Top.100, Game = Game.Pwr, Raw = Raw.Pwr, Spd, playerid) %>%
       arrange(desc(FV))
   })
 
   prospectP_r <- reactive({
     AllP_avail() %>% inner_join(pplist, by = 'playerid') %>%
       mutate(Player = fgLink(Name, playerid)) %>%
-      select(Player, MLB = Org, Age = Age.x, DFL = pDFL, ADP = pADP, FV, Top.100, FB, SL, CB, CH, CMD, Sits, Tops, playerid) %>%
+      select(Player, MLB = Org, Age = Age.x, Level = mlevel, DFL = pDFL, ADP = pADP, FV, Top.100, FB, SL, CB, CH, CMD, Sits, Tops, playerid) %>%
       arrange(desc(FV))
   })
 

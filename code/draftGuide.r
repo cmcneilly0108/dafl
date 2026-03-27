@@ -35,9 +35,8 @@ fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- as.double(difftime(cd, fd, units = "hours"))
 if (dt > 14) {
-  system("bash ../scripts/pullSteamer.sh")
-  system("bash ../scripts/pullATC.sh")
-  system("bash ../scripts/fgInj.sh")
+  # Use Playwright-based fetch (bypasses Cloudflare)
+  system(str_c("node ../scripts/fgFetchAll.js ", cyear))
   system("bash ../scripts/pullRRClosers.sh")
   predUpdate <- TRUE
 }
@@ -65,6 +64,10 @@ if (src=='atc') {
   hitters <- read.fg(str_c('../steamerH',as.character(cyear),'.json',sep=''))
   pitchers <- read.fg(str_c('../steamerP',as.character(cyear),'.json',sep=''))
 }
+
+# Add pSkew if missing (ROS projections don't include it)
+if (!"pSkew" %in% colnames(hitters)) hitters$pSkew <- 0
+if (!"pSkew" %in% colnames(pitchers)) pitchers$pSkew <- 0
 
 #pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
@@ -166,6 +169,106 @@ pstandings <- protClean %>% group_by(Team) %>%
   arrange(-FullValue)
 pstandings$zScore <- as.numeric(scale(pstandings$FullValue))
 
+# --- Actual vs Optimal Protection List Comparison ---
+nteams <- 13
+nhitters <- 13
+npitchers <- 12
+tdollars <- nteams * 260
+pdollars <- round(tdollars * hpratio)
+hdollars <- tdollars - pdollars
+
+fakeProtFile <- str_c("../", cyear, "fakeprotected.csv")
+if (file.exists(fakeProtFile)) {
+  fakeProt <- read.csv(fakeProtFile, stringsAsFactors = FALSE)
+  fakeProt$playerid <- as.character(fakeProt$playerid)
+
+  # Classify positions
+  isPitcher <- function(pos) pos %in% c('P', 'SP', 'MR', 'CL', 'RP')
+
+  # Actual protections (from the real protection list)
+  actualH <- protected %>% filter(!isPitcher(Pos))
+  actualP <- protected %>% filter(isPitcher(Pos))
+
+  # Optimal protections (from fake protected)
+  optimalH <- fakeProt %>% filter(!isPitcher(Pos))
+  optimalP <- fakeProt %>% filter(isPitcher(Pos))
+
+  # Look up pDFL for each player from AllH/AllP (inflated Pass 2 values)
+  lookupValue <- function(ids, allH, allP) {
+    hvals <- allH %>% filter(playerid %in% ids) %>% select(playerid, pDFL)
+    pvals <- allP %>% filter(playerid %in% ids) %>% select(playerid, pDFL)
+    rbind(hvals, pvals)
+  }
+
+  actualVals <- lookupValue(protected$playerid, AllH, AllP)
+  optimalVals <- lookupValue(fakeProt$playerid, AllH, AllP)
+
+  # Build comparison summary
+  protComparison <- data.frame(
+    Metric = c("Players", "Salary", "Value", "Surplus", "Avg $/Player"),
+    Actual_Hitters = c(
+      nrow(actualH),
+      sum(actualH$Salary),
+      round(sum(actualVals$pDFL[actualVals$playerid %in% actualH$playerid])),
+      round(sum(actualVals$pDFL[actualVals$playerid %in% actualH$playerid]) - sum(actualH$Salary)),
+      round(sum(actualH$Salary) / nrow(actualH), 1)
+    ),
+    Optimal_Hitters = c(
+      nrow(optimalH),
+      sum(optimalH$Salary),
+      round(sum(optimalVals$pDFL[optimalVals$playerid %in% optimalH$playerid])),
+      round(sum(optimalVals$pDFL[optimalVals$playerid %in% optimalH$playerid]) - sum(optimalH$Salary)),
+      round(sum(optimalH$Salary) / nrow(optimalH), 1)
+    ),
+    Actual_Pitchers = c(
+      nrow(actualP),
+      sum(actualP$Salary),
+      round(sum(actualVals$pDFL[actualVals$playerid %in% actualP$playerid])),
+      round(sum(actualVals$pDFL[actualVals$playerid %in% actualP$playerid]) - sum(actualP$Salary)),
+      round(sum(actualP$Salary) / nrow(actualP), 1)
+    ),
+    Optimal_Pitchers = c(
+      nrow(optimalP),
+      sum(optimalP$Salary),
+      round(sum(optimalVals$pDFL[optimalVals$playerid %in% optimalP$playerid])),
+      round(sum(optimalVals$pDFL[optimalVals$playerid %in% optimalP$playerid]) - sum(optimalP$Salary)),
+      round(sum(optimalP$Salary) / nrow(optimalP), 1)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  # Draft pool impact
+  totalDollars <- nteams * 260
+  totalSpots <- (nhitters + npitchers) * nteams
+
+  protPoolComparison <- data.frame(
+    Metric = c("Remaining $", "Remaining Spots", "$/Spot"),
+    Actual_Hitters = c(
+      hdollars - sum(actualH$Salary),
+      nhitters * nteams - nrow(actualH),
+      round((hdollars - sum(actualH$Salary)) / (nhitters * nteams - nrow(actualH)), 1)
+    ),
+    Optimal_Hitters = c(
+      hdollars - sum(optimalH$Salary),
+      nhitters * nteams - nrow(optimalH),
+      round((hdollars - sum(optimalH$Salary)) / (nhitters * nteams - nrow(optimalH)), 1)
+    ),
+    Actual_Pitchers = c(
+      pdollars - sum(actualP$Salary),
+      npitchers * nteams - nrow(actualP),
+      round((pdollars - sum(actualP$Salary)) / (npitchers * nteams - nrow(actualP)), 1)
+    ),
+    Optimal_Pitchers = c(
+      pdollars - sum(optimalP$Salary),
+      npitchers * nteams - nrow(optimalP),
+      round((pdollars - sum(optimalP$Salary)) / (npitchers * nteams - nrow(optimalP)), 1)
+    ),
+    stringsAsFactors = FALSE
+  )
+} else {
+  protComparison <- NULL
+  protPoolComparison <- NULL
+}
 
 lc <- filter(protClean,Team == 'Liquor Crickets') %>% select(-Team) %>% arrange(-pDFL)
 
@@ -300,18 +403,30 @@ lc <- left_join(lc,inj,by=c('Player'))
 
 
 #prospects from FanGraphs API
-hplist <- getFGProspects(pos = "bat") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
-pplist <- getFGProspects(pos = "pit") %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
+hplist_raw <- getFGProspects(pos = "bat")
+pplist_raw <- getFGProspects(pos = "pit")
 
-#proh <- right_join(AllH,hplist,by=c('playerid'))
-proh <- inner_join(AllH,hplist,by=c('playerid'))
-#proh <- proh %>% filter(cFV > 45)
-prospectH <- select(proh,Player=Name,MLB=Org,Pos=Pos.y,Age=Age.x,DFL=pDFL,ADP=pADP,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
-  arrange(desc(FV))
-#prop <- right_join(AllP,pplist,by=c('playerid')) %>% filter(cFV > 45)
-prop <- inner_join(AllP,pplist,by=c('playerid'))
-prospectP <- select(prop,Player=Name,MLB=Org,Age=Age.x,DFL=pDFL,ADP=pADP,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
-  arrange(desc(FV))
+if (!is.null(hplist_raw)) {
+  hplist <- hplist_raw %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
+  proh <- inner_join(AllH,hplist,by=c('playerid'))
+  prospectH <- select(proh,Player=Name,MLB=Org,Pos=Pos.y,Age=Age.x,Level=mlevel,DFL=pDFL,ADP=pADP,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
+    arrange(desc(FV))
+} else {
+  hplist <- data.frame(playerid=character(), stringsAsFactors=FALSE)
+  prospectH <- data.frame()
+  warning("Prospect hitter data unavailable — FanGraphs API returned 403")
+}
+
+if (!is.null(pplist_raw)) {
+  pplist <- pplist_raw %>% rename(playerid = PlayerId) %>% mutate(playerid = as.character(playerid))
+  prop <- inner_join(AllP,pplist,by=c('playerid'))
+  prospectP <- select(prop,Player=Name,MLB=Org,Age=Age.x,Level=mlevel,DFL=pDFL,ADP=pADP,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
+    arrange(desc(FV))
+} else {
+  pplist <- data.frame(playerid=character(), stringsAsFactors=FALSE)
+  prospectP <- data.frame()
+  warning("Prospect pitcher data unavailable — FanGraphs API returned 403")
+}
 
 # Roster Resource Closer report
 # Need to update json file
