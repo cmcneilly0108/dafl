@@ -476,6 +476,59 @@ shinyServer(function(input, output, session) {
     }
   })
 
+  # --- Search tab: find any player across all pools + roster ---
+  searchData_r <- reactive({
+    roster <- rv$roster
+    rosterLookup <- roster %>% select(playerid, Owner = Team, Salary) %>% distinct()
+
+    allPlayers <- bind_rows(
+      AllH_orig %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Hitter"),
+      AllP_orig %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Pitcher")
+    ) %>% distinct(playerid, .keep_all = TRUE)
+
+    allPlayers <- left_join(allPlayers, rosterLookup, by = "playerid")
+    allPlayers$Owner <- replace_na(allPlayers$Owner, "Free Agent")
+    allPlayers$Salary <- replace_na(allPlayers$Salary, NA_real_)
+    allPlayers %>% arrange(-pDFL)
+  })
+
+  output$searchTable <- DT::renderDataTable({
+    data <- searchData_r() %>%
+      mutate(Player = fgLink(Player, playerid))
+    data <- markTargets(data, rv$targets)
+    tRows <- which(data$isTarget == 1)
+    data <- data %>% select(-playerid, -isTarget)
+    data <- data %>% select(Player, Type, Pos, MLB, Age, Owner, Salary, DFL = pDFL, ADP = pADP)
+
+    dt <- datatable(data, selection = 'single',
+              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('Age', 'ADP'), 0) %>%
+      formatCurrency('Salary', digits = 0)
+    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
+    dt
+  })
+
+  observeEvent(input$targetSearchBtn, {
+    sel <- input$searchTable_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      showNotification("Select a player row first", type = "warning")
+      return()
+    }
+    data <- searchData_r()
+    pid <- as.character(data$playerid[sel])
+    pName <- data$Player[sel]
+    if (pid %in% rv$targets) {
+      rv$targets <- rv$targets[rv$targets != pid]
+      showNotification(paste0("Removed target: ", pName), type = "message")
+    } else {
+      rv$targets <- c(rv$targets, pid)
+      showNotification(paste0("Added target: ", pName), type = "message")
+    }
+    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+  })
+
   # --- Build roster card for a team (slot assignment) ---
   buildTeamRoster <- function(hitters, pitchers) {
     makeRow <- function(slot, p) {
@@ -1873,7 +1926,7 @@ shinyServer(function(input, output, session) {
 
     datatable(data, selection = 'single', rownames = FALSE,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE,
+                             info = FALSE,
                              columnDefs = list(list(visible = FALSE, targets = ncol(data) - 1))),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
@@ -2022,7 +2075,7 @@ shinyServer(function(input, output, session) {
     data <- data %>% select(-playerid, -isTarget)
     dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE),
+                             info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
     if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
@@ -2142,7 +2195,7 @@ shinyServer(function(input, output, session) {
     data <- data %>% select(-playerid, -isTarget)
     dt <- datatable(data, selection = 'single',
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE),
+                             info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
     if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))

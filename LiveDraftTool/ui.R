@@ -292,6 +292,14 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                             verticalLayout(
                               DT::dataTableOutput("targetTable")
                             )
+                   ),
+                   tabPanel("Search",
+                            verticalLayout(
+                              actionButton('targetSearchBtn', 'Toggle Target',
+                                           class = 'btn-info btn-sm',
+                                           style = 'margin-bottom:10px;'),
+                              DT::dataTableOutput("searchTable")
+                            )
                    )
 )
 )
