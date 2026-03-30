@@ -7,8 +7,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    theme = bs_theme(bootswatch = "flatly"),
     useShinyjs(),
                    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
+                     uiOutput("myTeamBadge", inline = TRUE),
                      actionButton('settingsBtn', 'Settings',
-                                  class = 'btn-default btn-sm')
+                                  class = 'btn-default btn-sm',
+                                  style = 'margin-left:12px;')
                    ),
                    tabPanel("Draft",
                             fluidRow(
@@ -25,10 +27,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                                     style = 'width:100%; margin-bottom:10px;'),
                                        actionButton('undoBtn', 'Undo Last Pick',
                                                     class = 'btn-warning btn-block',
-                                                    style = 'width:100%;'),
-                                       tags$hr(),
-                                       actionButton('targetBtn', 'Toggle Target',
-                                                    class = 'btn-info btn-block',
                                                     style = 'width:100%;')
                                      ),
                                      h4("Draft Market", style = "margin-top:15px;"),
@@ -144,9 +142,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               sidebarPanel(
                                 selectizeInput(
                                   'e2', 'Select Position', choices=NULL),
-                                actionButton('targetHBtn', 'Toggle Target',
-                                             class = 'btn-info btn-sm',
-                                             style = 'width:100%; margin-top:10px;'),
                                 tags$div(style = 'margin-top:15px; font-size:12px; line-height:1.8;',
                                   tags$strong('Price Tiers'),
                                   tags$div(style = 'background:#e8f4fd; padding:2px 6px; margin-top:4px;', 'Elite $30+'),
@@ -165,9 +160,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                           sidebarPanel(
                                             selectizeInput(
                                               'e3', 'Select Role', choices=NULL),
-                                            actionButton('targetPBtn', 'Toggle Target',
-                                                         class = 'btn-info btn-sm',
-                                                         style = 'width:100%; margin-top:10px;'),
                                             tags$div(style = 'margin-top:15px; font-size:12px; line-height:1.8;',
                                               tags$strong('Price Tiers'),
                                               tags$div(style = 'background:#e8f4fd; padding:2px 6px; margin-top:4px;', 'Elite $30+'),
@@ -183,9 +175,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    ),
                    tabPanel("Bullpen Depth Charts",
                             verticalLayout(fluid=FALSE,
-                                           actionButton('targetBPBtn', 'Toggle Target',
-                                                        class = 'btn-info btn-sm',
-                                                        style = 'margin-bottom:10px;'),
                                            DT::dataTableOutput("rrcResults")
                             )
                    ),
@@ -199,10 +188,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 actionButton('fetchLeaders', 'Fetch Leaderboards',
                                              class = 'btn-primary', style = 'width:100%;'),
                                 uiOutput("blendStatus"),
-                                tags$hr(),
-                                actionButton('targetLBBtn', 'Toggle Target',
-                                             class = 'btn-info btn-sm',
-                                             style = 'width:100%;'),
                                 width = 2
                               ),
                               mainPanel(
@@ -217,17 +202,11 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    ),
                    tabPanel("Top Hitters",
                             verticalLayout(
-                              actionButton('targetTopHBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
                               DT::dataTableOutput("topHitters")
                             )
                    ),
                    tabPanel("Prospects",
                             mainPanel(
-                              actionButton('targetProspBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
                               tabsetPanel(id = 'prospectTab', type='tabs',
                                           tabPanel('Hitters',
                                                    DT::dataTableOutput("prospectH")),
@@ -238,9 +217,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    ),
                    tabPanel("Injured",
                             verticalLayout(
-                              actionButton('targetInjBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
                               DT::dataTableOutput("injOrig")
                             )
                    ),
@@ -265,10 +241,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                              class = 'btn-primary',
                                              style = 'width:100%; margin-bottom:10px;'),
                                 uiOutput('researchStatus'),
-                                tags$hr(),
-                                actionButton('targetResBtn', 'Toggle Target',
-                                             class = 'btn-info btn-sm',
-                                             style = 'width:100%;'),
                                 width = 3
                               ),
                               mainPanel(
@@ -287,12 +259,10 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               DT::dataTableOutput("targetTable")
                             )
                    ),
-                   tabPanel("Search",
-                            verticalLayout(
-                              actionButton('targetSearchBtn', 'Toggle Target',
-                                           class = 'btn-info btn-sm',
-                                           style = 'margin-bottom:10px;'),
-                              DT::dataTableOutput("searchTable")
+                   tabPanel("Player Snapshot",
+                            fluidRow(
+                              column(7, DT::dataTableOutput("searchTable")),
+                              column(5, uiOutput("playerSnapshot"))
                             )
                    )
 )

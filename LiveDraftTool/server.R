@@ -118,6 +118,15 @@ shinyServer(function(input, output, session) {
     researchTitle = ""
   )
 
+  # --- My Team (initialized immediately, updated via Settings modal) ---
+  myTeam <- reactiveVal('Liquor Crickets')
+  observeEvent(input$myTeam, { myTeam(input$myTeam) })
+
+  output$myTeamBadge <- renderUI({
+    tags$span(style = "font-size:13px; color:#ecf0f1;",
+              tags$strong(myTeam()))
+  })
+
   # --- Projection source toggle ---
   projPools_r <- reactive({
     src <- input$projSource
@@ -270,27 +279,31 @@ shinyServer(function(input, output, session) {
   # --- Helper: split roster into H/P ---
   isPitcherPos <- function(pos) pos %in% c('P','SP','MR','CL','RP')
 
-  # --- Helper: mark target players with star + hidden flag ---
+  # --- Helper: inline target star for player rows ---
+  targetStar <- function(pid, isTarget) {
+    star <- ifelse(isTarget, "\u2605", "\u2606")
+    color <- ifelse(isTarget, "#f1c40f", "#ccc")
+    paste0("<span onclick='Shiny.setInputValue(\"toggleTarget\", \"", pid,
+           "\", {priority: \"event\"}); return false;' ",
+           "style='cursor:pointer; font-size:16px; color:", color, ";'>", star, "</span>")
+  }
+
+  # --- Helper: mark target players with star column ---
   markTargets <- function(df, targets) {
     df$isTarget <- as.integer(df$playerid %in% targets)
-    tIdx <- which(df$isTarget == 1)
-    if (length(tIdx) > 0) {
-      df$Player[tIdx] <- paste0("\u2605 ", df$Player[tIdx])
-    }
+    df$Target <- targetStar(df$playerid, df$isTarget == 1)
     df
   }
 
-  # --- Target toggle (Draft tab player search) ---
-  observeEvent(input$targetBtn, {
-    req(input$playerSearch)
-    pid <- input$playerSearch
+  # --- Universal target toggle handler ---
+  observeEvent(input$toggleTarget, {
+    pid <- input$toggleTarget
     allPlayers <- bind_rows(
       AllH_active() %>% select(playerid, Player),
       AllP_active() %>% select(playerid, Player)
     ) %>% distinct(playerid, .keep_all = TRUE)
     pName <- allPlayers$Player[allPlayers$playerid == pid]
     if (length(pName) == 0) pName <- "Player"
-
     if (pid %in% rv$targets) {
       rv$targets <- rv$targets[rv$targets != pid]
       showNotification(paste0("Removed target: ", pName), type = "message")
@@ -301,179 +314,19 @@ shinyServer(function(input, output, session) {
     write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
   })
 
-  # --- Target toggle (Hitters tab row selection) ---
-  observeEvent(input$targetHBtn, {
-    sel <- input$hpbpos_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    data <- hitPlayersbyPos(input$e2)
-    pid <- as.character(data$playerid[sel])
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Pitchers tab row selection) ---
-  observeEvent(input$targetPBtn, {
-    sel <- input$ppbpos_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    data <- pitPlayersbyPos(input$e3)
-    pid <- as.character(data$playerid[sel])
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Prospects tab — one button, checks active subtab) ---
-  observeEvent(input$targetProspBtn, {
-    tab <- input$prospectTab
-    if (!is.null(tab) && tab == "Pitchers") {
-      sel <- input$prospectP_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- prospectP_r()
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    } else {
-      sel <- input$prospectH_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- prospectH_r()
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    }
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Top Hitters tab) ---
-  observeEvent(input$targetTopHBtn, {
-    sel <- input$topHitters_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    data <- topHitters_r()
-    pid <- as.character(data$playerid[sel])
-    pName <- data$Player[sel]
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Injuries tab) ---
-  observeEvent(input$targetInjBtn, {
-    sel <- input$injOrig_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    data <- injOrig_r()
-    pid <- as.character(data$playerid[sel])
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", data$Player[sel]), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", data$Player[sel]), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Bullpen Depth Charts tab) ---
-  observeEvent(input$targetBPBtn, {
-    sel <- input$rrcResults_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    pid <- as.character(rrcResults$playerid[sel])
-    pName <- rrcResults$Player[sel]
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- Target toggle (Leaderboards tab) ---
-  observeEvent(input$targetLBBtn, {
-    tab <- input$leaderTab
-    if (is.null(tab)) return()
-    if (tab == 'Hitters') {
-      sel <- input$leaderH_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- leaderH_avail()
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    } else {
-      sel <- input$leaderP_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- leaderP_avail()
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    }
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  })
-
-  # --- My Targets tab: table + remove ---
+  # --- My Targets tab: table with inline remove ---
   output$targetTable <- DT::renderDataTable({
     allPlayers <- bind_rows(
       AllH_active() %>% select(playerid, Player, Pos, MLB, Age, pDFL),
       AllP_active() %>% select(playerid, Player, Pos, MLB, Age, pDFL)
     ) %>% distinct(playerid, .keep_all = TRUE)
     info <- allPlayers %>% filter(playerid %in% rv$targets) %>%
-      mutate(Player = fgLink(Player, playerid)) %>%
-      arrange(-pDFL) %>%
-      select(Player, Pos, MLB, Age, pDFL)
-    datatable(info, selection = 'single',
-              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+      mutate(Player = fgLink(Player, playerid))
+    info <- markTargets(info, rv$targets)
+    info <- info %>% arrange(-pDFL) %>%
+      select(Target, Player, Pos, MLB, Age, pDFL)
+    datatable(info,
+              options = list(paging = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE),
               escape = FALSE) %>%
       formatCurrency('pDFL') %>%
@@ -519,9 +372,7 @@ shinyServer(function(input, output, session) {
       mutate(Player = fgLink(Player, playerid),
              Owner = teamLink(Owner))
     data <- markTargets(data, rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    data <- data %>% select(Player, Type, Pos, MLB, Age, Owner, Salary, DFL = pDFL, ADP = pADP)
+    data <- data %>% select(Target, Player, Type, Pos, MLB, Age, Owner, Salary, DFL = pDFL, ADP = pADP)
 
     dt <- datatable(data, selection = 'single',
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
@@ -529,27 +380,215 @@ shinyServer(function(input, output, session) {
       formatCurrency('DFL') %>%
       formatRound(c('Age', 'ADP'), 0) %>%
       formatCurrency('Salary', digits = 0)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
     dt
   })
 
-  observeEvent(input$targetSearchBtn, {
+  # --- Player Snapshot detail panel ---
+  output$playerSnapshot <- renderUI({
     sel <- input$searchTable_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
+    if (is.null(sel) || length(sel) == 0) return(NULL)
+
     data <- searchData_r()
+    if (sel > nrow(data)) return(NULL)
     pid <- as.character(data$playerid[sel])
-    pName <- data$Player[sel]
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
+
+    # Look up full player record
+    ah <- AllH_active()
+    ap <- AllP_active()
+    playerH <- ah %>% filter(playerid == pid)
+    playerP <- ap %>% filter(playerid == pid)
+    isHitter <- nrow(playerH) > 0
+    if (!isHitter && nrow(playerP) == 0) return(tags$div(style = "color:gray; padding:12px;", "Player not found in projection data."))
+    player <- if (isHitter) playerH[1,] else playerP[1,]
+
+    playerName <- player$Player
+    playerPos <- player$Pos
+    posElStr <- if (!is.null(player$posEl) && !is.na(player$posEl)) paste0(" (", player$posEl, ")") else ""
+    playerAge <- round(player$Age)
+    playerMLB <- player$MLB
+    ownerRow <- data[sel, ]
+    ownerStr <- if (!is.na(ownerRow$Owner) && ownerRow$Owner != "Free Agent") {
+      paste0(ownerRow$Owner, " — $", ownerRow$Salary)
     } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
+      "Free Agent"
     }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+
+    # --- Header ---
+    headerUI <- tags$div(
+      style = "padding:12px 16px; background:#2c3e50; color:white; border-radius:6px 6px 0 0;",
+      tags$div(style = "font-size:20px; font-weight:bold;", playerName),
+      tags$div(style = "font-size:14px; margin-top:4px; color:#bdc3c7;",
+        paste0(playerPos, posElStr, "  |  ", playerMLB, "  |  Age ", playerAge)),
+      tags$div(style = "font-size:14px; margin-top:2px; color:#ecf0f1;", ownerStr)
+    )
+
+    # --- Stats Card ---
+    valLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px; margin-bottom:8px;",
+      tags$span(tags$strong("DFL: "), paste0("$", round(player$pDFL))),
+      tags$span(tags$strong("SGP: "), round(player$pSGP, 2)),
+      tags$span(tags$strong("ADP: "), round(player$pADP)),
+      tags$span(tags$strong("Rank Diff: "), ifelse(!is.na(player$rankDiff), sprintf("%+d", round(player$rankDiff)), "—"))
+    )
+    if (isHitter) {
+      statLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px;",
+        tags$span(tags$strong("HR: "), round(player$pHR)),
+        tags$span(tags$strong("RBI: "), round(player$pRBI)),
+        tags$span(tags$strong("R: "), round(player$pR)),
+        tags$span(tags$strong("SB: "), round(player$pSB)),
+        tags$span(tags$strong("AVG: "), sprintf("%.3f", player$pAVG))
+      )
+    } else {
+      statLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px;",
+        tags$span(tags$strong("W: "), round(player$pW)),
+        tags$span(tags$strong("SO: "), round(player$pSO)),
+        tags$span(tags$strong("ERA: "), sprintf("%.2f", player$pERA)),
+        tags$span(tags$strong("SV: "), round(player$pSV)),
+        tags$span(tags$strong("HLD: "), round(player$pHLD))
+      )
+    }
+    statsUI <- tags$div(
+      style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none;",
+      valLine, statLine
+    )
+
+    # --- Competition Card ---
+    ps <- pstandings_r()
+    pc <- protClean_r()
+    me <- ps %>% filter(Team == myTeam())
+    if (nrow(me) > 0 && me$Needed > 0) {
+      myMaxBid <- me$CashLeft - (me$Needed - 1)
+      otherTeams <- ps %>% filter(Team != myTeam(), Needed > 0)
+      competitors <- lapply(seq_len(nrow(otherTeams)), function(i) {
+        tm <- otherTeams$Team[i]
+        tmRow <- otherTeams[i,]
+        theirMaxBid <- tmRow$CashLeft - (tmRow$Needed - 1)
+        if (theirMaxBid <= myMaxBid) return(NULL)
+        theirPosCounts <- pc %>% filter(Team == tm, Pos == playerPos) %>% nrow()
+        threshold <- ifelse(playerPos %in% names(posThresholds), posThresholds[playerPos], 1)
+        needsStarter <- theirPosCounts < threshold
+        hasBenchRoom <- tmRow$Needed > 0
+        if (!needsStarter && !hasBenchRoom) return(NULL)
+        reason <- if (needsStarter) paste0("needs ", playerPos) else "bench"
+        data.frame(Team = tm, MaxBid = theirMaxBid, Reason = reason, stringsAsFactors = FALSE)
+      })
+      competitors <- bind_rows(competitors)
+      nComp <- nrow(competitors)
+      compColor <- if (nComp <= 1) "#2ecc71" else if (nComp <= 3) "#f39c12" else "#e74c3c"
+      compHeadline <- paste0(nComp, " team", if (nComp != 1) "s", " can outbid you")
+      if (nComp > 0) {
+        competitors <- competitors %>% arrange(-MaxBid)
+        compLines <- lapply(seq_len(nComp), function(j) {
+          tags$div(style = "font-size:14px; padding:2px 0;",
+            paste0(competitors$Team[j], " ($", competitors$MaxBid[j], " max, ", competitors$Reason[j], ")"))
+        })
+      } else {
+        compLines <- list(tags$div(style = "font-size:14px; color:#2ecc71;", "No one can outbid you!"))
+      }
+      competitionUI <- tags$div(
+        tags$div(style = "font-size:13px; color:#888;", paste0("Your max bid: $", myMaxBid)),
+        tags$div(style = paste0("margin-top:6px; padding:8px; border-radius:4px; background:", compColor, "15;"),
+          tags$strong(style = paste0("color:", compColor, "; font-size:15px;"), compHeadline),
+          tags$div(style = "margin-top:6px;", compLines)
+        )
+      )
+    } else {
+      competitionUI <- tags$div(style = "color:#888; font-size:14px;", "Select your team in Settings to see competition.")
+    }
+
+    # --- Positional Context Card ---
+    need <- getPositionalNeed(playerPos, pc, ps, currentSummary_r(), rhitters_r(), rpitchers_r())
+    if (nrow(need) > 0) {
+      avgDPP <- round(mean(need$DPP, na.rm = TRUE))
+      needTop <- head(need, 5)
+      needLines <- lapply(seq_len(nrow(needTop)), function(j) {
+        mktColor <- switch(needTop$Market[j],
+          "Strong Buy" = "#155724", "Lean Buy" = "#155724",
+          "Neutral" = "#856404", "Wait" = "#721c24", "Full" = "#666", "#666")
+        tags$div(style = "font-size:14px; padding:2px 0;",
+          paste0(needTop$Team[j], " — "),
+          tags$span(style = paste0("color:", mktColor, ";"), needTop$Market[j]),
+          paste0(" ($", needTop$MaxBid[j], " max)"))
+      })
+      posContextUI <- tags$div(
+        tags$strong(style = "font-size:16px;", paste0(nrow(need), " teams need ", playerPos)),
+        tags$div(style = "font-size:13px; color:#888;", paste0("Avg $/Player: $", avgDPP)),
+        tags$div(style = "margin-top:6px;", needLines)
+      )
+    } else {
+      posContextUI <- tags$div(style = "color:#2ecc71; font-size:15px;",
+                               paste0("No teams need ", playerPos, " as a starter"))
+    }
+
+    # --- Pressure Summary Card ---
+    pressData <- pressure_r()
+    pressRow <- pressData %>% filter(Pos == playerPos)
+    atPos <- pc %>% filter(Pos == playerPos)
+    nProtected <- nrow(atPos)
+    avgSal <- if (nProtected > 0) round(mean(atPos$Salary, na.rm = TRUE)) else 0
+    avgVal <- if (nProtected > 0) round(mean(atPos$pDFL, na.rm = TRUE)) else 0
+    pressLevel <- if (nrow(pressRow) > 0) pressRow$Pressure[1] else "Unknown"
+    pressColor <- switch(pressLevel,
+      "High" = "#e74c3c", "Medium" = "#f39c12", "Low" = "#2ecc71", "No" = "#95a5a6", "#666")
+    pressureUI <- tags$div(
+      tags$strong(style = "font-size:16px;", paste0(playerPos, " Market")),
+      tags$div(style = "margin-top:6px; display:flex; gap:24px; flex-wrap:wrap; font-size:14px;",
+        tags$span(tags$strong("Pressure: "),
+                  tags$span(style = paste0("color:", pressColor, "; font-weight:bold;"), pressLevel)),
+        tags$span(tags$strong("Protected: "), nProtected),
+        tags$span(tags$strong("Avg Salary: "), paste0("$", avgSal)),
+        tags$span(tags$strong("Avg Value: "), paste0("$", avgVal))
+      )
+    )
+
+    # --- Comparables Card ---
+    if (isHitter) {
+      comps <- AllH_avail() %>% filter(Pos == playerPos, playerid != pid,
+                                        pDFL >= player$pDFL - 10, pDFL <= player$pDFL + 10) %>%
+        arrange(-pDFL) %>% head(5)
+    } else {
+      comps <- AllP_avail() %>% filter(Pos == playerPos, playerid != pid,
+                                        pDFL >= player$pDFL - 10, pDFL <= player$pDFL + 10) %>%
+        arrange(-pDFL) %>% head(5)
+    }
+    if (nrow(comps) > 0) {
+      compRows <- lapply(seq_len(nrow(comps)), function(j) {
+        tags$div(style = "font-size:14px; padding:2px 0;",
+          tags$span(style = "display:inline-block; width:200px;", comps$Player[j]),
+          tags$span(style = "display:inline-block; width:70px;", paste0("$", round(comps$pDFL[j]))),
+          tags$span(paste0("ADP ", round(comps$pADP[j]))))
+      })
+      comparablesUI <- tags$div(
+        tags$strong(style = "font-size:16px;", "Comparable Players"),
+        tags$div(style = "margin-top:6px;", compRows)
+      )
+    } else {
+      comparablesUI <- tags$div(style = "color:#888; font-size:14px;", "No comparable players at this position.")
+    }
+
+    # --- Injury line ---
+    injData <- injOrig_full %>% filter(playerid == pid)
+    injUI <- if (nrow(injData) > 0) {
+      tags$div(style = "padding:10px 16px; background:#fff3cd; border:1px solid #ddd; border-top:none; font-size:14px;",
+        tags$div(tags$strong("Injury: "), injData$Injury[1]),
+        tags$div(style = "margin-top:4px;",
+          tags$strong("Status: "), injData$status[1],
+          tags$span(style = "margin-left:16px;", tags$strong("Update: "), injData$`Latest Update`[1]))
+      )
+    } else {
+      NULL
+    }
+
+    # --- Assemble (stacked vertically) ---
+    sectionStyle <- "border:1px solid #ddd; border-top:none; padding:12px 16px;"
+    tags$div(style = "border-radius:6px; overflow:hidden;",
+      headerUI,
+      statsUI,
+      tags$div(style = sectionStyle, competitionUI),
+      tags$div(style = sectionStyle, posContextUI),
+      tags$div(style = sectionStyle, pressureUI),
+      tags$div(style = sectionStyle, comparablesUI),
+      injUI
+    )
   })
 
   # --- Build roster card for a team (slot assignment) ---
@@ -783,24 +822,13 @@ shinyServer(function(input, output, session) {
     group_by(pc, Position) %>% summarize(Count = n(), .groups = 'drop')
   })
 
-  # --- posNeed: position intelligence table ---
-  posNeed_r <- reactive({
-    req(input$e4)
-    pos <- input$e4
-    pc <- protClean_r()
-    ps <- pstandings_r()
-    cs <- currentSummary_r()
-    rh <- rhitters_r()
-    rp <- rpitchers_r()
-
-    # Position thresholds (from global constant)
+  # --- Shared helper: compute which teams need a position ---
+  getPositionalNeed <- function(pos, pc, ps, cs, rh, rp) {
     threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
 
-    # Count protected per team at this position (using Pos column only)
     posCounts <- pc %>% filter(Pos == pos) %>%
       group_by(Team) %>% summarize(have = n(), .groups = 'drop')
 
-    # All teams, join counts, compute Still Need
     allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
     need <- left_join(allteams, posCounts, by = 'Team') %>%
       mutate(have = replace_na(have, 0),
@@ -808,12 +836,12 @@ shinyServer(function(input, output, session) {
       filter(StillNeed > 0)
 
     if (nrow(need) == 0) return(data.frame(
-      Team = character(), `Still Need` = integer(), Market = character(),
-      `Cash Left` = numeric(), `$/Player` = numeric(), `Weakest Stats` = character(),
-      stringsAsFactors = FALSE, check.names = FALSE
+      Team = character(), StillNeed = integer(), Market = character(),
+      CashLeft = numeric(), MaxBid = numeric(), DPP = numeric(),
+      WeakestStats = character(),
+      stringsAsFactors = FALSE
     ))
 
-    # Market label from pstandings DPP ratio
     need <- left_join(need, ps %>% select(Team, Needed, DPP), by = 'Team')
 
     need$Market <- sapply(seq_len(nrow(need)), function(i) {
@@ -831,7 +859,6 @@ shinyServer(function(input, output, session) {
       )
     })
 
-    # Position-adjusted cash left from currentSummary
     isHitterPos <- pos %in% c('C','1B','2B','SS','3B','OF')
     csGroup <- if (isHitterPos) 'hitting' else 'pitching'
     csSub <- cs %>% filter(group == csGroup) %>% select(Team, salleft, needed)
@@ -842,7 +869,6 @@ shinyServer(function(input, output, session) {
     groupNeeded <- replace_na(need$needed, fullNeeded)
     need$MaxBid <- pmax(1, need$CashLeft - pmax(0, groupNeeded - 1))
 
-    # Weakest stats per team
     hitterStats <- c('HR','RBI','R','SB')
     pitcherStats <- c('W','K','SV','HLD')
     relevantStats <- if (isHitterPos) hitterStats else pitcherStats
@@ -859,15 +885,28 @@ shinyServer(function(input, output, session) {
       }), collapse = ', ')
     })
 
-    # Sort by market label priority, then DPP descending
     statusOrd <- c("Strong Buy" = 1, "Lean Buy" = 2, "Neutral" = 3, "Wait" = 4, "Full" = 5)
-    need <- need %>%
-      mutate(ord = statusOrd[Market], Team = teamLink(Team)) %>%
+    need %>%
+      mutate(ord = statusOrd[Market]) %>%
       arrange(ord, -DPP) %>%
-      select(Team, StillNeed, Market, CashLeft, MaxBid, DPP, WeakestStats) %>%
+      select(Team, StillNeed, Market, CashLeft, MaxBid, DPP, WeakestStats)
+  }
+
+  # --- posNeed: position intelligence table ---
+  posNeed_r <- reactive({
+    req(input$e4)
+    need <- getPositionalNeed(input$e4, protClean_r(), pstandings_r(),
+                              currentSummary_r(), rhitters_r(), rpitchers_r())
+    if (nrow(need) == 0) return(data.frame(
+      Team = character(), `Still Need` = integer(), Market = character(),
+      `Cash Left` = numeric(), `Max Bid` = numeric(), `$/Player` = numeric(),
+      `Weakest Stats` = character(),
+      stringsAsFactors = FALSE, check.names = FALSE
+    ))
+    need %>%
+      mutate(Team = teamLink(Team)) %>%
       dplyr::rename(`Still Need` = StillNeed, `$/Player` = DPP, `Cash Left` = CashLeft,
                      `Max Bid` = MaxBid, `Weakest Stats` = WeakestStats)
-    need
   })
 
   # --- pressure: positional scarcity indicator ---
@@ -1196,13 +1235,13 @@ shinyServer(function(input, output, session) {
 
   # --- Spending Power ---
   output$spendingPower <- renderUI({
-    req(input$myTeam)
+    req(myTeam())
     ps <- pstandings_r()
-    me <- ps %>% filter(Team == input$myTeam)
+    me <- ps %>% filter(Team == myTeam())
     if (nrow(me) == 0) return(tags$span("Team not found", style = "color:gray;"))
 
     myDPP <- me$DPP
-    others <- ps %>% filter(Team != input$myTeam, Needed > 0)
+    others <- ps %>% filter(Team != myTeam(), Needed > 0)
     if (nrow(others) == 0) return(tags$span("No other teams with needs", style = "color:gray;"))
 
     leagueAvgDPP <- sum(others$CashLeft) / sum(others$Needed)
@@ -1852,7 +1891,7 @@ shinyServer(function(input, output, session) {
       size = "m",
       easyClose = TRUE,
       selectInput('myTeam', 'My Team', choices = teams,
-                  selected = isolate(input$myTeam) %||% 'Liquor Crickets'),
+                  selected = isolate(myTeam())),
       tags$hr(),
       radioButtons('projSource', 'Projection System',
                    choices = c('ATC' = 'atc',
@@ -1961,9 +2000,6 @@ shinyServer(function(input, output, session) {
   # Team dropdowns
   updateSelectInput(session, 'draftTeam', choices = teams)
 
-  # Auto-open Settings on first load so modal inputs (myTeam, projSource, valMode) get initialized
-  session$onFlushed(function() { click("settingsBtn") }, once = TRUE)
-
   # ============================
   # New outputs: Recent Picks, Draft Standings
   # ============================
@@ -2008,10 +2044,10 @@ shinyServer(function(input, output, session) {
       data$DFL >= 1  ~ '#f5f5f5',
       TRUE ~ ''
     )
-    data <- data %>% select(-playerid, -isTarget)
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
     visibleCols <- setdiff(names(data), 'rowBg')
 
-    datatable(data, selection = 'single', rownames = FALSE,
+    datatable(data, rownames = FALSE,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE,
                              columnDefs = list(list(visible = FALSE, targets = ncol(data) - 1))),
@@ -2038,10 +2074,10 @@ shinyServer(function(input, output, session) {
       data$DFL >= 1  ~ '#f5f5f5',
       TRUE ~ ''
     )
-    data <- data %>% select(-playerid, -isTarget)
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
     visibleCols <- setdiff(names(data), 'rowBg')
 
-    datatable(data, selection = 'single', rownames = FALSE,
+    datatable(data, rownames = FALSE,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE,
                              columnDefs = list(list(visible = FALSE, targets = ncol(data) - 1))),
@@ -2116,58 +2152,46 @@ shinyServer(function(input, output, session) {
   output$rrcResults <- DT::renderDataTable({
     data <- rrcResults %>% mutate(Player = fgLink(Player, playerid))
     data <- markTargets(data, rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('pADP','pW','pSV','pHLD','pSO'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('pSGP','pERA','pK/9','pBB/9'), 3)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
   })
 
   output$injOrig <- DT::renderDataTable({
     data <- injOrig_r()
     data$playerid <- as.character(data$playerid)
     data <- markTargets(data, rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             info = FALSE), filter = 'top') %>%
+                             info = FALSE), filter = 'top', escape = FALSE) %>%
       formatCurrency('pDFL')
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
   })
 
   output$topHitters <- DT::renderDataTable({
     data <- markTargets(topHitters_r(), rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
-                             searching = FALSE, info = FALSE),
+                             info = FALSE),
               escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('Skew','AVG'), 3)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
   })
 
   output$prospectH <- DT::renderDataTable({
     data <- markTargets(prospectH_r(), rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
   })
 
   # ============================
@@ -2248,8 +2272,7 @@ shinyServer(function(input, output, session) {
   output$leaderH <- DT::renderDataTable({
     h <- leaderH_avail() %>% mutate(Player = fgLink(Player, playerid))
     h <- markTargets(h, rv$targets)
-    tRows <- which(h$isTarget == 1)
-    h <- h %>% select(-playerid, -isTarget)
+    h <- h %>% select(Target, everything(), -playerid, -isTarget)
     dt <- datatable(h,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
               filter = 'top', escape = FALSE) %>%
@@ -2257,15 +2280,13 @@ shinyServer(function(input, output, session) {
       formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
       formatRound(c('wRC+','WAR'), 1)
     if ('hotscore' %in% names(h)) dt <- dt %>% formatRound('hotscore', 2)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
     dt
   })
 
   output$leaderP <- DT::renderDataTable({
     p <- leaderP_avail() %>% mutate(Player = fgLink(Player, playerid))
     p <- markTargets(p, rv$targets)
-    tRows <- which(p$isTarget == 1)
-    p <- p %>% select(-playerid, -isTarget)
+    p <- p %>% select(Target, everything(), -playerid, -isTarget)
     dt <- datatable(p,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
               filter = 'top', escape = FALSE) %>%
@@ -2273,21 +2294,17 @@ shinyServer(function(input, output, session) {
       formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
       formatRound('WAR', 1)
     if ('hotscore' %in% names(p)) dt <- dt %>% formatRound('hotscore', 2)
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
     dt
   })
 
   output$prospectP <- DT::renderDataTable({
     data <- markTargets(prospectP_r(), rv$targets)
-    tRows <- which(data$isTarget == 1)
-    data <- data %>% select(-playerid, -isTarget)
-    dt <- datatable(data, selection = 'single',
+    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE),
               filter = 'top', escape = FALSE) %>%
       formatRound(c('Age','ADP'), 0) %>% formatCurrency('DFL')
-    if (length(tRows) > 0) dt <- dt %>% formatStyle(1, target = 'row', backgroundColor = styleRow(tRows, '#fff9c4'))
-    dt
   })
 
   # ============================
@@ -2919,10 +2936,10 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Message = "No hitters found. Paste an article URL and click Analyze."),
                        options = list(dom = 't'), selection = 'none'))
     }
-    datatable(df, selection = 'single', escape = FALSE,
-              options = list(pageLength = 20, columnDefs = list(
-                list(visible = FALSE, targets = which(names(df) == "playerid") - 1)
-              ))) %>%
+    df <- markTargets(df, rv$targets)
+    df <- df %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(df, escape = FALSE,
+              options = list(pageLength = 20)) %>%
       formatCurrency('DFL') %>%
       formatRound(c('SGP', 'AVG'), 3) %>%
       formatRound(c('Age', 'HR', 'RBI', 'R', 'SB'), 0)
@@ -2934,10 +2951,10 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Message = "No pitchers found. Paste an article URL and click Analyze."),
                        options = list(dom = 't'), selection = 'none'))
     }
-    datatable(df, selection = 'single', escape = FALSE,
-              options = list(pageLength = 20, columnDefs = list(
-                list(visible = FALSE, targets = which(names(df) == "playerid") - 1)
-              ))) %>%
+    df <- markTargets(df, rv$targets)
+    df <- df %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(df, escape = FALSE,
+              options = list(pageLength = 20)) %>%
       formatCurrency('DFL') %>%
       formatRound(c('SGP', 'ERA', 'K/9'), 3) %>%
       formatRound(c('Age', 'W', 'SO', 'SV', 'HLD'), 0)
@@ -2963,38 +2980,6 @@ shinyServer(function(input, output, session) {
     tags$div(style = "margin-top:10px; font-size:12px; color:#888;",
       tags$em(paste0("Could not match: ", paste(um, collapse = ", ")))
     )
-  })
-
-  # --- Target toggle (Research tab — one button, checks active subtab) ---
-  observeEvent(input$targetResBtn, {
-    tab <- input$researchTab
-    if (!is.null(tab) && tab == "Pitchers") {
-      sel <- input$researchP_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- rv$researchP
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    } else {
-      sel <- input$researchH_rows_selected
-      if (is.null(sel) || length(sel) == 0) {
-        showNotification("Select a player row first", type = "warning")
-        return()
-      }
-      data <- rv$researchH
-      pid <- as.character(data$playerid[sel])
-      pName <- data$Player[sel]
-    }
-    if (pid %in% rv$targets) {
-      rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    } else {
-      rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", pName), type = "message")
-    }
-    write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
   })
 
 })
