@@ -18,9 +18,13 @@ nteams <- 13
 nhitters <- 13
 npitchers <- 12
 
-# Save original pools for blend toggle
-AllH_orig <- AllH_full
-AllP_orig <- AllP_full
+# Save pools per projection system
+AllH_atc <- AllH_full
+AllP_atc <- AllP_full
+AllH_steamer <- if (!is.null(steamerPool)) steamerPool$hitters else AllH_full
+AllP_steamer <- if (!is.null(steamerPool)) steamerPool$pitchers else AllP_full
+AllH_batx <- if (!is.null(batxPool)) batxPool$hitters else AllH_full
+AllP_batx <- if (!is.null(batxPool)) batxPool$pitchers else AllP_full
 
 # --- Roster file initialization ---
 rosterFile <- str_c("../", cyear, "DraftRosters.csv")
@@ -114,12 +118,25 @@ shinyServer(function(input, output, session) {
     researchTitle = ""
   )
 
+  # --- Projection source toggle ---
+  projPools_r <- reactive({
+    src <- input$projSource
+    if (is.null(src) || src == "atc") {
+      list(hitters = AllH_atc, pitchers = AllP_atc)
+    } else if (src == "steamer") {
+      list(hitters = AllH_steamer, pitchers = AllP_steamer)
+    } else {
+      list(hitters = AllH_batx, pitchers = AllP_batx)
+    }
+  })
+
   # --- Blended player pools (actual stats + projections) ---
   blendedPools_r <- reactive({
     mode <- input$valMode
+    pools <- projPools_r()
     if (is.null(mode) || mode == "proj" ||
         is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
-      return(list(hitters = AllH_orig, pitchers = AllP_orig))
+      return(pools)
     }
 
     lbH <- leaderboards$hitters
@@ -127,9 +144,9 @@ shinyServer(function(input, output, session) {
     lbH$playerid <- as.character(lbH$playerid)
     lbP$playerid <- as.character(lbP$playerid)
 
-    # Start with copies of original pools
-    newH <- AllH_orig
-    newP <- AllP_orig
+    # Start with copies of selected projection pools
+    newH <- pools$hitters
+    newP <- pools$pitchers
 
     if (mode == "leaders") {
       # Leaderboard Only: replace projected stats with actual stats (0 for players not on leaderboard)
@@ -231,19 +248,23 @@ shinyServer(function(input, output, session) {
   # Blend mode status indicator
   output$blendStatus <- renderUI({
     mode <- input$valMode
-    if (is.null(mode) || mode == "proj") {
-      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#d4edda;",
-               tags$small(style = "color:#155724;", "Using projections only"))
-    } else if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
-      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#fff3cd;",
-               tags$small(style = "color:#856404;", "Fetch leaderboards first to enable blend"))
+    src <- input$projSource
+    srcLabel <- switch(src %||% "atc", atc = "ATC", steamer = "Steamer", batx = "THE BAT X", "ATC")
+    modeLabel <- if (is.null(mode) || mode == "proj") {
+      "Projections"
     } else if (mode == "blend") {
-      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#cce5ff;",
-               tags$small(style = "color:#004085;", "Using blended (actual + projected) stats"))
+      "Blended"
     } else {
-      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#e2d5f1;",
-               tags$small(style = "color:#4a235a;", "Using leaderboard stats only"))
+      "Leaderboard Only"
     }
+    needsLB <- !is.null(mode) && mode != "proj" &&
+      (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers))
+    tagList(
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#f0f0f0;",
+               tags$small(tags$strong(srcLabel), " | ", modeLabel)),
+      if (needsLB) tags$div(style = "text-align:center; padding:4px; margin-top:4px; border-radius:4px; background:#fff3cd;",
+               tags$small(style = "color:#856404;", "Fetch leaderboards first"))
+    )
   })
 
   # --- Helper: split roster into H/P ---
@@ -481,9 +502,10 @@ shinyServer(function(input, output, session) {
     roster <- rv$roster
     rosterLookup <- roster %>% select(playerid, Owner = Team, Salary) %>% distinct()
 
+    pools <- projPools_r()
     allPlayers <- bind_rows(
-      AllH_orig %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Hitter"),
-      AllP_orig %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Pitcher")
+      pools$hitters %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Hitter"),
+      pools$pitchers %>% select(playerid, Player, Pos, MLB, Age, pDFL, pADP) %>% mutate(Type = "Pitcher")
     ) %>% distinct(playerid, .keep_all = TRUE)
 
     allPlayers <- left_join(allPlayers, rosterLookup, by = "playerid")
@@ -494,7 +516,8 @@ shinyServer(function(input, output, session) {
 
   output$searchTable <- DT::renderDataTable({
     data <- searchData_r() %>%
-      mutate(Player = fgLink(Player, playerid))
+      mutate(Player = fgLink(Player, playerid),
+             Owner = teamLink(Owner))
     data <- markTargets(data, rv$targets)
     tRows <- which(data$isTarget == 1)
     data <- data %>% select(-playerid, -isTarget)
@@ -836,7 +859,7 @@ shinyServer(function(input, output, session) {
     # Sort by market label priority, then DPP descending
     statusOrd <- c("Strong Buy" = 1, "Lean Buy" = 2, "Neutral" = 3, "Wait" = 4, "Full" = 5)
     need <- need %>%
-      mutate(ord = statusOrd[Market]) %>%
+      mutate(ord = statusOrd[Market], Team = teamLink(Team)) %>%
       arrange(ord, -DPP) %>%
       select(Team, StillNeed, Market, CashLeft, DPP, WeakestStats) %>%
       dplyr::rename(`Still Need` = StillNeed, `$/Player` = DPP, `Cash Left` = CashLeft,
@@ -910,6 +933,21 @@ shinyServer(function(input, output, session) {
   })
 
   # --- FanGraphs link helper ---
+  # Link team name to Rosters tab
+  teamLink <- function(team) {
+    ifelse(is.na(team) | team == "" | team == "Free Agent",
+           team,
+           paste0("<a href='#' onclick='Shiny.setInputValue(\"goToRoster\", \"",
+                  htmltools::htmlEscape(team, attribute = TRUE),
+                  "\", {priority: \"event\"}); return false;' style='cursor:pointer;'>",
+                  htmltools::htmlEscape(team), "</a>"))
+  }
+
+  observeEvent(input$goToRoster, {
+    updateNavbarPage(session, "mainNav", selected = "Rosters")
+    updateSelectizeInput(session, "rosterTeam", selected = input$goToRoster)
+  })
+
   fgLink <- function(name, pid) {
     ifelse(is.na(pid) | name == "",
            name,
@@ -1569,7 +1607,7 @@ shinyServer(function(input, output, session) {
       }
 
       data.frame(
-        Team = tm, Status = status,
+        Team = teamLink(tm), Status = status,
         CashLeft = tmRow$CashLeft, Needed = tmRow$Needed, DPP = tmRow$DPP,
         TargetPos = bestPos,
         Nominee = if (bestPlayer != "") fgLink(bestPlayer, bestPid) else "",
@@ -1804,6 +1842,48 @@ shinyServer(function(input, output, session) {
   # ============================
   # Reset Draft handler
   # ============================
+  # --- Settings modal ---
+  observeEvent(input$settingsBtn, {
+    showModal(modalDialog(
+      title = "Settings",
+      size = "m",
+      easyClose = TRUE,
+      selectInput('myTeam', 'My Team', choices = teams,
+                  selected = isolate(input$myTeam) %||% 'Liquor Crickets'),
+      tags$hr(),
+      radioButtons('projSource', 'Projection System',
+                   choices = c('ATC' = 'atc',
+                               'Steamer' = 'steamer',
+                               'THE BAT X' = 'batx'),
+                   selected = isolate(input$projSource) %||% 'atc',
+                   inline = TRUE),
+      tags$hr(),
+      radioButtons('valMode', 'Valuation Mode',
+                   choices = c('Projections Only' = 'proj',
+                               'Blended' = 'blend',
+                               'Leaderboard Only' = 'leaders'),
+                   selected = isolate(input$valMode) %||% 'proj'),
+      uiOutput("blendStatusModal"),
+      tags$hr(),
+      actionButton('resetDraftBtn', 'Reset Draft',
+                   class = 'btn-danger', style = 'width:100%;'),
+      footer = modalButton("Close")
+    ))
+  })
+
+  # Blend status for settings modal
+  output$blendStatusModal <- renderUI({
+    mode <- input$valMode
+    if (is.null(mode) || mode == "proj") {
+      NULL
+    } else if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
+      tags$div(style = "text-align:center; padding:6px; margin-top:10px; border-radius:4px; background:#fff3cd;",
+               tags$small(style = "color:#856404;", "Fetch leaderboards first to enable blend"))
+    } else {
+      NULL
+    }
+  })
+
   observeEvent(input$resetDraftBtn, {
     showModal(modalDialog(
       title = "Reset Draft",
@@ -1877,7 +1957,9 @@ shinyServer(function(input, output, session) {
 
   # Team dropdowns
   updateSelectInput(session, 'draftTeam', choices = teams)
-  updateSelectInput(session, 'myTeam', choices = teams, selected = 'Liquor Crickets')
+
+  # Auto-open Settings on first load so modal inputs (myTeam, projSource, valMode) get initialized
+  session$onFlushed(function() { click("settingsBtn") }, once = TRUE)
 
   # ============================
   # New outputs: Recent Picks, Draft Standings
@@ -1888,15 +1970,17 @@ shinyServer(function(input, output, session) {
       df <- data.frame(Player = character(), Team = character(),
                        Pos = character(), Salary = numeric())
     } else {
-      df <- bind_rows(rev(log)) %>% select(Player, Team, Pos, Salary, MLB)
+      df <- bind_rows(rev(log)) %>%
+        mutate(Team = teamLink(Team)) %>%
+        select(Player, Team, Pos, Salary, MLB)
     }
-    datatable(df, options = list(pageLength = 15, autoWidth = FALSE,
+    datatable(df, escape = FALSE, options = list(pageLength = 15, autoWidth = FALSE,
                                  searching = FALSE, info = FALSE))
   })
 
   output$draftStandings <- DT::renderDataTable({
-    ps <- pstandings_r()
-    datatable(ps, options = list(pageLength = 20, autoWidth = FALSE,
+    ps <- pstandings_r() %>% mutate(Team = teamLink(Team))
+    datatable(ps, escape = FALSE, options = list(pageLength = 20, autoWidth = FALSE,
                                  paging = FALSE, searching = FALSE, info = FALSE)) %>%
       formatCurrency(c('TotalValue','Earned','VPPlayer','DPP','FullValue')) %>%
       formatRound('CashLeft', 0) %>%

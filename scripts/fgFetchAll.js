@@ -56,6 +56,16 @@ const ENDPOINTS = [
     file: `steamerP${cyear}.json`,
   },
   {
+    name: 'THE BAT X Hitters (ROS)',
+    url: `https://www.fangraphs.com/api/projections?type=rthebatx&stats=bat&pos=all&team=0&lg=all&download=1`,
+    file: `batxH${cyear}.json`,
+  },
+  {
+    name: 'THE BAT X Pitchers (ROS)',
+    url: `https://www.fangraphs.com/api/projections?type=rthebatx&stats=pit&pos=all&team=0&lg=all&download=1`,
+    file: `batxP${cyear}.json`,
+  },
+  {
     name: 'Injuries',
     url: `https://www.fangraphs.com/api/roster-resource/injury-report/data?season=${cyear}`,
     file: 'latestInjuries.json',

@@ -3,11 +3,12 @@ library("DT")
 library("shinyjs")
 
 shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
+                   id = "mainNav",
                    theme = bs_theme(bootswatch = "flatly"),
     useShinyjs(),
                    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
-                     actionButton('resetDraftBtn', 'Reset Draft',
-                                  class = 'btn-danger btn-sm')
+                     actionButton('settingsBtn', 'Settings',
+                                  class = 'btn-default btn-sm')
                    ),
                    tabPanel("Draft",
                             fluidRow(
@@ -31,7 +32,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                                     style = 'width:100%;')
                                      ),
                                      h4("Draft Market", style = "margin-top:15px;"),
-                                     selectInput('myTeam', 'My Team', choices = NULL),
                                      uiOutput("spendingPower"),
                                      selectInput('marketPos', 'Filter by Position',
                                                  choices = c('All', 'C','1B','2B','SS','3B','OF','SP','MR','CL'),
@@ -198,12 +198,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                           value = Sys.Date(), format = "yyyy-mm-dd"),
                                 actionButton('fetchLeaders', 'Fetch Leaderboards',
                                              class = 'btn-primary', style = 'width:100%;'),
-                                tags$hr(),
-                                radioButtons('valMode', 'Valuation Mode',
-                                             choices = c('Projections Only' = 'proj',
-                                                         'Blended' = 'blend',
-                                                         'Leaderboard Only' = 'leaders'),
-                                             selected = 'proj'),
                                 uiOutput("blendStatus"),
                                 tags$hr(),
                                 actionButton('targetLBBtn', 'Toggle Target',

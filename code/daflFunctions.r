@@ -896,12 +896,12 @@ master <- read.csv("../mymaster.csv",stringsAsFactors=FALSE, encoding="UTF-8")
 
 calcGoals <- function(p,h,targets,t) {
   lcht <- h %>% filter(Team == t) %>%
-    summarize(HR = sum(pHR),RBI=sum(pRBI),R=sum(pR),SB=sum(pSB))
+    summarize(HR = sum(pHR, na.rm=TRUE),RBI=sum(pRBI, na.rm=TRUE),R=sum(pR, na.rm=TRUE),SB=sum(pSB, na.rm=TRUE))
   lcht <- melt(lcht) %>% dplyr::rename(statistic = variable, collected = value)
   hg <- inner_join(lcht,targets) %>% mutate(needed=goal-collected,pc = (collected/goal))
 
   lcpt <- p %>% filter(Team == t) %>%
-    summarize(W = sum(pW),HLD=sum(pHLD),K=sum(pSO),SV=sum(pSV))
+    summarize(W = sum(pW, na.rm=TRUE),HLD=sum(pHLD, na.rm=TRUE),K=sum(pSO, na.rm=TRUE),SV=sum(pSV, na.rm=TRUE))
   lcpt <- melt(lcpt) %>% dplyr::rename(statistic = variable, collected = value)
   pg <- inner_join(lcpt,targets) %>% mutate(needed=goal-collected,pc = (collected/goal))
 
@@ -1187,15 +1187,23 @@ addMLBstandings <- function(df) {
 # }
 
 
-# Fetch injuries from FanGraphs API (no browser needed)
+# Load injuries from FanGraphs JSON (fetched by scripts/fgFetchAll.js)
+# Falls back to direct API call if JSON file not found
 getInjuriesAPI <- function() {
-  cat("Fetching injuries from FanGraphs API...\n")
+  cat("Loading injuries from FanGraphs...\n")
 
   currentYear <- as.integer(format(Sys.Date(), "%Y"))
-  url <- paste0("https://www.fangraphs.com/api/roster-resource/injury-report/data?season=", currentYear)
 
-  inj <- fromJSON(url)
-  cat("Fetched", nrow(inj), "injury records for", currentYear, "\n")
+  jsonFile <- "../latestInjuries.json"
+  if (file.exists(jsonFile)) {
+    inj <- fromJSON(jsonFile)
+    cat("Loaded", nrow(inj), "injury records from", jsonFile, "\n")
+  } else {
+    cat("JSON file not found, trying API directly...\n")
+    url <- paste0("https://www.fangraphs.com/api/roster-resource/injury-report/data?season=", currentYear)
+    inj <- fromJSON(url)
+    cat("Fetched", nrow(inj), "injury records from API\n")
+  }
 
   # Filter out blank entries and activated players (keep only currently injured)
   inj <- inj %>%
@@ -1581,27 +1589,56 @@ getFGScouts <- function(fn) {
   rrc <- rrc %>% filter(!is.na(playerid))
 }
 
-# Fetch FanGraphs prospect board data from API
+# Load FanGraphs prospect board data (fetched by scripts/fgFetchAll.js)
+# Falls back to API if cached file not found
 # pos: "bat" for hitters, "pit" for pitchers
-# draft: e.g. "2026prospect", "2025updated". NULL = auto-detect latest.
-# Returns dataframe with same column names as manually downloaded CSV
 getFGProspects <- function(pos = "bat", draft = NULL) {
-  if (is.null(draft)) {
-    # Try candidates in priority order, use first that returns matching data
-    candidates <- c(paste0(cyear, "updated"), paste0(cyear, "prospect"),
-                    paste0(lastyear, "updated"), paste0(lastyear, "prospect"))
-    for (cand in candidates) {
-      yr <- as.integer(sub("(\\d{4}).*", "\\1", cand))
-      url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", cand, "&pos=", pos)
-      df <- tryCatch(jsonlite::fromJSON(url), error = function(e) NULL)
-      if (!is.null(df) && nrow(df) > 0 && df$Season[1] == yr) {
-        message("Using FanGraphs prospect list: ", cand)
-        break
-      }
+  # Try cached JSON file first
+  cachedFile <- str_c("../prospects_", pos, "_", cyear, ".json")
+  if (file.exists(cachedFile)) {
+    df <- tryCatch(jsonlite::fromJSON(cachedFile), error = function(e) NULL)
+    if (!is.null(df) && nrow(df) > 0) {
+      message("Loaded prospects (", pos, ") from ", cachedFile)
+    } else {
+      df <- NULL
     }
   } else {
-    url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", draft, "&pos=", pos)
-    df <- jsonlite::fromJSON(url)
+    df <- NULL
+  }
+
+  # Fall back to API calls if no cached file
+  if (is.null(df)) {
+    message("No cached prospect file, trying API...")
+    fgFetch <- function(url) {
+      resp <- tryCatch(httr::GET(url, httr::user_agent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      )), error = function(e) NULL)
+      if (is.null(resp) || httr::status_code(resp) != 200) return(NULL)
+      tryCatch(jsonlite::fromJSON(httr::content(resp, as = "text", encoding = "UTF-8")),
+               error = function(e) NULL)
+    }
+
+    if (is.null(draft)) {
+      candidates <- c(paste0(cyear, "updated"), paste0(cyear, "prospect"),
+                      paste0(lastyear, "updated"), paste0(lastyear, "prospect"))
+      for (cand in candidates) {
+        yr <- as.integer(sub("(\\d{4}).*", "\\1", cand))
+        url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", cand, "&pos=", pos)
+        df <- fgFetch(url)
+        if (!is.null(df) && nrow(df) > 0 && df$Season[1] == yr) {
+          message("Using FanGraphs prospect list: ", cand)
+          break
+        }
+      }
+    } else {
+      url <- paste0("https://www.fangraphs.com/api/prospects/board/data?draft=", draft, "&pos=", pos)
+      df <- fgFetch(url)
+    }
+  }
+
+  if (is.null(df) || nrow(df) == 0) {
+    warning("getFGProspects: all API calls failed or returned no data for pos=", pos)
+    return(NULL)
   }
 
   if (pos == "bat") {
@@ -1609,9 +1646,9 @@ getFGProspects <- function(pos = "bat", draft = NULL) {
       Name = playerName, Pos = Position, Org = Team,
       Top.100 = Ovr_Rank, Org.Rk = Org_Rank,
       Pitch.Sel = Pitch_Sel, Bat.Ctrl = Bat_Ctrl,
-      Con.Style = Contact_Style, Game.Pwr = Game,
-      Raw.Pwr = Raw, Versa = Versatility,
-      Hard.Hit. = `HardHit%`, FV = cFV
+      Plyr.Type = Player_Type, Game.Pwr = Game,
+      Raw.Pwr = Raw, Ath = Athleticism,
+      FV = cFV
     )
   } else {
     df <- df %>% rename(

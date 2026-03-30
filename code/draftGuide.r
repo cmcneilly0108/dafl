@@ -383,6 +383,49 @@ AllP_full <- left_join(AllP_full, allRanks_full, by = 'playerid') %>% mutate(ran
 protClean <- left_join(protClean, allRanks_full, by = 'playerid') %>%
   mutate(rankDiff = pADP - myRank) %>% select(-myRank)
 
+# Build alternate projection pools for Live Draft Tool toggle
+buildAltPool <- function(hFile, pFile) {
+  h <- read.fg(hFile)
+  p <- read.fg(pFile)
+  if (!"pSkew" %in% colnames(h)) h$pSkew <- 0
+  if (!"pSkew" %in% colnames(p)) p$pSkew <- 0
+  p$pSGP <- pitSGP(p)
+  h$pSGP <- hitSGP(h)
+  nlist <- preLPP(h, p)
+  th <- nlist[[1]]; tp <- nlist[[2]]
+  h <- left_join(h, th, by = 'playerid')
+  p <- left_join(p, tp, by = 'playerid')
+  h <- dplyr::rename(h, pDFL = zDFL); p <- dplyr::rename(p, pDFL = zDFL)
+  h$pDFL <- replace(h$pDFL, is.na(h$pDFL), 0)
+  p$pDFL <- replace(p$pDFL, is.na(p$pDFL), 0)
+  # Position buckets
+  p$Pos <- with(p, ifelse(pSV > pHLD, 'CL', ifelse(pHLD > pW, 'MR', 'SP')))
+  h$Pos <- with(h, ifelse(Pos %in% c('LF','CF','RF'), 'OF', Pos))
+  # Position eligibility + orank
+  h <- left_join(h, pedf, by = 'playerid')
+  h <- h %>% group_by(Pos) %>% mutate(orank = rank(-pDFL)) %>% ungroup()
+  p <- p %>% group_by(Pos) %>% mutate(orank = rank(-pDFL)) %>% ungroup()
+  # Injury info
+  h <- left_join(h, inj, by = 'Player')
+  p <- left_join(p, inj, by = 'Player')
+  # Rankings
+  ar <- bind_rows(h %>% select(playerid, pDFL), p %>% select(playerid, pDFL)) %>%
+    group_by(playerid) %>% summarise(pDFL = max(pDFL), .groups = 'drop') %>%
+    mutate(myRank = rank(-pDFL)) %>% select(playerid, myRank)
+  h <- left_join(h, ar, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
+  p <- left_join(p, ar, by = 'playerid') %>% mutate(rankDiff = pADP - myRank)
+  list(hitters = h, pitchers = p)
+}
+
+steamerPool <- tryCatch(
+  buildAltPool(str_c('../steamerH', cyear, '.json'), str_c('../steamerP', cyear, '.json')),
+  error = function(e) { warning("Steamer pool failed: ", e$message); NULL }
+)
+batxPool <- tryCatch(
+  buildAltPool(str_c('../batxH', cyear, '.json'), str_c('../batxP', cyear, '.json')),
+  error = function(e) { warning("BAT X pool failed: ", e$message); NULL }
+)
+
 # Remove protected players
 AllH <- anti_join(AllH,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
 AllP <- anti_join(AllP,protected,by=c('playerid'),copy=FALSE) %>% arrange(-pDFL)
