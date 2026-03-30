@@ -834,10 +834,13 @@ shinyServer(function(input, output, session) {
     # Position-adjusted cash left from currentSummary
     isHitterPos <- pos %in% c('C','1B','2B','SS','3B','OF')
     csGroup <- if (isHitterPos) 'hitting' else 'pitching'
-    csSub <- cs %>% filter(group == csGroup) %>% select(Team, salleft)
+    csSub <- cs %>% filter(group == csGroup) %>% select(Team, salleft, needed)
     fullBudget <- if (isHitterPos) cap * (1 - hpratio) else cap * hpratio
+    fullNeeded <- if (isHitterPos) nhitters else npitchers
     need <- left_join(need, csSub, by = 'Team')
     need$CashLeft <- round(replace_na(need$salleft, fullBudget), 0)
+    groupNeeded <- replace_na(need$needed, fullNeeded)
+    need$MaxBid <- pmax(1, need$CashLeft - pmax(0, groupNeeded - 1))
 
     # Weakest stats per team
     hitterStats <- c('HR','RBI','R','SB')
@@ -846,12 +849,12 @@ shinyServer(function(input, output, session) {
 
     need$WeakestStats <- sapply(need$Team, function(tm) {
       goals <- calcGoals(rp, rh, targets, tm)
-      goals <- goals %>% filter(statistic %in% relevantStats, pc < 0.65) %>%
+      goals <- goals %>% filter(statistic %in% relevantStats, pc < 0.75) %>%
         arrange(pc) %>% head(3)
       if (nrow(goals) == 0) return('<span style="color:#2ecc71;">On track</span>')
       paste(sapply(seq_len(nrow(goals)), function(j) {
         pct <- round(goals$pc[j] * 100)
-        color <- if (goals$pc[j] < 0.50) '#e74c3c' else '#f39c12'
+        color <- if (goals$pc[j] < 0.50) '#e74c3c' else if (goals$pc[j] < 0.65) '#f39c12' else '#c5a000'
         paste0('<span style="color:', color, ';">', goals$statistic[j], ' ', pct, '%</span>')
       }), collapse = ', ')
     })
@@ -861,9 +864,9 @@ shinyServer(function(input, output, session) {
     need <- need %>%
       mutate(ord = statusOrd[Market], Team = teamLink(Team)) %>%
       arrange(ord, -DPP) %>%
-      select(Team, StillNeed, Market, CashLeft, DPP, WeakestStats) %>%
+      select(Team, StillNeed, Market, CashLeft, MaxBid, DPP, WeakestStats) %>%
       dplyr::rename(`Still Need` = StillNeed, `$/Player` = DPP, `Cash Left` = CashLeft,
-                     `Weakest Stats` = WeakestStats)
+                     `Max Bid` = MaxBid, `Weakest Stats` = WeakestStats)
     need
   })
 
@@ -2089,6 +2092,7 @@ shinyServer(function(input, output, session) {
                              paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE)) %>%
       formatRound('$/Player', 0) %>%
+      formatCurrency('Max Bid', digits = 0) %>%
       formatStyle('Market',
                   backgroundColor = styleEqual(
                     c('Strong Buy', 'Lean Buy', 'Neutral', 'Wait', 'Full'),
