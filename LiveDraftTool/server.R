@@ -118,6 +118,25 @@ shinyServer(function(input, output, session) {
     researchTitle = ""
   )
 
+  # --- Selected player (synced from Draft tab to Player Snapshot) ---
+  selectedPlayer <- reactiveVal(NULL)
+  searchProxy <- DT::dataTableProxy("searchTable")
+
+  observeEvent(input$playerSearch, {
+    pid <- input$playerSearch
+    if (!is.null(pid) && pid != "") selectedPlayer(pid)
+  })
+
+  observeEvent(selectedPlayer(), {
+    pid <- selectedPlayer()
+    if (is.null(pid)) return()
+    data <- searchData_r()
+    rowIdx <- which(data$playerid == pid)
+    if (length(rowIdx) > 0) {
+      selectRows(searchProxy, rowIdx[1])
+    }
+  })
+
   # --- My Team (initialized immediately, updated via Settings modal) ---
   myTeam <- reactiveVal('Liquor Crickets')
   observeEvent(input$myTeam, { myTeam(input$myTeam) })
@@ -365,6 +384,33 @@ shinyServer(function(input, output, session) {
     allPlayers$Owner <- replace_na(allPlayers$Owner, "Free Agent")
     allPlayers$Salary <- replace_na(allPlayers$Salary, NA_real_)
     allPlayers %>% arrange(-pDFL)
+  })
+
+  # --- Return to current auction link ---
+  output$auctionReturnLink <- renderUI({
+    pid <- selectedPlayer()
+    if (is.null(pid) || pid == "") return(NULL)
+    allPlayers <- bind_rows(
+      AllH_active() %>% select(playerid, Player),
+      AllP_active() %>% select(playerid, Player)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    pName <- allPlayers$Player[allPlayers$playerid == pid]
+    if (length(pName) == 0) return(NULL)
+    tags$div(style = "margin-bottom:8px;",
+      tags$a(href = "#", onclick = paste0('Shiny.setInputValue("returnToAuction", "', pid,
+             '", {priority: "event"}); return false;'),
+             style = "font-size:14px; font-weight:bold;",
+             paste0("Return to Current Auction: ", pName))
+    )
+  })
+
+  observeEvent(input$returnToAuction, {
+    pid <- input$returnToAuction
+    data <- searchData_r()
+    rowIdx <- which(data$playerid == pid)
+    if (length(rowIdx) > 0) {
+      selectRows(searchProxy, rowIdx[1])
+    }
   })
 
   output$searchTable <- DT::renderDataTable({

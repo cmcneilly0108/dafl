@@ -262,7 +262,9 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    tabPanel("Player Snapshot",
                             fluidRow(
                               column(7, DT::dataTableOutput("searchTable")),
-                              column(5, uiOutput("playerSnapshot"))
+                              column(5,
+                                     uiOutput("auctionReturnLink"),
+                                     uiOutput("playerSnapshot"))
                             )
                    )
 )
