@@ -6,11 +6,11 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    id = "mainNav",
                    theme = bs_theme(bootswatch = "flatly"),
     useShinyjs(),
-                   header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
+                   header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000; display:flex; align-items:center; gap:12px;",
+                     uiOutput("draftProgress", inline = TRUE),
                      uiOutput("myTeamBadge", inline = TRUE),
                      actionButton('settingsBtn', 'Settings',
-                                  class = 'btn-default btn-sm',
-                                  style = 'margin-left:12px;')
+                                  class = 'btn-default btn-sm')
                    ),
                    tabPanel("Draft",
                             fluidRow(
@@ -49,6 +49,14 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                               )
                             )
                    ),
+                   tabPanel("Player Snapshot",
+                            fluidRow(
+                              column(7, DT::dataTableOutput("searchTable")),
+                              column(5,
+                                     uiOutput("auctionReturnLink"),
+                                     uiOutput("playerSnapshot"))
+                            )
+                   ),
                    tabPanel("Nominations",
                             sidebarLayout(fluid = FALSE,
                               sidebarPanel(
@@ -56,6 +64,7 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 uiOutput("nomSpendingPower"),
                                 uiOutput("nomStrategyCard"),
                                 tags$hr(),
+                                uiOutput("nomAuctionReturnLink"),
                                 h4("Competition Check"),
                                 selectizeInput('compPlayer', 'Select Player',
                                                choices = NULL,
@@ -257,14 +266,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    tabPanel("My Targets",
                             verticalLayout(
                               DT::dataTableOutput("targetTable")
-                            )
-                   ),
-                   tabPanel("Player Snapshot",
-                            fluidRow(
-                              column(7, DT::dataTableOutput("searchTable")),
-                              column(5,
-                                     uiOutput("auctionReturnLink"),
-                                     uiOutput("playerSnapshot"))
                             )
                    )
 )

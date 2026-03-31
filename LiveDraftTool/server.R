@@ -146,6 +146,20 @@ shinyServer(function(input, output, session) {
               tags$strong(myTeam()))
   })
 
+  output$draftProgress <- renderUI({
+    roster <- rv$roster
+    totalSpots <- nteams * (nhitters + npitchers)
+    nProtected <- sum(is.na(roster$DraftOrder))
+    auctionSpots <- totalSpots - nProtected
+    picked <- sum(!is.na(roster$DraftOrder))
+    totalCash <- nteams * cap
+    spent <- sum(roster$Salary, na.rm = TRUE)
+    remaining <- totalCash - spent
+    tags$span(style = "font-size:12px; color:#bdc3c7;",
+      paste0("Pick ", picked, "/", auctionSpots,
+             " | $", formatC(remaining, format = "d", big.mark = ","), " remaining"))
+  })
+
   # --- Projection source toggle ---
   projPools_r <- reactive({
     src <- input$projSource
@@ -1509,6 +1523,39 @@ shinyServer(function(input, output, session) {
     pChoices <- setNames(ap$playerid, paste0(ap$Player, " (", ap$Pos, " $", round(ap$pDFL), ")"))
     allChoices <- c(hChoices, pChoices)
     updateSelectizeInput(session, 'compPlayer', choices = allChoices, server = TRUE)
+  })
+
+  # Sync Draft tab selection to Competition Check
+  observeEvent(selectedPlayer(), {
+    pid <- selectedPlayer()
+    if (!is.null(pid) && pid != "") {
+      updateSelectizeInput(session, 'compPlayer', selected = pid)
+    }
+  })
+
+  # Return to auction link for Nominations tab
+  output$nomAuctionReturnLink <- renderUI({
+    pid <- selectedPlayer()
+    if (is.null(pid) || pid == "") return(NULL)
+    allPlayers <- bind_rows(
+      AllH_active() %>% select(playerid, Player),
+      AllP_active() %>% select(playerid, Player)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    pName <- allPlayers$Player[allPlayers$playerid == pid]
+    if (length(pName) == 0) return(NULL)
+    tags$div(style = "margin-bottom:8px;",
+      tags$a(href = "#", onclick = paste0('Shiny.setInputValue("returnToAuctionNom", "', pid,
+             '", {priority: "event"}); return false;'),
+             style = "font-size:14px; font-weight:bold;",
+             paste0("Return to Current Auction: ", pName))
+    )
+  })
+
+  observeEvent(input$returnToAuctionNom, {
+    pid <- input$returnToAuctionNom
+    if (!is.null(pid) && pid != "") {
+      updateSelectizeInput(session, 'compPlayer', selected = pid)
+    }
   })
 
   output$competitionReport <- renderUI({
