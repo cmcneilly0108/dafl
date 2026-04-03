@@ -127,7 +127,8 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                 h4("Hitters"),
                                 DT::dataTableOutput("rosterH"),
                                 h4("Pitchers"),
-                                DT::dataTableOutput("rosterP")
+                                DT::dataTableOutput("rosterP"),
+                                uiOutput("benchTargets")
                               )
                             )
                    ),

@@ -1254,33 +1254,30 @@ getStuffAPI <- function() {
 }
 
 # Fetch hitter leaderboard from FanGraphs API (last 30 days by default)
-getHitterLeaders <- function(startDate, endDate) {
-  cat("Fetching hitter leaderboard from FanGraphs API...\n")
-
-  year <- as.integer(format(as.Date(endDate), "%Y"))
-
-  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data",
-                "?pos=all&stats=bat&lg=all",
-                "&season=", year, "&season1=", year,
-                "&ind=0&qual=0",
-                "&type=8&month=1000",
-                "&startdate=", startDate, "&enddate=", endDate,
-                "&pageitems=2000&rost=0")
-
+fetchLeaderboards <- function(startDate, endDate) {
+  cat("Fetching leaderboards via Playwright...\n")
   cat("Date range:", startDate, "to", endDate, "\n")
-  hitters <- tryCatch({
-    fromJSON(url)$data
-  }, error = function(e) {
-    cat("Error fetching hitter leaders:", e$message, "\n")
-    return(NULL)
-  })
+  cmd <- paste0("cd ../scripts && node fgFetchLeaders.js ", startDate, " ", endDate)
+  result <- system(cmd, intern = TRUE)
+  cat(paste(result, collapse = "\n"), "\n")
+}
 
+getHitterLeaders <- function(startDate, endDate) {
+  fetchLeaderboards(startDate, endDate)
+
+  jsonFile <- "../latestHitterLeaders.json"
+  if (!file.exists(jsonFile)) {
+    cat("No hitter leaderboard file found.\n")
+    return(NULL)
+  }
+
+  hitters <- tryCatch(read_json(jsonFile, simplifyVector = TRUE), error = function(e) NULL)
   if (is.null(hitters) || nrow(hitters) == 0) {
     cat("No hitter data returned.\n")
     return(NULL)
   }
 
-  cat("Fetched", nrow(hitters), "hitter records\n")
+  cat("Loaded", nrow(hitters), "hitter records\n")
 
   hitters <- hitters %>%
     select(Player = PlayerName, MLB = TeamNameAbb, Pos = position,
@@ -1288,38 +1285,23 @@ getHitterLeaders <- function(startDate, endDate) {
            AVG, OBP, SLG, OPS, wOBA, `wRC+`, WAR, playerid)
 
   write.csv(hitters, "../latestHitterLeaders.csv", row.names = FALSE)
-  cat("Wrote to ../latestHitterLeaders.csv\n")
   hitters
 }
 
-# Fetch pitcher leaderboard from FanGraphs API (last 30 days by default)
 getPitcherLeaders <- function(startDate, endDate) {
-  cat("Fetching pitcher leaderboard from FanGraphs API...\n")
-
-  year <- as.integer(format(as.Date(endDate), "%Y"))
-
-  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data",
-                "?pos=all&stats=pit&lg=all",
-                "&season=", year, "&season1=", year,
-                "&ind=0&qual=0",
-                "&type=8&month=1000",
-                "&startdate=", startDate, "&enddate=", endDate,
-                "&pageitems=2000&rost=0")
-
-  cat("Date range:", startDate, "to", endDate, "\n")
-  pitchers <- tryCatch({
-    fromJSON(url)$data
-  }, error = function(e) {
-    cat("Error fetching pitcher leaders:", e$message, "\n")
+  jsonFile <- "../latestPitcherLeaders.json"
+  if (!file.exists(jsonFile)) {
+    cat("No pitcher leaderboard file found.\n")
     return(NULL)
-  })
+  }
 
+  pitchers <- tryCatch(read_json(jsonFile, simplifyVector = TRUE), error = function(e) NULL)
   if (is.null(pitchers) || nrow(pitchers) == 0) {
     cat("No pitcher data returned.\n")
     return(NULL)
   }
 
-  cat("Fetched", nrow(pitchers), "pitcher records\n")
+  cat("Loaded", nrow(pitchers), "pitcher records\n")
 
   pitchers <- pitchers %>%
     select(Player = PlayerName, MLB = TeamNameAbb,
@@ -1327,7 +1309,6 @@ getPitcherLeaders <- function(startDate, endDate) {
            `K/9`, `BB/9`, HR, WHIP, BABIP, FIP, xFIP, WAR, playerid)
 
   write.csv(pitchers, "../latestPitcherLeaders.csv", row.names = FALSE)
-  cat("Wrote to ../latestPitcherLeaders.csv\n")
   pitchers
 }
 

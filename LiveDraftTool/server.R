@@ -7,6 +7,12 @@ setwd("../code/")
 source("./draftGuide.r")
 setwd("../LiveDraftTool")
 
+# --- Saved Settings ---
+settingsFile <- "../savedSettings.json"
+savedSettings <- tryCatch({
+  if (file.exists(settingsFile)) fromJSON(settingsFile) else list()
+}, error = function(e) list())
+
 # --- Constants ---
 teams <- sort(unique(pstandings$Team))
 hpos <- list('C','1B','2B','SS','3B','OF')
@@ -138,8 +144,12 @@ shinyServer(function(input, output, session) {
   })
 
   # --- My Team (initialized immediately, updated via Settings modal) ---
-  myTeam <- reactiveVal('Liquor Crickets')
+  myTeam <- reactiveVal(savedSettings$myTeam %||% 'Liquor Crickets')
+  projSource <- reactiveVal(savedSettings$projSource %||% 'atc')
+  valMode <- reactiveVal(savedSettings$valMode %||% 'proj')
   observeEvent(input$myTeam, { myTeam(input$myTeam) })
+  observeEvent(input$projSource, { projSource(input$projSource) })
+  observeEvent(input$valMode, { valMode(input$valMode) })
 
   output$myTeamBadge <- renderUI({
     tags$span(style = "font-size:13px; color:#ecf0f1;",
@@ -162,7 +172,7 @@ shinyServer(function(input, output, session) {
 
   # --- Projection source toggle ---
   projPools_r <- reactive({
-    src <- input$projSource
+    src <- projSource()
     if (is.null(src) || src == "atc") {
       list(hitters = AllH_atc, pitchers = AllP_atc)
     } else if (src == "steamer") {
@@ -174,7 +184,7 @@ shinyServer(function(input, output, session) {
 
   # --- Blended player pools (actual stats + projections) ---
   blendedPools_r <- reactive({
-    mode <- input$valMode
+    mode <- valMode()
     pools <- projPools_r()
     if (is.null(mode) || mode == "proj" ||
         is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
@@ -289,8 +299,8 @@ shinyServer(function(input, output, session) {
 
   # Blend mode status indicator
   output$blendStatus <- renderUI({
-    mode <- input$valMode
-    src <- input$projSource
+    mode <- valMode()
+    src <- projSource()
     srcLabel <- switch(src %||% "atc", atc = "ATC", steamer = "Steamer", batx = "THE BAT X", "ATC")
     modeLabel <- if (is.null(mode) || mode == "proj") {
       "Projections"
@@ -483,9 +493,23 @@ shinyServer(function(input, output, session) {
     )
 
     # --- Stats Card ---
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    hsLookup <- if (isHitter && !is.null(hs[[1]])) {
+      hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+    } else if (!isHitter && !is.null(hs[[2]])) {
+      hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+    } else { NULL }
+    playerHS <- if (!is.null(hsLookup)) {
+      hsRow <- hsLookup %>% filter(playerid == pid)
+      if (nrow(hsRow) > 0) round(hsRow$hotscore[1], 1) else NA
+    } else { NA }
+
+    heroLine <- tags$div(style = "display:flex; gap:24px; font-size:22px; font-weight:bold; margin-bottom:8px;",
+      tags$span(paste0("$", round(player$pDFL))),
+      tags$span(style = "color:#888;", "|"),
+      tags$span(paste0("Hotscore: ", ifelse(is.na(playerHS), 0, playerHS)))
+    )
     valLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px; margin-bottom:8px;",
-      tags$span(tags$strong("DFL: "), paste0("$", round(player$pDFL))),
-      tags$span(tags$strong("SGP: "), round(player$pSGP, 2)),
       tags$span(tags$strong("ADP: "), round(player$pADP)),
       tags$span(tags$strong("Rank Diff: "), ifelse(!is.na(player$rankDiff), sprintf("%+d", round(player$rankDiff)), "—"))
     )
@@ -508,7 +532,7 @@ shinyServer(function(input, output, session) {
     }
     statsUI <- tags$div(
       style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none;",
-      valLine, statLine
+      heroLine, valLine, statLine
     )
 
     # --- Competition Card ---
@@ -1677,14 +1701,22 @@ shinyServer(function(input, output, session) {
 
   output$posInflation <- DT::renderDataTable({
     df <- posInflation_r()
-    datatable(df %>% select(Position, Drafted, Inflation, Trend, InflationNum, TrendNum),
+    press <- pressure_r() %>% select(Pos, Pressure)
+    df <- left_join(df, press, by = c('Position' = 'Pos'))
+    df$Pressure <- replace_na(df$Pressure, "—")
+    datatable(df %>% select(Position, Pressure, Drafted, Inflation, Trend, InflationNum, TrendNum),
               options = list(paging = FALSE, searching = FALSE, info = FALSE,
                              ordering = FALSE, autoWidth = FALSE,
-                             columnDefs = list(list(visible = FALSE, targets = c(5, 6))))) %>%
+                             columnDefs = list(list(visible = FALSE, targets = c(6, 7))))) %>%
       formatStyle('Inflation', valueColumns = 'InflationNum',
                   color = styleInterval(c(0, 5), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
       formatStyle('Trend', valueColumns = 'TrendNum',
-                  color = styleInterval(c(0, 5), c('#2ecc71', '#f39c12', '#e74c3c')))
+                  color = styleInterval(c(0, 5), c('#2ecc71', '#f39c12', '#e74c3c'))) %>%
+      formatStyle('Pressure',
+                  backgroundColor = styleEqual(
+                    c('High', 'Medium', 'Low', 'No'),
+                    c('#f8d7da', '#fff3cd', '#d4edda', '#e9ecef')),
+                  fontWeight = styleEqual('High', 'bold'))
   })
 
   # --- Nomination Targets table ---
@@ -1990,14 +2022,14 @@ shinyServer(function(input, output, session) {
                    choices = c('ATC' = 'atc',
                                'Steamer' = 'steamer',
                                'THE BAT X' = 'batx'),
-                   selected = isolate(input$projSource) %||% 'atc',
+                   selected = isolate(projSource()),
                    inline = TRUE),
       tags$hr(),
       radioButtons('valMode', 'Valuation Mode',
                    choices = c('Projections Only' = 'proj',
                                'Blended' = 'blend',
                                'Leaderboard Only' = 'leaders'),
-                   selected = isolate(input$valMode) %||% 'proj'),
+                   selected = isolate(valMode())),
       uiOutput("blendStatusModal"),
       tags$hr(),
       actionButton('resetDraftBtn', 'Reset Draft',
@@ -2008,7 +2040,7 @@ shinyServer(function(input, output, session) {
 
   # Blend status for settings modal
   output$blendStatusModal <- renderUI({
-    mode <- input$valMode
+    mode <- valMode()
     if (is.null(mode) || mode == "proj") {
       NULL
     } else if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) {
@@ -2018,6 +2050,18 @@ shinyServer(function(input, output, session) {
       NULL
     }
   })
+
+  # Persist settings to disk on change
+  saveSettings <- function() {
+    tryCatch(write(toJSON(list(
+      myTeam = myTeam(),
+      projSource = projSource(),
+      valMode = valMode()
+    ), auto_unbox = TRUE), settingsFile), error = function(e) NULL)
+  }
+  observeEvent(myTeam(), { saveSettings() }, ignoreInit = TRUE)
+  observeEvent(projSource(), { saveSettings() }, ignoreInit = TRUE)
+  observeEvent(valMode(), { saveSettings() }, ignoreInit = TRUE)
 
   observeEvent(input$resetDraftBtn, {
     showModal(modalDialog(
@@ -2292,6 +2336,18 @@ shinyServer(function(input, output, session) {
   # ============================
   leaderboards <- reactiveValues(hitters = NULL, pitchers = NULL)
 
+  # Load cached leaderboard CSVs on startup
+  tryCatch({
+    hFile <- "../latestHitterLeaders.csv"
+    pFile <- "../latestPitcherLeaders.csv"
+    if (file.exists(hFile) && file.exists(pFile)) {
+      leaderboards$hitters <- read.csv(hFile, stringsAsFactors = FALSE, check.names = FALSE)
+      leaderboards$pitchers <- read.csv(pFile, stringsAsFactors = FALSE, check.names = FALSE)
+      hAge <- round(difftime(Sys.time(), file.info(hFile)$mtime, units = "hours"), 1)
+      cat("Loaded cached leaderboards (", hAge, "hours old)\n")
+    }
+  }, error = function(e) cat("Could not load cached leaderboards:", e$message, "\n"))
+
   observeEvent(input$fetchLeaders, {
     startDate <- format(input$lbStartDate, "%Y-%m-%d")
     endDate <- format(input$lbEndDate, "%Y-%m-%d")
@@ -2330,7 +2386,7 @@ shinyServer(function(input, output, session) {
     # Add hotscore
     hs <- leaderHotScores()
     if (!is.null(hs[[1]])) {
-      hsH <- hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      hsH <- hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore)
       h <- left_join(h, hsH, by = "playerid")
     }
     # Remove rostered players
@@ -2350,7 +2406,7 @@ shinyServer(function(input, output, session) {
     # Add hotscore
     hs <- leaderHotScores()
     if (!is.null(hs[[2]])) {
-      hsP <- hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      hsP <- hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore)
       p <- left_join(p, hsP, by = "playerid")
     }
     # Remove rostered players
@@ -2636,6 +2692,162 @@ shinyServer(function(input, output, session) {
         checkAndSaveBudget(input$rosterTeam, tr$pitchers$Slot[info$row], newVal, "P")
       }
     }
+  })
+
+  # --- Bench Targets (stat gaps + hot start replacements) ---
+  output$benchTargets <- renderUI({
+    req(input$rosterTeam)
+    if (is.null(leaderboards$hitters) || is.null(leaderboards$pitchers)) return(NULL)
+    tryCatch({
+
+    tm <- input$rosterTeam
+    tr <- teamRoster_r()
+    rh <- rhitters_r()
+    rp <- rpitchers_r()
+
+    # Get starters for goals
+    hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    rhStarters <- rh %>% filter(playerid %in% hStarterIds)
+    rpStarters <- rp %>% filter(playerid %in% pStarterIds)
+    goals <- calcGoals(rpStarters, rhStarters, targets, tm)
+
+    # Available leaderboard players with pDFL < $5
+    lbH <- tryCatch(leaderH_avail(), error = function(e) NULL)
+    lbP <- tryCatch(leaderP_avail(), error = function(e) NULL)
+    if (is.null(lbH) || is.null(lbP)) return(NULL)
+    gapH <- lbH %>% filter(pDFL < 10)
+    gapP <- lbP %>% filter(pDFL < 10)
+    cheapH <- lbH %>% filter(pDFL < 5)
+    cheapP <- lbP %>% filter(pDFL < 5)
+
+    # --- Stat Gap Targets ---
+    weakGoals <- goals %>% filter(pc < 0.75) %>% arrange(pc)
+    hitterStats <- c('HR','RBI','R','SB')
+    pitcherStats <- c('W','K','SV','HLD')
+
+    statGapUI <- if (nrow(weakGoals) > 0) {
+      gapSections <- lapply(seq_len(nrow(weakGoals)), function(i) {
+        stat <- as.character(weakGoals$statistic[i])
+        pct <- round(weakGoals$pc[i] * 100)
+        needed <- round(weakGoals$needed[i])
+        pctColor <- if (weakGoals$pc[i] < 0.50) '#e74c3c' else if (weakGoals$pc[i] < 0.65) '#f39c12' else '#c5a000'
+
+        # Map goal stat names to leaderboard column names
+        if (stat %in% hitterStats) {
+          pool <- gapH
+          col <- stat
+        } else {
+          pool <- gapP
+          col <- switch(stat, K = "SO", stat)
+        }
+
+        if (!col %in% names(pool) || nrow(pool) == 0) return(NULL)
+        top5 <- pool %>% arrange(desc(.data[[col]])) %>% head(5)
+        if (nrow(top5) == 0) return(NULL)
+
+        playerLines <- lapply(seq_len(nrow(top5)), function(j) {
+          hs <- if ("hotscore" %in% names(top5)) round(top5$hotscore[j], 1) else NA
+          hsStr <- if (!is.na(hs)) paste0("  hs:", hs) else ""
+          tags$div(style = "font-size:13px; padding:1px 0;",
+            tags$span(style = "display:inline-block; width:220px;", paste0(top5$Player[j], " (", top5$Pos[j], ")")),
+            tags$span(style = "display:inline-block; width:50px; font-weight:bold;", as.character(unname(top5[[col]][j]))),
+            tags$span(style = "display:inline-block; width:70px; color:#888;", paste0("$", round(top5$pDFL[j]))),
+            tags$span(style = "color:#999;", hsStr))
+        })
+
+        tags$div(style = "margin-bottom:10px;",
+          tags$div(style = "font-size:14px; font-weight:bold;",
+            paste0(stat, " "),
+            tags$span(style = paste0("color:", pctColor, ";"), paste0("(", pct, "% — need ", needed, " more)"))
+          ),
+          do.call(tags$div, c(list(style = "margin-top:4px;"), playerLines))
+        )
+      })
+      gapSections <- Filter(Negate(is.null), gapSections)
+      do.call(tags$div, c(list(tags$h4(style = "margin-bottom:8px;", "Stat Gap Targets")), gapSections))
+    } else {
+      tags$div(style = "color:#2ecc71; font-size:14px; margin-bottom:12px;",
+               tags$h4("Stat Gap Targets"),
+               "All categories on track!")
+    }
+
+    # --- Hot Start Replacements ---
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) else NULL
+    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) else NULL
+
+    # Get starters with hotscores
+    allStarters <- bind_rows(
+      rhStarters %>% select(playerid, Player, Pos, Salary) %>% mutate(type = "H"),
+      rpStarters %>% select(playerid, Player, Pos, Salary) %>% mutate(type = "P")
+    )
+    if (!is.null(hsH)) allStarters <- left_join(allStarters, hsH %>% select(playerid, hotscore), by = "playerid")
+    if (!is.null(hsP) && !"hotscore" %in% names(allStarters)) {
+      allStarters <- left_join(allStarters, hsP %>% select(playerid, hotscore), by = "playerid")
+    } else if (!is.null(hsP)) {
+      pScores <- hsP %>% select(playerid, hotscore_p = hotscore)
+      allStarters <- left_join(allStarters, pScores, by = "playerid")
+      allStarters$hotscore <- ifelse(is.na(allStarters$hotscore), allStarters$hotscore_p, allStarters$hotscore)
+      allStarters$hotscore_p <- NULL
+    }
+
+    coldStarters <- allStarters %>%
+      filter(!is.na(hotscore), hotscore < 6) %>%
+      arrange(hotscore)
+
+    hotReplUI <- tryCatch(if (nrow(coldStarters) > 0) {
+      replSections <- lapply(seq_len(nrow(coldStarters)), function(i) {
+        pos <- coldStarters[["Pos"]][i]
+        sType <- coldStarters[["type"]][i]
+        sPlayer <- coldStarters[["Player"]][i]
+        sHotscore <- coldStarters[["hotscore"]][i]
+
+        if (sType == "H") {
+          replacements <- cheapH %>% filter(!is.na(hotscore), Pos %in% pos) %>%
+            arrange(-hotscore) %>% head(3)
+        } else {
+          replacements <- cheapP %>% filter(!is.na(hotscore)) %>%
+            arrange(-hotscore) %>% head(3)
+        }
+        if (nrow(replacements) == 0) return(NULL)
+
+        replLines <- lapply(seq_len(nrow(replacements)), function(j) {
+          tags$div(style = "font-size:13px; padding:1px 0; margin-left:16px;",
+            tags$span(style = "display:inline-block; width:180px;", replacements$Player[j]),
+            tags$span(style = "display:inline-block; width:70px; color:#2ecc71; font-weight:bold;",
+                      paste0("hs: ", round(replacements$hotscore[j], 1))),
+            tags$span(style = "color:#888;", paste0("$", round(replacements$pDFL[j]))))
+        })
+
+        tags$div(style = "margin-bottom:10px;",
+          tags$div(style = "font-size:14px;",
+            tags$strong(sPlayer),
+            tags$span(style = "color:#888;", paste0(" (", pos, ")")),
+            tags$span(style = "color:#e74c3c; margin-left:8px;",
+                      paste0("hotscore: ", round(sHotscore, 1)))),
+          do.call(tags$div, replLines)
+        )
+      })
+      replSections <- Filter(Negate(is.null), replSections)
+      do.call(tags$div, c(list(tags$h4(style = "margin-bottom:8px;", "Hot Start Replacements")), replSections))
+    } else {
+      tags$div(style = "color:#2ecc71; font-size:14px;",
+               tags$h4("Hot Start Replacements"),
+               "No cold starters — all performing well!")
+    }, error = function(e) {
+      tags$div(style = "color:red; padding:12px;", paste("Hot Start error:", e$message))
+    })
+
+    tags$div(style = "margin-top:24px; padding-top:16px; border-top:2px solid #ddd;",
+      tags$div(style = "display:grid; grid-template-columns:1fr 1fr; gap:20px;",
+        tags$div(statGapUI),
+        tags$div(hotReplUI)
+      )
+    )
+    }, error = function(e) {
+      tags$div(style = "color:red; padding:12px;", paste("Bench Targets error:", e$message))
+    })
   })
 
   output$spiderChart <- renderPlot({
