@@ -2199,6 +2199,14 @@ shinyServer(function(input, output, session) {
   output$hpbpos <- DT::renderDataTable({
     req(input$e2)
     data <- markTargets(hitPlayersbyPos(input$e2), rv$targets)
+    # Join hotscores
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    if (!is.null(hs[[1]])) {
+      hsH <- hs[[1]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      data <- left_join(data, hsH, by = "playerid")
+    } else {
+      data$Hotscore <- NA_real_
+    }
     tierColors <- c('#e8f4fd', '#edf7ee', '#fef9e7', '#f5f5f5')
     data$rowBg <- case_when(
       data$DFL >= 30 ~ '#e8f4fd',
@@ -2218,6 +2226,8 @@ shinyServer(function(input, output, session) {
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','AVG'), 3) %>%
+      formatRound('Hotscore', 1) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71'))) %>%
       formatStyle(visibleCols, valueColumns = 'rowBg',
                   backgroundColor = styleEqual(tierColors, tierColors))
   })
@@ -2229,6 +2239,14 @@ shinyServer(function(input, output, session) {
   output$ppbpos <- DT::renderDataTable({
     req(input$e3)
     data <- markTargets(pitPlayersbyPos(input$e3), rv$targets)
+    # Join hotscores
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    if (!is.null(hs[[2]])) {
+      hsP <- hs[[2]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      data <- left_join(data, hsP, by = "playerid")
+    } else {
+      data$Hotscore <- NA_real_
+    }
     tierColors <- c('#e8f4fd', '#edf7ee', '#fef9e7', '#f5f5f5')
     data$rowBg <- case_when(
       data$DFL >= 30 ~ '#e8f4fd',
@@ -2248,6 +2266,8 @@ shinyServer(function(input, output, session) {
       formatRound(c('Age','ADP','rankDiff','W','SV','HLD','SO'), 0) %>%
       formatCurrency('DFL') %>%
       formatRound(c('RPV','SGP','Skew','ERA'), 3) %>%
+      formatRound('Hotscore', 1) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71'))) %>%
       formatStyle(visibleCols, valueColumns = 'rowBg',
                   backgroundColor = styleEqual(tierColors, tierColors))
   })
@@ -2315,13 +2335,23 @@ shinyServer(function(input, output, session) {
   output$rrcResults <- DT::renderDataTable({
     data <- rrcResults %>% mutate(Player = fgLink(Player, playerid))
     data <- markTargets(data, rv$targets)
-    data <- data %>% select(Target, everything(), -playerid, -isTarget)
+    # Join hotscores
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    if (!is.null(hs[[2]])) {
+      hsP <- hs[[2]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      data <- left_join(data, hsP, by = "playerid")
+    } else {
+      data$Hotscore <- NA_real_
+    }
+    data <- data %>% arrange(-Hotscore) %>% select(Target, everything(), -playerid, -isTarget)
     datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
                              info = FALSE), filter = 'top', escape = FALSE) %>%
       formatRound(c('pADP','pW','pSV','pHLD','pSO'), 0) %>%
       formatCurrency('pDFL') %>%
-      formatRound(c('pSGP','pERA','pK/9','pBB/9'), 3)
+      formatRound(c('pSGP','pERA','pK/9','pBB/9'), 3) %>%
+      formatRound('Hotscore', 1) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71')))
   })
 
   output$injOrig <- DT::renderDataTable({
@@ -2337,6 +2367,14 @@ shinyServer(function(input, output, session) {
 
   output$topHitters <- DT::renderDataTable({
     data <- markTargets(topHitters_r(), rv$targets)
+    # Join hotscores
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    if (!is.null(hs[[1]])) {
+      hsH <- hs[[1]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      data <- left_join(data, hsH, by = "playerid")
+    } else {
+      data$Hotscore <- NA_real_
+    }
     data <- data %>% select(Target, everything(), -playerid, -isTarget)
     datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
@@ -2344,7 +2382,9 @@ shinyServer(function(input, output, session) {
               escape = FALSE) %>%
       formatRound(c('Age','ADP','rankDiff','HR','RBI','R','SB'), 0) %>%
       formatCurrency('pDFL') %>%
-      formatRound(c('Skew','AVG'), 3)
+      formatRound(c('Skew','AVG'), 3) %>%
+      formatRound('Hotscore', 1) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71')))
   })
 
   output$prospectH <- DT::renderDataTable({
