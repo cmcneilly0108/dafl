@@ -681,6 +681,7 @@ shinyServer(function(input, output, session) {
       data.frame(Slot = slot, Player = p$Player[1], Pos = p$Pos[1],
                  MLB = p$MLB[1], Age = p$Age[1], Yr = p$Contract[1],
                  Salary = p$Salary[1], pDFL = p$pDFL[1], Value = p$Value[1],
+                 Hotscore = if ("hotscore" %in% names(p)) p$hotscore[1] else NA_real_,
                  playerid = p$playerid[1],
                  stringsAsFactors = FALSE)
     }
@@ -688,6 +689,7 @@ shinyServer(function(input, output, session) {
       data.frame(Slot = slot, Player = "", Pos = "", MLB = "",
                  Age = NA_real_, Yr = NA_real_, Salary = NA_real_,
                  pDFL = NA_real_, Value = NA_real_,
+                 Hotscore = NA_real_,
                  playerid = NA_character_, stringsAsFactors = FALSE)
     }
 
@@ -2477,6 +2479,17 @@ shinyServer(function(input, output, session) {
     roster$pDFL <- replace_na(roster$pDFL, 0)
     roster$Value <- roster$pDFL - roster$Salary
 
+    # Join hotscores
+    hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
+    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
+    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
+    hsAll <- bind_rows(hsH, hsP) %>% distinct(playerid, .keep_all = TRUE)
+    if (nrow(hsAll) > 0) {
+      roster <- left_join(roster, hsAll, by = "playerid")
+    } else {
+      roster$hotscore <- NA_real_
+    }
+
     hitters <- roster %>% filter(!isPitcherPos(Pos)) %>% arrange(-pDFL)
     pitchers <- roster %>% filter(isPitcherPos(Pos)) %>% arrange(-pDFL)
 
@@ -2532,15 +2545,17 @@ shinyServer(function(input, output, session) {
     dt <- datatable(
       hDisplay %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid, -slotAvg),
       rownames = FALSE,
-      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9))),
+      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9,10))),
       options = list(paging = FALSE, searching = FALSE, info = FALSE,
                      ordering = FALSE, autoWidth = FALSE,
-                     columnDefs = list(list(visible = FALSE, targets = 9))),
+                     columnDefs = list(list(visible = FALSE, targets = 10))),
       escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%
+      formatRound('Hotscore', 1) %>%
       formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71'))) %>%
       formatStyle('Player', target = 'row',
                   backgroundColor = styleEqual("", "#f5f5f5")) %>%
       formatStyle('Slot', valueColumns = 'slotBg',
@@ -2663,15 +2678,17 @@ shinyServer(function(input, output, session) {
     dt <- datatable(
       pDisplay %>% mutate(Player = fgLink(Player, playerid)) %>% select(-playerid, -slotAvg),
       rownames = FALSE,
-      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9))),
+      editable = list(target = 'cell', disable = list(columns = c(0,1,2,3,4,5,7,8,9,10))),
       options = list(paging = FALSE, searching = FALSE, info = FALSE,
                      ordering = FALSE, autoWidth = FALSE,
-                     columnDefs = list(list(visible = FALSE, targets = 9))),
+                     columnDefs = list(list(visible = FALSE, targets = 10))),
       escape = FALSE) %>%
       formatCurrency(c('Salary', 'pDFL', 'Value')) %>%
       formatRound('Age', 0) %>%
       formatRound('Yr', 0) %>%
+      formatRound('Hotscore', 1) %>%
       formatStyle('Value', color = styleInterval(0, c('#e74c3c', '#2ecc71'))) %>%
+      formatStyle('Hotscore', color = styleInterval(c(4, 7), c('#e74c3c', '#666666', '#2ecc71'))) %>%
       formatStyle('Player', target = 'row',
                   backgroundColor = styleEqual("", "#f5f5f5")) %>%
       formatStyle('Slot', valueColumns = 'slotBg',
