@@ -733,11 +733,11 @@ shinyServer(function(input, output, session) {
       }
     }
 
-    # --- Pitcher slots: SP x5, MR x2, CL x2, BN x3 = 12 ---
+    # --- Pitcher slots: SP x6, MR x1, CL x1, BN x4 = 12 ---
     pSlots <- list(
-      list(slot = "SP", pos = "SP", n = 7),
-      list(slot = "MR", pos = "MR", n = 2),
-      list(slot = "CL", pos = "CL", n = 2)
+      list(slot = "SP", pos = "SP", n = 6),
+      list(slot = "MR", pos = "MR", n = 1),
+      list(slot = "CL", pos = "CL", n = 1)
     )
 
     usedIds <- c()
@@ -756,17 +756,18 @@ shinyServer(function(input, output, session) {
     }
 
     remaining <- pitchers %>% filter(!playerid %in% usedIds) %>% arrange(-pDFL)
-    for (k in 1:1) {
+    benchP <- c("BNP1", "BNP2", "BNP3", "BNP4")
+    for (k in seq_along(benchP)) {
       if (k <= nrow(remaining)) {
-        pRows[[length(pRows) + 1]] <- makeRow("BNP", remaining[k, ])
+        pRows[[length(pRows) + 1]] <- makeRow(benchP[k], remaining[k, ])
       } else {
-        pRows[[length(pRows) + 1]] <- emptyRow("BNP")
+        pRows[[length(pRows) + 1]] <- emptyRow(benchP[k])
       }
     }
     # Overflow pitchers beyond defined slots
-    if (nrow(remaining) > 1) {
-      for (k in 2:nrow(remaining)) {
-        pRows[[length(pRows) + 1]] <- makeRow(paste0("EXP", k - 1), remaining[k, ])
+    if (nrow(remaining) > length(benchP)) {
+      for (k in (length(benchP) + 1):nrow(remaining)) {
+        pRows[[length(pRows) + 1]] <- makeRow(paste0("EXP", k - length(benchP)), remaining[k, ])
       }
     }
 
@@ -2707,7 +2708,7 @@ shinyServer(function(input, output, session) {
 
     # Get starters for goals
     hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
-    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","SP6","MR","CL")) %>% pull(playerid)
     rhStarters <- rh %>% filter(playerid %in% hStarterIds)
     rpStarters <- rp %>% filter(playerid %in% pStarterIds)
     goals <- calcGoals(rpStarters, rhStarters, targets, tm)
@@ -2854,7 +2855,7 @@ shinyServer(function(input, output, session) {
     req(input$rosterTeam)
     tr <- teamRoster_r()
     hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
-    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","SP6","MR","CL")) %>% pull(playerid)
     rh <- rhitters_r() %>% filter(playerid %in% hStarterIds)
     rp <- rpitchers_r() %>% filter(playerid %in% pStarterIds)
     goals <- calcGoals(rp, rh, targets, input$rosterTeam)
@@ -2922,7 +2923,7 @@ shinyServer(function(input, output, session) {
     tr <- teamRoster_r()
     # Only count starters toward goals
     hStarterIds <- tr$hitters %>% filter(!grepl("^BN", Slot)) %>% pull(playerid)
-    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","MR1","CL1","CL2")) %>% pull(playerid)
+    pStarterIds <- tr$pitchers %>% filter(Slot %in% c("SP1","SP2","SP3","SP4","SP5","SP6","MR","CL")) %>% pull(playerid)
     rh <- rhitters_r() %>% filter(playerid %in% hStarterIds)
     rp <- rpitchers_r() %>% filter(playerid %in% pStarterIds)
     datatable(calcGoals(rp, rh, targets, input$rosterTeam),
