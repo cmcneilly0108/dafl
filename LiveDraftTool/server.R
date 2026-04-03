@@ -635,11 +635,21 @@ shinyServer(function(input, output, session) {
         arrange(-pDFL) %>% head(5)
     }
     if (nrow(comps) > 0) {
+      # Join hotscores to comparables
+      if (!is.null(hsLookup)) {
+        comps <- left_join(comps, hsLookup %>% select(playerid, hotscore), by = "playerid")
+      } else {
+        comps$hotscore <- NA_real_
+      }
       compRows <- lapply(seq_len(nrow(comps)), function(j) {
+        hsVal <- if (!is.na(comps$hotscore[j])) round(comps$hotscore[j], 1) else NA
+        hsColor <- if (is.na(hsVal)) "#888" else if (hsVal >= 7) "#2ecc71" else if (hsVal < 4) "#e74c3c" else "#666"
+        hsText <- if (is.na(hsVal)) "" else paste0("HS ", hsVal)
         tags$div(style = "font-size:14px; padding:2px 0;",
           tags$span(style = "display:inline-block; width:200px;", comps$Player[j]),
           tags$span(style = "display:inline-block; width:70px;", paste0("$", round(comps$pDFL[j]))),
-          tags$span(paste0("ADP ", round(comps$pADP[j]))))
+          tags$span(style = "display:inline-block; width:80px;", paste0("ADP ", round(comps$pADP[j]))),
+          tags$span(style = paste0("color:", hsColor, ";"), hsText))
       })
       comparablesUI <- tags$div(
         tags$strong(style = "font-size:16px;", "Comparable Players"),
@@ -653,7 +663,10 @@ shinyServer(function(input, output, session) {
     injData <- injOrig_full %>% filter(playerid == pid)
     injUI <- if (nrow(injData) > 0) {
       tags$div(style = "padding:10px 16px; background:#fff3cd; border:1px solid #ddd; border-top:none; font-size:14px;",
-        tags$div(tags$strong("Injury: "), injData$Injury[1]),
+        tags$div(tags$strong("Injury: "), injData$Injury[1],
+          if (!is.null(injData$`Injury / Surgery Date`[1]) && !is.na(injData$`Injury / Surgery Date`[1]) && injData$`Injury / Surgery Date`[1] != "")
+            tags$span(style = "margin-left:12px; color:#888;", paste0("(", injData$`Injury / Surgery Date`[1], ")"))
+        ),
         tags$div(style = "margin-top:4px;",
           tags$strong("Status: "), injData$status[1],
           tags$span(style = "margin-left:16px;", tags$strong("Update: "), injData$`Latest Update`[1]))
