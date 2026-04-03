@@ -86,6 +86,12 @@ const ENDPOINTS = [
     ],
     file: `prospects_pit_${cyear}.json`,
   },
+  {
+    name: 'Pitching+ (Stuff)',
+    url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=10&type=36&month=0&pageitems=2000`,
+    file: 'latestStuff.json',
+    extractData: true,
+  },
 ];
 
 async function fetchAll() {
@@ -126,8 +132,13 @@ async function fetchAll() {
             continue;
           }
         }
-        fs.writeFileSync(outPath, body);
-        console.log(`  -> ${ep.file} (${(body.length / 1024).toFixed(0)} KB)\n`);
+        let output = body;
+        if (ep.extractData) {
+          const parsed = JSON.parse(body);
+          output = JSON.stringify(parsed.data || parsed);
+        }
+        fs.writeFileSync(outPath, output);
+        console.log(`  -> ${ep.file} (${(output.length / 1024).toFixed(0)} KB)\n`);
         fetched = true;
         break;
       } catch (err) {

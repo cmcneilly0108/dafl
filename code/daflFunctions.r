@@ -1233,17 +1233,38 @@ getInjuriesAPI <- function() {
   inj
 }
 
-# Fetch Pitching+ data from FanGraphs API (no browser needed)
+# Fetch Pitching+ data — cached JSON from Playwright, fallback to API
 getStuffAPI <- function() {
-  cat("Fetching Pitching+ data from FanGraphs API...\n")
+  cat("Loading Pitching+ data...\n")
 
   currentYear <- as.integer(format(Sys.Date(), "%Y"))
-  url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=",
-                currentYear, "&season1=", currentYear,
-                "&ind=0&qual=10&type=36&month=0&pageitems=2000")
+  jsonFile <- "../latestStuff.json"
 
-  stuff <- fromJSON(url)$data
-  cat("Fetched", nrow(stuff), "pitcher records for", currentYear, "\n")
+  stuff <- NULL
+  if (file.exists(jsonFile)) {
+    stuff <- tryCatch(read_json(jsonFile, simplifyVector = TRUE), error = function(e) NULL)
+    if (!is.null(stuff) && nrow(stuff) > 0) {
+      cat("Loaded", nrow(stuff), "Pitching+ records from", jsonFile, "\n")
+    } else {
+      stuff <- NULL
+    }
+  }
+
+  if (is.null(stuff)) {
+    cat("JSON file not found, trying API directly...\n")
+    url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=",
+                  currentYear, "&season1=", currentYear,
+                  "&ind=0&qual=10&type=36&month=0&pageitems=2000")
+    stuff <- tryCatch(fromJSON(url)$data, error = function(e) {
+      cat("Error fetching Pitching+ data:", e$message, "\n")
+      return(NULL)
+    })
+  }
+
+  if (is.null(stuff) || nrow(stuff) == 0) {
+    cat("No Pitching+ data available.\n")
+    return(NULL)
+  }
 
   stuff <- stuff %>%
     select(Player = PlayerName, MLB = TeamNameAbb, `Pitching+` = sp_pitching)
