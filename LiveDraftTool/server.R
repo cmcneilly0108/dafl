@@ -1557,6 +1557,16 @@ shinyServer(function(input, output, session) {
     pid <- selectedPlayer()
     if (!is.null(pid) && pid != "") {
       updateSelectizeInput(session, 'compPlayer', selected = pid)
+
+      # Sync Positional Pressure position selector
+      allPlayers <- bind_rows(
+        AllH_active() %>% select(playerid, Pos) %>% mutate(playerid = as.character(playerid)),
+        AllP_active() %>% select(playerid, Pos) %>% mutate(playerid = as.character(playerid))
+      ) %>% distinct(playerid, .keep_all = TRUE)
+      pPos <- allPlayers$Pos[allPlayers$playerid == pid]
+      if (length(pPos) > 0 && pPos[1] %in% allpos) {
+        updateSelectizeInput(session, 'e4', selected = pPos[1])
+      }
     }
   })
 
