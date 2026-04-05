@@ -25,3 +25,25 @@ Draft date: ~April 8, 2026
 - [ ] **Draft pace tracker** — how far through the draft are we, average time per pick
 - [ ] **Value leaderboard** — which teams are getting the most surplus value (pDFL - Salary) so far
 - [x] **Category balance view** — a radar/spider chart per team showing how balanced they are across stat categories (added to Rosters sidebar, tabbed with Goals table)
+
+## Draft Day UX
+
+- [ ] **Nomination queue** — a sortable list of players you want to nominate next, separate from Targets
+- [ ] **Draft log** — a scrollable feed showing each pick as it happens (player, team, price, timestamp)
+- [ ] **"Who needs what" summary** — a quick grid showing which teams still need which positions, visible from the Draft tab
+
+## Analytics (New)
+
+- [ ] **Value tracker** — running chart of avg draft price vs projected value as the draft progresses (are bargains drying up?)
+- [ ] **Positional scarcity alerts** — flag when a position is about to dry up (e.g., "Only 2 closers left with pDFL > $10")
+- [ ] **Category projections** — show projected standings based on current rosters (who wins each category?)
+
+## In-Season Prep
+
+- [ ] **Trade targets** — cross-reference your team's stat gaps with other teams' bench players to suggest trade partners
+
+## Quality of Life
+
+- [ ] **Keyboard shortcuts** on the Draft tab (quick-draft without clicking)
+- [ ] **Dark mode** toggle
+- [ ] **Export roster** to CSV or clipboard for pasting into CBS
