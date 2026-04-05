@@ -327,7 +327,7 @@ shinyServer(function(input, output, session) {
   targetStar <- function(pid, isTarget) {
     star <- ifelse(isTarget, "\u2605", "\u2606")
     color <- ifelse(isTarget, "#f1c40f", "#ccc")
-    paste0("<span onclick='Shiny.setInputValue(\"toggleTarget\", \"", pid,
+    paste0("<span id='tgt-", pid, "' onclick='Shiny.setInputValue(\"toggleTarget\", \"", pid,
            "\", {priority: \"event\"}); return false;' ",
            "style='cursor:pointer; font-size:16px; color:", color, ";'>", star, "</span>")
   }
@@ -350,12 +350,17 @@ shinyServer(function(input, output, session) {
     if (length(pName) == 0) pName <- "Player"
     if (pid %in% rv$targets) {
       rv$targets <- rv$targets[rv$targets != pid]
+      isNowTarget <- FALSE
       showNotification(paste0("Removed target: ", pName), type = "message")
     } else {
       rv$targets <- c(rv$targets, pid)
+      isNowTarget <- TRUE
       showNotification(paste0("Added target: ", pName), type = "message")
     }
     write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
+
+    # Flip all star instances for this player client-side
+    session$sendCustomMessage("toggleStar", list(pid = pid, isTarget = isNowTarget))
   })
 
   # --- My Targets tab: table with inline remove ---
@@ -442,7 +447,7 @@ shinyServer(function(input, output, session) {
     data <- searchData_r() %>%
       mutate(Player = fgLink(Player, playerid),
              Owner = teamLink(Owner))
-    data <- markTargets(data, rv$targets)
+    data <- markTargets(data, isolate(rv$targets))
     data <- data %>% select(Target, Player, Type, Pos, MLB, Age, Owner, Salary, DFL = pDFL, ADP = pADP)
 
     dt <- datatable(data, selection = 'single',
@@ -2199,7 +2204,7 @@ shinyServer(function(input, output, session) {
 
   output$hpbpos <- DT::renderDataTable({
     req(input$e2)
-    data <- markTargets(hitPlayersbyPos(input$e2), rv$targets)
+    data <- markTargets(hitPlayersbyPos(input$e2), isolate(rv$targets))
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[1]])) {
@@ -2239,7 +2244,7 @@ shinyServer(function(input, output, session) {
 
   output$ppbpos <- DT::renderDataTable({
     req(input$e3)
-    data <- markTargets(pitPlayersbyPos(input$e3), rv$targets)
+    data <- markTargets(pitPlayersbyPos(input$e3), isolate(rv$targets))
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[2]])) {
@@ -2335,7 +2340,7 @@ shinyServer(function(input, output, session) {
   # Static outputs that don't change with drafting
   output$rrcResults <- DT::renderDataTable({
     data <- rrcResults %>% mutate(Player = fgLink(Player, playerid))
-    data <- markTargets(data, rv$targets)
+    data <- markTargets(data, isolate(rv$targets))
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[2]])) {
@@ -2358,7 +2363,7 @@ shinyServer(function(input, output, session) {
   output$injOrig <- DT::renderDataTable({
     data <- injOrig_r()
     data$playerid <- as.character(data$playerid)
-    data <- markTargets(data, rv$targets)
+    data <- markTargets(data, isolate(rv$targets))
     data <- data %>% select(Target, everything(), -playerid, -isTarget)
     datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
@@ -2367,7 +2372,7 @@ shinyServer(function(input, output, session) {
   })
 
   output$topHitters <- DT::renderDataTable({
-    data <- markTargets(topHitters_r(), rv$targets)
+    data <- markTargets(topHitters_r(), isolate(rv$targets))
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[1]])) {
@@ -2389,7 +2394,7 @@ shinyServer(function(input, output, session) {
   })
 
   output$prospectH <- DT::renderDataTable({
-    data <- markTargets(prospectH_r(), rv$targets)
+    data <- markTargets(prospectH_r(), isolate(rv$targets))
     data <- data %>% select(Target, everything(), -playerid, -isTarget)
     datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
@@ -2487,7 +2492,7 @@ shinyServer(function(input, output, session) {
 
   output$leaderH <- DT::renderDataTable({
     h <- leaderH_avail() %>% mutate(Player = fgLink(Player, playerid))
-    h <- markTargets(h, rv$targets)
+    h <- markTargets(h, isolate(rv$targets))
     h <- h %>% select(Target, everything(), -playerid, -isTarget)
     dt <- datatable(h,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
@@ -2501,7 +2506,7 @@ shinyServer(function(input, output, session) {
 
   output$leaderP <- DT::renderDataTable({
     p <- leaderP_avail() %>% mutate(Player = fgLink(Player, playerid))
-    p <- markTargets(p, rv$targets)
+    p <- markTargets(p, isolate(rv$targets))
     p <- p %>% select(Target, everything(), -playerid, -isTarget)
     dt <- datatable(p,
               options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
@@ -2514,7 +2519,7 @@ shinyServer(function(input, output, session) {
   })
 
   output$prospectP <- DT::renderDataTable({
-    data <- markTargets(prospectP_r(), rv$targets)
+    data <- markTargets(prospectP_r(), isolate(rv$targets))
     data <- data %>% select(Target, everything(), -playerid, -isTarget)
     datatable(data,
               options = list(pageLength = 20, autoWidth = FALSE,
@@ -3330,7 +3335,7 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Message = "No hitters found. Paste an article URL and click Analyze."),
                        options = list(dom = 't'), selection = 'none'))
     }
-    df <- markTargets(df, rv$targets)
+    df <- markTargets(df, isolate(rv$targets))
     df <- df %>% select(Target, everything(), -playerid, -isTarget)
     datatable(df, escape = FALSE,
               options = list(pageLength = 20)) %>%
@@ -3345,7 +3350,7 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Message = "No pitchers found. Paste an article URL and click Analyze."),
                        options = list(dom = 't'), selection = 'none'))
     }
-    df <- markTargets(df, rv$targets)
+    df <- markTargets(df, isolate(rv$targets))
     df <- df %>% select(Target, everything(), -playerid, -isTarget)
     datatable(df, escape = FALSE,
               options = list(pageLength = 20)) %>%

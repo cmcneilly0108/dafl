@@ -7,6 +7,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    id = "mainNav",
                    theme = bs_theme(bootswatch = "flatly"),
     useShinyjs(),
+    tags$head(tags$script(HTML("
+      Shiny.addCustomMessageHandler('toggleStar', function(msg) {
+        var els = document.querySelectorAll('[id=\"tgt-' + msg.pid + '\"]');
+        els.forEach(function(el) {
+          if (msg.isTarget) {
+            el.innerHTML = '\\u2605';
+            el.style.color = '#f1c40f';
+          } else {
+            el.innerHTML = '\\u2606';
+            el.style.color = '#ccc';
+          }
+        });
+      });
+    "))),
                    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000; display:flex; align-items:center; gap:12px;",
                      uiOutput("draftProgress", inline = TRUE),
                      actionButton('settingsBtn', 'Settings',
