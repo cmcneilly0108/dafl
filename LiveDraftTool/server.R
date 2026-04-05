@@ -1,4 +1,4 @@
-# LiveDraftTool server.R — reactive draft tool
+install.packages("shinyAce")# LiveDraftTool server.R — reactive draft tool
 
 library(ggplot2)
 library(shinyjs)
@@ -3093,6 +3093,13 @@ shinyServer(function(input, output, session) {
 
       response <- callClaudeAPI(prompt, max_tokens = 4096)
 
+      if (is.null(response) || length(response) == 0 || is.na(response) || response == "") {
+        removeNotification("researchMsg")
+        showNotification("Empty response from Claude API", type = "error", duration = 15)
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
       # Step 3: Parse response — strip markdown code fences if present
       response <- gsub("^\\s*```json\\s*", "", response)
       response <- gsub("^\\s*```\\s*", "", response)
@@ -3141,7 +3148,7 @@ shinyServer(function(input, output, session) {
         }
       )
 
-      if (is.null(extracted) || nrow(extracted) == 0) {
+      if (is.null(extracted) || !is.data.frame(extracted) || nrow(extracted) == 0) {
         removeNotification("researchMsg")
         showNotification("No players found in this article", type = "warning")
         rv$researchH <- data.frame()
@@ -3366,6 +3373,35 @@ shinyServer(function(input, output, session) {
     tags$div(style = "margin-top:10px; font-size:12px; color:#888;",
       tags$em(paste0("Could not match: ", paste(um, collapse = ", ")))
     )
+  })
+
+  # ============================
+  # Notes tab
+  # ============================
+  notesFile <- str_c("../", cyear, "DraftNotes.html")
+
+  # Load existing notes and render editor with saved content
+  savedNotes <- if (file.exists(notesFile)) {
+    paste(readLines(notesFile, warn = FALSE), collapse = "\n")
+  } else { "" }
+
+  output$notesEditorUI <- renderUI({
+    quillInput("notesEditor", label = NULL, value = savedNotes,
+               width = "100%", height = "550px",
+               toolbarOptions = SetQuillOptions(
+                 headers = list(1, 2, 3, FALSE),
+                 bold = TRUE, italic = TRUE, underline = TRUE,
+                 strikethrough = TRUE,
+                 lists = c("ordered", "bullet"),
+                 blockQuote = TRUE, codeBlock = TRUE,
+                 links = TRUE, colors = list(),
+                 images = FALSE, videos = FALSE
+               ))
+  })
+
+  observeEvent(input$saveNotes, {
+    writeLines(input$notesEditor, notesFile)
+    shinyjs::html("notesSaveStatus", paste0("Saved at ", format(Sys.time(), "%H:%M:%S")))
   })
 
 })

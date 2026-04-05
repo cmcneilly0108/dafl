@@ -1,6 +1,7 @@
 library("bslib")
 library("DT")
 library("shinyjs")
+library("ShinyQuill")
 
 shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    id = "mainNav",
@@ -267,6 +268,20 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                    tabPanel("My Targets",
                             verticalLayout(
                               DT::dataTableOutput("targetTable")
+                            )
+                   ),
+                   tabPanel("Notes",
+                            useQuill(),
+                            fluidRow(
+                              column(10, offset = 1,
+                                uiOutput("notesEditorUI"),
+                                tags$div(style = "margin-top:10px;",
+                                  actionButton("saveNotes", "Save Notes",
+                                               class = "btn-primary",
+                                               style = "margin-right:10px;"),
+                                  tags$span(id = "notesSaveStatus", style = "color:#888; font-size:13px;")
+                                )
+                              )
                             )
                    )
 )
