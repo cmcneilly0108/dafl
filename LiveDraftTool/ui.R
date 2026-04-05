@@ -9,7 +9,6 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
     useShinyjs(),
                    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000; display:flex; align-items:center; gap:12px;",
                      uiOutput("draftProgress", inline = TRUE),
-                     uiOutput("myTeamBadge", inline = TRUE),
                      actionButton('settingsBtn', 'Settings',
                                   class = 'btn-default btn-sm')
                    ),

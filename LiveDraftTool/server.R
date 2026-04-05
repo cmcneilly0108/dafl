@@ -162,12 +162,13 @@ shinyServer(function(input, output, session) {
     nProtected <- sum(is.na(roster$DraftOrder))
     auctionSpots <- totalSpots - nProtected
     picked <- sum(!is.na(roster$DraftOrder))
+    playersLeft <- auctionSpots - picked
     totalCash <- nteams * cap
     spent <- sum(roster$Salary, na.rm = TRUE)
-    remaining <- totalCash - spent
+    cashLeft <- totalCash - spent
     tags$span(style = "font-size:12px; color:#bdc3c7;",
-      paste0("Pick ", picked, "/", auctionSpots,
-             " | $", formatC(remaining, format = "d", big.mark = ","), " remaining"))
+      paste0(playersLeft, " players left",
+             " | $", formatC(cashLeft, format = "d", big.mark = ","), " left"))
   })
 
   # --- Projection source toggle ---
