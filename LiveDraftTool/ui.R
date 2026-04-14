@@ -157,7 +157,9 @@ shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
                                             width=3),
                                           mainPanel(
                                             h3(textOutput("posNeedHeader")),
-                                            DT::dataTableOutput("posNeedTable")
+                                            DT::dataTableOutput("posNeedTable"),
+                                            h4("Available by Price Tier", style = "margin-top:20px;"),
+                                            DT::dataTableOutput("posTierTable")
                                           )
                             )
                    ),

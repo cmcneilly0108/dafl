@@ -39,11 +39,8 @@ fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
 cd <- Sys.time()
 dt <- difftime(cd, fd, units = "hours")
 if (dt > 10) {
-  #system("./pullSteamer.sh")
-  system("bash ../scripts/pullSteamer.sh")
-  #system("bash ../scripts/pullMaster.sh")
-  system("bash ../scripts/pullATC.sh")
-  system("bash ../scripts/fgInj.sh")
+  # Use Playwright-based fetch (bypasses Cloudflare)
+  system(str_c("node ../scripts/fgFetchAll.js ", cyear))
   }
 
 #Load steamer data

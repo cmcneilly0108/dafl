@@ -1,4 +1,4 @@
-install.packages("shinyAce")# LiveDraftTool server.R — reactive draft tool
+# LiveDraftTool server.R — reactive draft tool
 
 library(ggplot2)
 library(shinyjs)
@@ -18,7 +18,7 @@ teams <- sort(unique(pstandings$Team))
 hpos <- list('C','1B','2B','SS','3B','OF')
 ppos <- list('SP','MR','CL')
 allpos <- c(hpos,list('SP','MR','CL'))
-posThresholds <- c('OF' = 3, 'SP' = 5)  # positions needing >1 protected
+posThresholds <- c('OF' = 3, 'SP' = 6)  # positions needing >1 protected
 cap <- 260
 nteams <- 13
 nhitters <- 13
@@ -501,9 +501,9 @@ shinyServer(function(input, output, session) {
     # --- Stats Card ---
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     hsLookup <- if (isHitter && !is.null(hs[[1]])) {
-      hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      hs[[1]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid))
     } else if (!isHitter && !is.null(hs[[2]])) {
-      hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid))
+      hs[[2]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid))
     } else { NULL }
     playerHS <- if (!is.null(hsLookup)) {
       hsRow <- hsLookup %>% filter(playerid == pid)
@@ -845,7 +845,7 @@ shinyServer(function(input, output, session) {
     rh <- rhitters_r()
     rp <- rpitchers_r()
     # Use common columns
-    cols <- c('Team','Player','Contract','Salary','pDFL','pADP','pSkew','rankDiff','Age','Pos','playerid','DraftOrder')
+    cols <- c('Team','Player','Contract','Salary','pDFL','pADP','pSkew','rankDiff','Age','Pos','posEl','playerid','DraftOrder')
     hcols <- intersect(cols, names(rh))
     pcols <- intersect(cols, names(rp))
     pc <- bind_rows(
@@ -932,7 +932,7 @@ shinyServer(function(input, output, session) {
   getPositionalNeed <- function(pos, pc, ps, cs, rh, rp) {
     threshold <- ifelse(pos %in% names(posThresholds), posThresholds[pos], 1)
 
-    posCounts <- pc %>% filter(Pos == pos) %>%
+    posCounts <- pc %>% filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, fixed(pos)))) %>%
       group_by(Team) %>% summarize(have = n(), .groups = 'drop')
 
     allteams <- data.frame(Team = teams, stringsAsFactors = FALSE)
@@ -1441,11 +1441,10 @@ shinyServer(function(input, output, session) {
     # Positions I still need
     pc <- protClean_r()
     allPositions <- c('C','1B','2B','SS','3B','OF','SP','MR','CL')
-    posCounts <- pc %>% filter(Team == myTeam) %>%
-      group_by(Pos) %>% summarize(have = n(), .groups = 'drop')
+    myPlayers <- pc %>% filter(Team == myTeam)
     neededPositions <- sapply(allPositions, function(p) {
       threshold <- ifelse(p %in% names(posThresholds), posThresholds[p], 1)
-      have <- sum(posCounts$Pos == p)
+      have <- myPlayers %>% filter(Pos == p | (!is.na(posEl) & str_detect(posEl, fixed(p)))) %>% nrow()
       threshold - have > 0
     })
     neededPositions <- allPositions[neededPositions]
@@ -1471,7 +1470,7 @@ shinyServer(function(input, output, session) {
         tm <- ps_others$Team[i]
         theirMax <- ps_others$CashLeft[i] - (ps_others$Needed[i] - 1)
         if (theirMax <= 1) next
-        tmHave <- pc %>% filter(Team == tm, Pos == pos) %>% nrow()
+        tmHave <- pc %>% filter(Team == tm, Pos == pos | (!is.na(posEl) & str_detect(posEl, fixed(pos)))) %>% nrow()
         if (tmHave < threshold) nComp <- nComp + 1
       }
       nComp
@@ -2208,7 +2207,7 @@ shinyServer(function(input, output, session) {
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[1]])) {
-      hsH <- hs[[1]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      hsH <- hs[[1]] %>% mutate(Hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, Hotscore)
       data <- left_join(data, hsH, by = "playerid")
     } else {
       data$Hotscore <- NA_real_
@@ -2248,7 +2247,7 @@ shinyServer(function(input, output, session) {
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[2]])) {
-      hsP <- hs[[2]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      hsP <- hs[[2]] %>% mutate(Hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, Hotscore)
       data <- left_join(data, hsP, by = "playerid")
     } else {
       data$Hotscore <- NA_real_
@@ -2324,6 +2323,34 @@ shinyServer(function(input, output, session) {
                     c('#d4edda', '#d4edda', '#fff3cd', '#f8d7da', '#e9ecef')))
   })
 
+  output$posTierTable <- DT::renderDataTable({
+    req(input$e4)
+    pos <- input$e4
+    hitterPositions <- c('C','1B','2B','SS','3B','OF')
+    if (pos %in% hitterPositions) {
+      pool <- AllH_avail() %>%
+        filter(Pos == pos | (!is.na(posEl) & str_detect(posEl, pos)))
+    } else {
+      pool <- AllP_avail() %>% filter(Pos == pos)
+    }
+    tiers <- c('Elite $30+', 'Solid $15+', 'Value $5+', 'Dollar $1+', 'Sub-$1')
+    counts <- c(
+      sum(pool$pDFL >= 30, na.rm = TRUE),
+      sum(pool$pDFL >= 15 & pool$pDFL < 30, na.rm = TRUE),
+      sum(pool$pDFL >= 5  & pool$pDFL < 15, na.rm = TRUE),
+      sum(pool$pDFL >= 1  & pool$pDFL < 5,  na.rm = TRUE),
+      sum(pool$pDFL < 1, na.rm = TRUE)
+    )
+    data <- data.frame(Tier = tiers, Players = counts, stringsAsFactors = FALSE, check.names = FALSE)
+    tierColors <- c('#e8f4fd', '#edf7ee', '#fef9e7', '#f5f5f5', '#ffffff')
+    datatable(data, rownames = FALSE,
+              options = list(paging = FALSE, searching = FALSE, info = FALSE,
+                             ordering = FALSE, autoWidth = FALSE),
+              selection = 'none') %>%
+      formatStyle('Tier', target = 'row',
+                  backgroundColor = styleEqual(tiers, tierColors))
+  })
+
   output$pressureTable <- DT::renderDataTable({
     data <- pressure_r()
     datatable(data, rownames = FALSE,
@@ -2344,7 +2371,7 @@ shinyServer(function(input, output, session) {
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[2]])) {
-      hsP <- hs[[2]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      hsP <- hs[[2]] %>% mutate(Hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, Hotscore)
       data <- left_join(data, hsP, by = "playerid")
     } else {
       data$Hotscore <- NA_real_
@@ -2376,7 +2403,7 @@ shinyServer(function(input, output, session) {
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
     if (!is.null(hs[[1]])) {
-      hsH <- hs[[1]] %>% rename(Hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, Hotscore)
+      hsH <- hs[[1]] %>% mutate(Hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, Hotscore)
       data <- left_join(data, hsH, by = "playerid")
     } else {
       data$Hotscore <- NA_real_
@@ -2458,7 +2485,7 @@ shinyServer(function(input, output, session) {
     # Add hotscore
     hs <- leaderHotScores()
     if (!is.null(hs[[1]])) {
-      hsH <- hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore)
+      hsH <- hs[[1]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, hotscore)
       h <- left_join(h, hsH, by = "playerid")
     }
     # Remove rostered players
@@ -2478,7 +2505,7 @@ shinyServer(function(input, output, session) {
     # Add hotscore
     hs <- leaderHotScores()
     if (!is.null(hs[[2]])) {
-      hsP <- hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore)
+      hsP <- hs[[2]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, hotscore)
       p <- left_join(p, hsP, by = "playerid")
     }
     # Remove rostered players
@@ -2500,7 +2527,7 @@ shinyServer(function(input, output, session) {
       formatCurrency('pDFL') %>%
       formatRound(c('AVG','OBP','SLG','OPS','wOBA'), 3) %>%
       formatRound(c('wRC+','WAR'), 1)
-    if ('hotscore' %in% names(h)) dt <- dt %>% formatRound('hotscore', 2)
+    if ('hotscore' %in% names(h)) dt <- dt %>% formatRound('hotscore', 1)
     dt
   })
 
@@ -2514,7 +2541,7 @@ shinyServer(function(input, output, session) {
       formatCurrency('pDFL') %>%
       formatRound(c('ERA','WHIP','BABIP','FIP','xFIP','K/9','BB/9'), 2) %>%
       formatRound('WAR', 1)
-    if ('hotscore' %in% names(p)) dt <- dt %>% formatRound('hotscore', 2)
+    if ('hotscore' %in% names(p)) dt <- dt %>% formatRound('hotscore', 1)
     dt
   })
 
@@ -2550,8 +2577,8 @@ shinyServer(function(input, output, session) {
 
     # Join hotscores
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
-    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
-    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
+    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
+    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) %>% select(playerid, hotscore) else NULL
     hsAll <- bind_rows(hsH, hsP) %>% distinct(playerid, .keep_all = TRUE)
     if (nrow(hsAll) > 0) {
       roster <- left_join(roster, hsAll, by = "playerid")
@@ -2861,8 +2888,8 @@ shinyServer(function(input, output, session) {
 
     # --- Hot Start Replacements ---
     hs <- tryCatch(leaderHotScores(), error = function(e) list(NULL, NULL))
-    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) else NULL
-    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% rename(hotscore = zScore) %>% mutate(playerid = as.character(playerid)) else NULL
+    hsH <- if (!is.null(hs[[1]])) hs[[1]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) else NULL
+    hsP <- if (!is.null(hs[[2]])) hs[[2]] %>% mutate(hotscore = round(zScore, 1), playerid = as.character(playerid)) else NULL
 
     # Get starters with hotscores
     allStarters <- bind_rows(
@@ -2926,10 +2953,55 @@ shinyServer(function(input, output, session) {
       tags$div(style = "color:red; padding:12px;", paste("Hot Start error:", e$message))
     })
 
+    # --- Injured Players (rostered players currently on injury list) ---
+    injuredUI <- tryCatch({
+      rosterIds <- unique(c(
+        tr$hitters %>% filter(Player != "") %>% pull(playerid),
+        tr$pitchers %>% filter(Player != "") %>% pull(playerid)
+      ))
+      rosterIds <- rosterIds[!is.na(rosterIds)]
+      injRoster <- injOrig_full %>%
+        mutate(playerid = as.character(playerid)) %>%
+        filter(playerid %in% as.character(rosterIds)) %>%
+        arrange(-pDFL)
+
+      if (nrow(injRoster) > 0) {
+        injLines <- lapply(seq_len(nrow(injRoster)), function(i) {
+          dateStr <- injRoster$`Injury / Surgery Date`[i]
+          dateTag <- if (!is.null(dateStr) && !is.na(dateStr) && dateStr != "")
+            tags$span(style = "margin-left:8px; color:#888;", paste0("(", dateStr, ")")) else NULL
+          statusStr <- injRoster$status[i]
+          updateStr <- injRoster$`Latest Update`[i]
+          tags$div(style = "margin-bottom:10px; padding:6px 8px; background:#fff3cd; border:1px solid #f0e0a0; border-radius:4px;",
+            tags$div(style = "font-size:14px;",
+              tags$strong(injRoster$Player[i]),
+              tags$span(style = "color:#888;", paste0(" (", injRoster$position[i], ")")),
+              if (!is.na(statusStr) && statusStr != "")
+                tags$span(style = "margin-left:8px; color:#c0392b; font-weight:bold;", statusStr)
+            ),
+            tags$div(style = "font-size:13px; margin-top:2px;",
+              injRoster$Injury[i], dateTag),
+            if (!is.null(updateStr) && !is.na(updateStr) && updateStr != "")
+              tags$div(style = "font-size:12px; color:#666; margin-top:2px;", updateStr)
+          )
+        })
+        do.call(tags$div, c(list(tags$h4(style = "margin-bottom:8px;", "Injured Players")), injLines))
+      } else {
+        tags$div(style = "color:#2ecc71; font-size:14px;",
+                 tags$h4("Injured Players"),
+                 "No rostered players currently injured.")
+      }
+    }, error = function(e) {
+      tags$div(style = "color:red; padding:12px;", paste("Injured Players error:", e$message))
+    })
+
     tags$div(style = "margin-top:24px; padding-top:16px; border-top:2px solid #ddd;",
       tags$div(style = "display:grid; grid-template-columns:1fr 1fr; gap:20px;",
         tags$div(statGapUI),
-        tags$div(hotReplUI)
+        tags$div(
+          hotReplUI,
+          tags$div(style = "margin-top:16px;", injuredUI)
+        )
       )
     )
     }, error = function(e) {
@@ -3386,9 +3458,20 @@ shinyServer(function(input, output, session) {
   # ============================
   notesFile <- str_c("../", cyear, "DraftNotes.html")
 
+  # ShinyQuill::quillInput drops `value` verbatim into a single-quoted JS
+  # string literal — apostrophes/newlines in saved notes break it. Escape
+  # backslashes first, then quotes and CR/LF.
+  jsEscape <- function(x) {
+    x <- gsub("\\", "\\\\", x, fixed = TRUE)
+    x <- gsub("'",  "\\'",  x, fixed = TRUE)
+    x <- gsub("\r", "\\r",  x, fixed = TRUE)
+    x <- gsub("\n", "\\n",  x, fixed = TRUE)
+    x
+  }
+
   # Load existing notes and render editor with saved content
   savedNotes <- if (file.exists(notesFile)) {
-    paste(readLines(notesFile, warn = FALSE), collapse = "\n")
+    jsEscape(paste(readLines(notesFile, warn = FALSE), collapse = "\n"))
   } else { "" }
 
   output$notesEditorUI <- renderUI({

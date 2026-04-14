@@ -281,7 +281,12 @@ AllH$Pos <- with(AllH,ifelse(Pos %in% c('LF','CF','RF'),'OF',Pos))
 
 # Add in position eligibility based on 20 games
 #pedf <- read.cbs(positionElig)
-pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
+# Refresh poselig.csv from CBS so eligibility tracks in-season position changes.
+# pullCBS2.sh writes ../poselig.csv (and also refreshes ../overall.csv as a side effect).
+tryCatch(system("bash ../scripts/pullCBS2.sh"), error = function(e) {
+  cat("pullCBS2.sh failed, falling back to existing poselig.csv:", conditionMessage(e), "\n")
+})
+pedf <- read.cbs("../poselig.csv")
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 # Add column into AllH
 AllH <- left_join(AllH,pedf,by=c('playerid'))

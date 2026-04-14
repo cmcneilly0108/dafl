@@ -37,12 +37,12 @@ cd <- Sys.time()
 dt <- as.integer(difftime(cd, fd, units = "hours"))
 #dt <- 9
 if (dt > 10) {
-  system("bash ../scripts/pullSteamerROS.sh")
-  system("bash ../scripts/pullBatXROS.sh")
+  # Use Playwright-based fetch for FanGraphs (bypasses Cloudflare)
+  system(str_c("node ../scripts/fgFetchInSeason.js ", cyear))
+  # CBS endpoints (not behind Cloudflare)
   system("bash ../scripts/pullCBS.sh")
   system("bash ../scripts/pullCBS2.sh")
   system("bash ../scripts/salaryinfo.sh")
-  system("bash ../scripts/pullRRClosers.sh")
 }
 
 

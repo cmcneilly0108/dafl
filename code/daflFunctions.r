@@ -1278,8 +1278,10 @@ getStuffAPI <- function() {
 fetchLeaderboards <- function(startDate, endDate) {
   cat("Fetching leaderboards via Playwright...\n")
   cat("Date range:", startDate, "to", endDate, "\n")
-  cmd <- paste0("cd ../scripts && node fgFetchLeaders.js ", startDate, " ", endDate)
-  result <- system(cmd, intern = TRUE)
+  oldwd <- getwd()
+  on.exit(setwd(oldwd), add = TRUE)
+  setwd("../scripts")
+  result <- system2("node", c("fgFetchLeaders.js", startDate, endDate), stdout = TRUE, stderr = TRUE)
   cat(paste(result, collapse = "\n"), "\n")
 }
 
@@ -1712,5 +1714,16 @@ callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max
   }, error = function(e) {
     paste("API Error:", e$message)
   })
+}
+
+# Clear Trending rows from DAFL.db for all seasons prior to `year`.
+# Date is stored as R epoch-days (REAL), so compare against the same.
+clearTrendingBefore <- function(year, dbPath = "DAFL.db") {
+  cutoff <- as.numeric(as.Date(paste0(year, "-01-01")))
+  conn <- dbConnect(RSQLite::SQLite(), dbPath)
+  on.exit(dbDisconnect(conn))
+  deleted <- dbExecute(conn, "DELETE FROM Trending WHERE Date < ?", params = list(cutoff))
+  message(sprintf("Deleted %d Trending rows before %s-01-01", deleted, year))
+  invisible(deleted)
 }
 
