@@ -68,7 +68,7 @@ async function fetchEndpoints(page) {
       const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
       const body = await response.text();
 
-      if (body.trim().length === 0 || body.includes('<!DOCTYPE')) {
+      if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
         console.error(`  !! ${ep.name}: empty or HTML response, skipping`);
         failures++;
         continue;
@@ -160,7 +160,7 @@ async function main() {
         const resp = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
         const body = await resp.text();
 
-        if (body.trim().length === 0 || body.includes('<!DOCTYPE')) {
+        if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
           console.error(`  !! ${ep.name}: empty or HTML response, skipping`);
           failures++;
           continue;
