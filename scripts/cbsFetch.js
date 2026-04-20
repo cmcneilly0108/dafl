@@ -49,7 +49,7 @@ async function waitForLogin(context) {
     () => !window.location.href.includes('login') &&
           !window.location.href.includes('auth') &&
           document.querySelector('body')?.innerText.length > 100,
-    { timeout: 300000 }
+    { timeout: 3000000 }
   );
   console.log('Login detected! Continuing with fetch...\n');
 
@@ -65,7 +65,7 @@ async function fetchEndpoints(page) {
     const outPath = path.join(DATA_DIR, ep.file);
     try {
       console.log(`Fetching ${ep.name}...`);
-      const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+      const response = await page.goto(url, { waitUntil: 'load', timeout: 300000 });
       const body = await response.text();
 
       if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
@@ -105,7 +105,7 @@ async function main() {
       () => !window.location.href.includes('login') &&
             !window.location.href.includes('auth') &&
             document.querySelector('body')?.innerText.length > 100,
-      { timeout: 300000 }
+      { timeout: 3000000 }
     );
     console.log('Login detected! Fetching data...\n');
 
@@ -126,7 +126,7 @@ async function main() {
   // Test session by fetching first endpoint
   const testUrl = BASE_URL + ENDPOINTS[0].path;
   console.log('Testing session...');
-  const response = await page.goto(testUrl, { waitUntil: 'load', timeout: 30000 });
+  const response = await page.goto(testUrl, { waitUntil: 'load', timeout: 300000 });
   const testBody = await response.text();
 
   if (isLoginPage(response.url(), testBody)) {
@@ -157,7 +157,7 @@ async function main() {
       const epOutPath = path.join(DATA_DIR, ep.file);
       try {
         console.log(`Fetching ${ep.name}...`);
-        const resp = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        const resp = await page.goto(url, { waitUntil: 'load', timeout: 300000 });
         const body = await resp.text();
 
         if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
