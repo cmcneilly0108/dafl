@@ -22,11 +22,10 @@ const ENDPOINTS = [
   { name: 'Position Eligibility', file: 'poselig.csv', path: '/print/csv/stats/view/all:C:1B:2B:3B:SS:OF:U/ytd:p/PosElig/stats' },
 ];
 
-function isLoginPage(url, body) {
-  return url.includes('login') ||
-    url.includes('auth') ||
-    body.includes('<!DOCTYPE') ||
+function isLoginResponse(body) {
+  return body.includes('<!DOCTYPE') ||
     body.includes('<html') ||
+    body.includes('login') ||
     body.trim().length === 0;
 }
 
@@ -43,17 +42,25 @@ async function waitForLogin(context) {
   const page = visibleContext.pages()[0] || await visibleContext.newPage();
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-  // Wait until the user is on a league page (not login)
   console.log('Waiting for successful login...');
   await page.waitForFunction(
     () => !window.location.href.includes('login') &&
           !window.location.href.includes('auth') &&
           document.querySelector('body')?.innerText.length > 100,
-    { timeout: 3000000 }
+    { timeout: 300000 }
   );
   console.log('Login detected! Continuing with fetch...\n');
 
   return { context: visibleContext, page };
+}
+
+async function fetchCSV(page, url) {
+  // Use fetch() inside the browser context to avoid triggering downloads
+  const body = await page.evaluate(async (fetchUrl) => {
+    const resp = await fetch(fetchUrl);
+    return await resp.text();
+  }, url);
+  return body;
 }
 
 async function fetchEndpoints(page) {
@@ -65,8 +72,7 @@ async function fetchEndpoints(page) {
     const outPath = path.join(DATA_DIR, ep.file);
     try {
       console.log(`Fetching ${ep.name}...`);
-      const response = await page.goto(url, { waitUntil: 'load', timeout: 300000 });
-      const body = await response.text();
+      const body = await fetchCSV(page, url);
 
       if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
         console.error(`  !! ${ep.name}: empty or HTML response, skipping`);
@@ -105,7 +111,7 @@ async function main() {
       () => !window.location.href.includes('login') &&
             !window.location.href.includes('auth') &&
             document.querySelector('body')?.innerText.length > 100,
-      { timeout: 3000000 }
+      { timeout: 300000 }
     );
     console.log('Login detected! Fetching data...\n');
 
@@ -123,13 +129,15 @@ async function main() {
   });
   let page = context.pages()[0] || await context.newPage();
 
-  // Test session by fetching first endpoint
-  const testUrl = BASE_URL + ENDPOINTS[0].path;
+  // Navigate to league page first (needed for fetch() to have correct cookie context)
   console.log('Testing session...');
-  const response = await page.goto(testUrl, { waitUntil: 'load', timeout: 300000 });
-  const testBody = await response.text();
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-  if (isLoginPage(response.url(), testBody)) {
+  // Test session with first endpoint using in-browser fetch
+  const testUrl = BASE_URL + ENDPOINTS[0].path;
+  const testBody = await fetchCSV(page, testUrl);
+
+  if (isLoginResponse(testBody)) {
     // Session expired - relaunch visible
     const result = await waitForLogin(context);
     context = result.context;
@@ -157,8 +165,7 @@ async function main() {
       const epOutPath = path.join(DATA_DIR, ep.file);
       try {
         console.log(`Fetching ${ep.name}...`);
-        const resp = await page.goto(url, { waitUntil: 'load', timeout: 300000 });
-        const body = await resp.text();
+        const body = await fetchCSV(page, url);
 
         if (body.trim().length === 0 || body.includes('<!DOCTYPE') || body.includes('<html')) {
           console.error(`  !! ${ep.name}: empty or HTML response, skipping`);
