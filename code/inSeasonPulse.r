@@ -39,9 +39,13 @@ dt <- as.integer(difftime(cd, fd, units = "hours"))
 if (dt > 10) {
   # Use Playwright-based fetch for FanGraphs (bypasses Cloudflare)
   system(str_c("node ../scripts/fgFetchInSeason.js ", cyear))
-  # CBS endpoints (uses Playwright with persistent auth)
-  system("node ../scripts/cbsFetch.js")
   system("bash ../scripts/salaryinfo.sh")
+}
+
+# CBS endpoints - separate check since they're slow
+cbsAge <- as.integer(difftime(cd, file.info("../AllHitters.csv")$mtime, units = "hours"))
+if (is.na(cbsAge) || cbsAge > 10) {
+  system("node ../scripts/cbsFetch.js")
 }
 
 
