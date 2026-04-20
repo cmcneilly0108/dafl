@@ -39,9 +39,8 @@ dt <- as.integer(difftime(cd, fd, units = "hours"))
 if (dt > 10) {
   # Use Playwright-based fetch for FanGraphs (bypasses Cloudflare)
   system(str_c("node ../scripts/fgFetchInSeason.js ", cyear))
-  # CBS endpoints (not behind Cloudflare)
-  system("bash ../scripts/pullCBS.sh")
-  system("bash ../scripts/pullCBS2.sh")
+  # CBS endpoints (uses Playwright with persistent auth)
+  system("node ../scripts/cbsFetch.js")
   system("bash ../scripts/salaryinfo.sh")
 }
 
