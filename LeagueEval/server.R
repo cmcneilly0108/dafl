@@ -21,34 +21,44 @@ shinyServer(function(input, output,session) {
     }
   )
 
-  # --- Helper: get playerid from a displayed table row ---
-  # The displayed tables strip playerid, so we look up from AllH/AllP by Player name
-  getPlayerIdFromName <- function(playerName) {
-    # Strip FanGraphs link HTML to get raw name if needed
-    cleanName <- gsub("<a[^>]*>([^<]*)</a>", "\\1", playerName)
-    pid <- AllH$playerid[AllH$Player == playerName]
-    if (length(pid) == 0) pid <- AllP$playerid[AllP$Player == playerName]
-    if (length(pid) == 0) pid <- AllH$playerid[grepl(cleanName, AllH$Player, fixed = TRUE)]
-    if (length(pid) == 0) pid <- AllP$playerid[grepl(cleanName, AllP$Player, fixed = TRUE)]
-    if (length(pid) > 0) return(as.character(pid[1]))
-    return(NULL)
+
+  # --- Helper: inline target star for player rows ---
+  targetStar <- function(pid, isTarget) {
+    star <- ifelse(isTarget, "\u2605", "\u2606")
+    color <- ifelse(isTarget, "#f1c40f", "#ccc")
+    paste0("<span id='tgt-", pid, "' onclick='Shiny.setInputValue(\"toggleTarget\", \"", pid,
+           "\", {priority: \"event\"}); return false;' ",
+           "style='cursor:pointer; font-size:16px; color:", color, ";'>", star, "</span>")
   }
 
-  # --- Helper: toggle a target by playerid ---
-  toggleTarget <- function(pid, playerName) {
-    if (is.null(pid)) {
-      showNotification("Could not identify player", type = "warning")
-      return()
-    }
+  # --- Helper: mark target players with star column ---
+  markTargets <- function(df, targets) {
+    df$isTarget <- as.integer(df$playerid %in% targets)
+    df$Target <- targetStar(df$playerid, df$isTarget == 1)
+    df
+  }
+
+  # --- Universal target toggle handler ---
+  observeEvent(input$toggleTarget, {
+    pid <- input$toggleTarget
+    allPlayers <- bind_rows(
+      AllH %>% select(playerid, Player),
+      AllP %>% select(playerid, Player)
+    ) %>% distinct(playerid, .keep_all = TRUE)
+    pName <- allPlayers$Player[allPlayers$playerid == pid]
+    if (length(pName) == 0) pName <- "Player"
     if (pid %in% rv$targets) {
       rv$targets <- rv$targets[rv$targets != pid]
-      showNotification(paste0("Removed target: ", playerName), type = "message")
+      isNowTarget <- FALSE
+      showNotification(paste0("Removed target: ", pName), type = "message")
     } else {
       rv$targets <- c(rv$targets, pid)
-      showNotification(paste0("Added target: ", playerName), type = "message")
+      isNowTarget <- TRUE
+      showNotification(paste0("Added target: ", pName), type = "message")
     }
     write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-  }
+    session$sendCustomMessage("toggleStar", list(pid = pid, isTarget = isNowTarget))
+  })
 
 
 # --- Refresh Data ---
@@ -108,32 +118,31 @@ shinyServer(function(input, output,session) {
   output$TeamP <- DT::renderDataTable({ dtTeamP() })
 
 # By Position
-  # Keep the raw data for target lookups
   topPosData <- reactive({
     rv$refreshCount
     ifelse(input$fa == TRUE,ffh <- filter(AllH,Team=='Free Agent'),ffh <- AllH)
     ifelse(input$fa == TRUE,ffp <- filter(AllP,Team=='Free Agent'),ffp <- AllP)
     ifelse(input$e3 %in% c('SP','MR','CL'),
            ff <- ffp %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
-             select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,twostarts,LVG,Injury,Expected.Return),
+             select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,twostarts,LVG,Injury,Expected.Return),
            ifelse(input$e3 == 'Hitters',
                   ff <- ffh %>%
-                    select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
                     arrange(-pDFL),
                   ff <- ffh %>% filter(str_detect(posEl,input$e3)) %>%
-                    select(Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
                     arrange(-pDFL)
            )
     )
-    ff
+    markTargets(ff, isolate(rv$targets))
   })
 
   topPos <- reactive({
-    ff <- topPosData()
+    ff <- topPosData() %>% select(Target, everything(), -playerid, -isTarget)
     ifelse(input$e3 %in% c('SP','MR','CL'),
-           res <- datatable(ff,options = list(pageLength = 20), filter='top', escape=FALSE, selection='single') %>% formatCurrency('pDFL') %>%
-             formatRound(c('pSGP','hotscore','pERA','pK/9','pFIP','LVG'),2) %>% formatRound(c('Age','pW','pSO','pSV','pHLD'),0),
-           res <- datatable(ff,options = list(pageLength = 20), filter='top', escape=FALSE, selection='single') %>% formatCurrency('pDFL') %>%
+           res <- datatable(ff,options = list(pageLength = 20), filter='top', escape=FALSE) %>% formatCurrency('pDFL') %>%
+             formatRound(c('pSGP','hotscore','pERA','pK/9','pFIP','LVG'),2) %>% formatRound(c('Age','pW','pSO','pSV','pHLD','Pitching+'),0),
+           res <- datatable(ff,options = list(pageLength = 20), filter='top', escape=FALSE) %>% formatCurrency('pDFL') %>%
              formatRound(c('pSGP','hotscore'),2) %>% formatRound(c('Age','pHR','pR','pRBI','pSB'),0) %>%
              formatRound(c('pAVG'),3)
     )
@@ -141,37 +150,13 @@ shinyServer(function(input, output,session) {
   })
   output$topPlayers <- DT::renderDataTable({topPos()})
 
-  # Target toggle — By Position tab
-  observeEvent(input$targetPosBtn, {
-    sel <- input$topPlayers_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    data <- topPosData()
-    playerName <- data$Player[sel]
-    pid <- getPlayerIdFromName(playerName)
-    toggleTarget(pid, playerName)
-  })
-
 # Reliever Detail
   output$rrcResults <- DT::renderDataTable({
     rv$refreshCount
-    datatable(rrcResults,options = list(pageLength = 20), filter='top', escape=FALSE, selection='single') %>%
+    ff <- markTargets(rrcResults, isolate(rv$targets)) %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(ff,options = list(pageLength = 20), filter='top', escape=FALSE) %>%
       formatRound(c('pSGP','hotscore','LVG','pERA','pK/9','pBB/9'),3) %>% formatCurrency('pDFL') %>%
       formatRound(c('pW','pSO','pSV','pHLD'),0)
-  })
-
-  # Target toggle — Reliever Detail tab
-  observeEvent(input$targetRRBtn, {
-    sel <- input$rrcResults_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    playerName <- rrcResults$Player[sel]
-    pid <- getPlayerIdFromName(playerName)
-    toggleTarget(pid, playerName)
   })
 
 # LC Trends
@@ -234,20 +219,9 @@ shinyServer(function(input, output,session) {
 # Injured
   output$injOrig <- DT::renderDataTable({
     rv$refreshCount
-    datatable(injOrig,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top', escape=FALSE, selection='single') %>%
+    ff <- markTargets(injOrig, isolate(rv$targets)) %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(ff,options = list(pageLength = 20,autoWidth = FALSE, info = FALSE), filter='top', escape=FALSE) %>%
       formatCurrency('pDFL')
-  })
-
-  # Target toggle — Injured tab
-  observeEvent(input$targetInjBtn, {
-    sel <- input$injOrig_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    playerName <- injOrig$Player[sel]
-    pid <- getPlayerIdFromName(playerName)
-    toggleTarget(pid, playerName)
   })
 
 # My Targets
@@ -258,36 +232,14 @@ shinyServer(function(input, output,session) {
       AllH %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return),
       AllP %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return)
     ) %>% distinct(playerid, .keep_all = TRUE)
-    info <- allPlayers %>% filter(playerid %in% rv$targets) %>%
-      arrange(-pDFL) %>%
-      select(Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return)
-    datatable(info, selection = 'single',
+    info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
+    ff <- markTargets(info, rv$targets) %>% select(Target, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, -playerid, -isTarget)
+    datatable(ff,
               options = list(paging = FALSE, info = FALSE, autoWidth = FALSE),
               escape = FALSE) %>%
       formatCurrency('pDFL') %>%
       formatRound(c('hotscore'), 2) %>%
       formatRound('Age', 0)
-  })
-
-  # Remove target from My Targets tab
-  observeEvent(input$removeTargetBtn, {
-    sel <- input$targetTable_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
-      showNotification("Select a player row first", type = "warning")
-      return()
-    }
-    allPlayers <- bind_rows(
-      AllH %>% select(playerid, Player, pDFL),
-      AllP %>% select(playerid, Player, pDFL)
-    ) %>% distinct(playerid, .keep_all = TRUE)
-    info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
-    if (sel <= nrow(info)) {
-      pid <- info$playerid[sel]
-      pName <- info$Player[sel]
-      rv$targets <- rv$targets[rv$targets != pid]
-      write.csv(data.frame(playerid = rv$targets, stringsAsFactors = FALSE), targetFile, row.names = FALSE)
-      showNotification(paste0("Removed target: ", pName), type = "message")
-    }
   })
 
 })

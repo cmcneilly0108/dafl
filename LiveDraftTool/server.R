@@ -2592,6 +2592,22 @@ shinyServer(function(input, output, session) {
     buildTeamRoster(hitters, pitchers)
   })
 
+  # Auto-clean budget entries for slots that now have a player
+
+  observe({
+    tr <- teamRoster_r()
+    team <- input$rosterTeam
+    filledSlots <- c(
+      tr$hitters %>% filter(Player != "") %>% pull(Slot),
+      tr$pitchers %>% filter(Player != "") %>% pull(Slot)
+    )
+    stale <- rv$budgets %>% filter(Team == team, Slot %in% filledSlots)
+    if (nrow(stale) > 0) {
+      rv$budgets <- rv$budgets %>% filter(!(Team == team & Slot %in% filledSlots))
+      write.csv(rv$budgets, budgetFile, row.names = FALSE)
+    }
+  })
+
   output$rosterTeamTitle <- renderText({ input$rosterTeam })
 
   # Positional strength: league-wide average pDFL per roster slot
@@ -2996,7 +3012,7 @@ shinyServer(function(input, output, session) {
     })
 
     tags$div(style = "margin-top:24px; padding-top:16px; border-top:2px solid #ddd;",
-      tags$div(style = "display:grid; grid-template-columns:1fr 1fr; gap:20px;",
+      tags$div(style = "display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;",
         tags$div(statGapUI),
         tags$div(
           hotReplUI,

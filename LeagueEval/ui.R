@@ -12,6 +12,20 @@ shinyUI(
     # "pulse", "sandstone", "simplex", "sketchy", "slate", "solar", "spacelab", "superhero", "united", "yeti"
     theme = bs_theme(bootswatch = "flatly"),
     "DAFL Evaluator, v3.0",
+    tags$head(tags$script(HTML("
+      Shiny.addCustomMessageHandler('toggleStar', function(msg) {
+        var els = document.querySelectorAll('[id=\"tgt-' + msg.pid + '\"]');
+        els.forEach(function(el) {
+          if (msg.isTarget) {
+            el.innerHTML = '\\u2605';
+            el.style.color = '#f1c40f';
+          } else {
+            el.innerHTML = '\\u2606';
+            el.style.color = '#ccc';
+          }
+        });
+      });
+    "))),
     header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
       actionButton('refreshBtn', 'Refresh Data',
                     class = 'btn-success btn-sm',
@@ -50,17 +64,11 @@ shinyUI(
                  choices = c('Hitters','C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
                ),
                checkboxInput('fa','Free Agents Only'),
-               actionButton('targetPosBtn', 'Toggle Target',
-                            class = 'btn-info btn-sm',
-                            style = 'width:100%; margin-top:10px;'),
                value=TRUE,width = 1),
                mainPanel(DT::dataTableOutput("topPlayers"))
              )),
     tabPanel("Reliever Detail",
              verticalLayout(
-               actionButton('targetRRBtn', 'Toggle Target',
-                            class = 'btn-info btn-sm',
-                            style = 'margin-bottom:10px;'),
                h2("Roster Resource"),
                DT::dataTableOutput("rrcResults")
              )
@@ -136,16 +144,10 @@ shinyUI(
              )),
     tabPanel("Injured",
              verticalLayout(
-               actionButton('targetInjBtn', 'Toggle Target',
-                            class = 'btn-info btn-sm',
-                            style = 'margin-bottom:10px;'),
                DT::dataTableOutput("injOrig")
              )),
     tabPanel("My Targets",
              verticalLayout(
-               actionButton('removeTargetBtn', 'Remove Selected',
-                            class = 'btn-warning btn-sm',
-                            style = 'margin-bottom:10px;'),
                h2("Targeted Players"),
                DT::dataTableOutput("targetTable")
              ))

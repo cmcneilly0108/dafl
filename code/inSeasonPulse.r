@@ -91,7 +91,11 @@ cstand$Week <- aWeek
 cstand <- inner_join(cstand,nicks,by=c('Team')) %>% select(-Team) %>% rename(Team=Short)
 
 standings <- filter(standings,Week != aWeek)
-standings <- bind_rows(standings,cstand)
+if (nrow(standings) == 0) {
+  standings <- cstand
+} else {
+  standings <- bind_rows(standings,cstand)
+}
 write.csv(standings,"../DAFLWeeklyStandings.csv",row.names=FALSE)
 #Load/Update DAFL standings file
 
@@ -434,10 +438,10 @@ proh <- right_join(Allhitters,hplist,by=c('playerid'),relationship = "many-to-ma
 
 #prospectH <- select(proh,Player=Player.y,MLB=Team.y,Team=Team.x,Current.Level=mlevel,Pos,Age=Age.y,FV=cFV,DFL=pDFL,Top.100=Ovr_Rank,Hit,Game,Raw,Spd) %>%
 #  arrange(desc(FV),desc(DFL))
-prospectH <- select(proh,playerid,Player=Name,MLB=Org,Team,Pos=Pos.y,Age,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
+prospectH <- select(proh,playerid,Player=Name,MLB=Org,Team,Pos=Pos.y,Age,Level=mlevel,FV,Top.100,Game=Game.Pwr,Raw=Raw.Pwr,Spd) %>%
   arrange(desc(FV))
 prop <- right_join(Allpitchers,pplist,by=c('playerid'),relationship = "many-to-many")
-prospectP <- select(prop,playerid,Player=Name,MLB=Org,Team,Age,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
+prospectP <- select(prop,playerid,Player=Name,MLB=Org,Team,Age,Level=mlevel,FV,Top.100,FB,SL,CB,CH,CMD,Sits,Tops) %>%
   arrange(desc(FV))
 
 # which prospects are taken?
@@ -861,7 +865,7 @@ injOrig <- injOrig %>% select(-fg)
 
 rrcResults <- rrcResults %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
 rrcResults$Player <- rrcResults$fg
-rrcResults <- rrcResults %>% select(-fg,-playerid)
+rrcResults <- rrcResults %>% select(-fg)
 
 prospectH <- prospectH %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
 prospectH$Player <- prospectH$fg
