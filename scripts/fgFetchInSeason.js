@@ -28,6 +28,21 @@ const ENDPOINTS = [
     file: 'batxHROS.json',
   },
   {
+    name: 'THE BAT X ROS Pitchers',
+    url: `https://www.fangraphs.com/api/projections?type=rthebatx&stats=pit&pos=all&team=0&lg=all&download=1`,
+    file: 'batxPROS.json',
+  },
+  {
+    name: 'ATC ROS Hitters',
+    url: `https://www.fangraphs.com/api/projections?type=ratcdc&stats=bat&pos=all&team=0&lg=all&download=1`,
+    file: 'atcHROS.json',
+  },
+  {
+    name: 'ATC ROS Pitchers',
+    url: `https://www.fangraphs.com/api/projections?type=ratcdc&stats=pit&pos=all&team=0&lg=all&download=1`,
+    file: 'atcPROS.json',
+  },
+  {
     name: 'Injuries',
     url: `https://www.fangraphs.com/api/roster-resource/injury-report/data?season=${cyear}`,
     file: 'latestInjuries.json',

@@ -2,9 +2,23 @@
 
 setwd("../code/")
 source("./inSeasonPulse.r")
+library(shinyjs)
 
 teams <- sort(unique(RTot$Team))
 targetFile <- "../InSeasonTargets.csv"
+
+# --- LeagueEval settings (projection source) ---
+# Persisted across sessions so the chosen projection survives restarts.
+# inSeasonPulse.r reads this file to set the default `activeProj` for the inline
+# pipeline; we read it here too so the Shiny UI starts in the same state.
+leSettingsFile <- "../leagueEvalSettings.json"
+leSettings <- tryCatch({
+  if (file.exists(leSettingsFile)) jsonlite::fromJSON(leSettingsFile) else list()
+}, error = function(e) list())
+initialProjSource <- if (!is.null(leSettings$projSource) &&
+                         leSettings$projSource %in% c('atc','steamer','batx')) {
+  leSettings$projSource
+} else 'atc'
 
 
 shinyServer(function(input, output,session) {
@@ -18,8 +32,58 @@ shinyServer(function(input, output,session) {
       } else {
         character(0)
       }
-    }
+    },
+    researchH = data.frame(),
+    researchP = data.frame(),
+    researchUnmatched = character(0),
+    researchTitle = ""
   )
+
+  projSource <- reactiveVal(initialProjSource)
+
+  # --- Settings modal: projection source ---
+  observeEvent(input$settingsBtn, {
+    showModal(modalDialog(
+      title = "Settings",
+      size = "s",
+      easyClose = TRUE,
+      radioButtons('projSource', 'Projection System',
+                   choices = c('ATC' = 'atc',
+                               'Steamer' = 'steamer',
+                               'THE BAT X' = 'batx'),
+                   selected = isolate(projSource()),
+                   inline = TRUE),
+      footer = modalButton("Close")
+    ))
+  })
+
+  # On projection change: swap globals from prebuilt pool, persist, refresh outputs
+  observeEvent(input$projSource, {
+    src <- input$projSource
+    if (is.null(src) || identical(src, projSource())) return()
+    if (!exists("leaguePools") || is.null(leaguePools[[src]])) {
+      showNotification(paste0("Projection pool '", src, "' not available."),
+                       type = "error", duration = 5)
+      return()
+    }
+    pool <- leaguePools[[src]]
+    AllH       <<- pool$AllH
+    AllP       <<- pool$AllP
+    RTot       <<- pool$RTot
+    RTotTop    <<- pool$RTotTop
+    rrcResults <<- pool$rrcResults
+    candTrades <<- pool$candTrades
+    problems   <<- pool$problems
+    injOrig    <<- pool$injOrig
+    projSource(src)
+    rv$refreshCount <- rv$refreshCount + 1
+    tryCatch(
+      write(jsonlite::toJSON(list(projSource = src), auto_unbox = TRUE), leSettingsFile),
+      error = function(e) NULL
+    )
+    showNotification(paste0("Projection: ", switch(src, atc = "ATC", steamer = "Steamer", batx = "THE BAT X")),
+                     type = "message", duration = 3)
+  }, ignoreInit = TRUE)
 
 
   # --- Helper: inline target star for player rows ---
@@ -113,7 +177,7 @@ shinyServer(function(input, output,session) {
     rv$refreshCount
     datatable(pullTeam(input$e1)[[2]],options = list(pageLength = 20), escape=FALSE) %>%
       formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore','pERA','pFIP','pK/9'),3) %>%
-      formatRound(c('pW','pSO','pSV','pHLD','Age'),0)
+      formatRound(c('pW','pSO','pSV','pHLD','Age','Pitching+'),0)
   })
   output$TeamP <- DT::renderDataTable({ dtTeamP() })
 
@@ -192,14 +256,63 @@ shinyServer(function(input, output,session) {
   })
   output$tprofile <- DT::renderDataTable({tprof()},
                                          options = list(pageLength = 20))
+
+# Statistical Surplus — team tiers by category
+  output$statSurplus <- DT::renderDataTable({
+    rv$refreshCount
+    cats <- list(
+      list(name = "HR",  col = "HR",  reverse = FALSE),
+      list(name = "RBI", col = "RBI", reverse = FALSE),
+      list(name = "R",   col = "R",   reverse = FALSE),
+      list(name = "SB",  col = "SB",  reverse = FALSE),
+      list(name = "BA",  col = "BA",  reverse = FALSE),
+      list(name = "W",   col = "W",   reverse = FALSE),
+      list(name = "K",   col = "K",   reverse = FALSE),
+      list(name = "SV",  col = "S",   reverse = FALSE),
+      list(name = "HD",  col = "HD",  reverse = FALSE),
+      list(name = "ERA", col = "ERA", reverse = TRUE)
+    )
+    nT <- nrow(cstand)
+    rows <- lapply(cats, function(c) {
+      v <- suppressWarnings(as.numeric(cstand[[c$col]]))
+      ord <- if (c$reverse) order(v, na.last = TRUE) else order(-v, na.last = TRUE)
+      teamsRanked <- cstand$Team[ord]
+      valsRanked  <- v[ord]
+      fmt <- function(t, x) {
+        if (c$col == "BA")       paste0(t, " (", sprintf("%.3f", x), ")")
+        else if (c$col == "ERA") paste0(t, " (", sprintf("%.2f", x), ")")
+        else                      paste0(t, " (", round(x), ")")
+      }
+      labels <- mapply(fmt, teamsRanked, valsRanked, USE.NAMES = FALSE)
+      high <- paste(labels[1:min(4, nT)], collapse = ", ")
+      med  <- if (nT >= 5) paste(labels[5:min(9, nT)], collapse = ", ") else ""
+      low  <- if (nT >= 10) paste(labels[10:nT], collapse = ", ") else ""
+      data.frame(Category = c$name, High = high, Medium = med, Low = low,
+                 stringsAsFactors = FALSE)
+    })
+    df <- do.call(rbind, rows)
+    datatable(df,
+              options = list(paging = FALSE, info = FALSE, searching = FALSE,
+                             ordering = FALSE, autoWidth = FALSE,
+                             columnDefs = list(
+                               list(targets = 0, width = "60px"),
+                               list(targets = 1:3, width = "32%")
+                             )),
+              rownames = FALSE, escape = FALSE) %>%
+      formatStyle('High',   backgroundColor = '#d4edda') %>%
+      formatStyle('Medium', backgroundColor = '#fff3cd') %>%
+      formatStyle('Low',    backgroundColor = '#f8d7da')
+  })
 # Prospects
   output$ProPit <- DT::renderDataTable({
     rv$refreshCount
-    datatable(prospectP,options = list(pageLength = 20), escape=FALSE) %>% formatRound(c('Age'),1)
+    df <- if (isTRUE(input$faProspects)) filter(prospectP, Team == 'Free Agent') else prospectP
+    datatable(df,options = list(pageLength = 20), escape=FALSE) %>% formatRound(c('Age'),1)
   })
   output$ProHit <- DT::renderDataTable({
     rv$refreshCount
-    datatable(prospectH,options = list(pageLength = 20), escape=FALSE) %>% formatRound(c('Age'),1)
+    df <- if (isTRUE(input$faProspects)) filter(prospectH, Team == 'Free Agent') else prospectH
+    datatable(df,options = list(pageLength = 20), escape=FALSE) %>% formatRound(c('Age'),1)
   })
 
 # Dumpers
@@ -240,6 +353,445 @@ shinyServer(function(input, output,session) {
       formatCurrency('pDFL') %>%
       formatRound(c('hotscore'), 2) %>%
       formatRound('Age', 0)
+  })
+
+# --- Player Snapshot: unified search + detail view ---
+  searchData_r <- reactive({
+    rv$refreshCount
+    hCols <- c("playerid", "Player", "Pos", "MLB", "Age", "pDFL", "Team", "Salary", "Contract", "hotscore")
+    pCols <- c("playerid", "Player", "Pos", "MLB", "Age", "pDFL", "Team", "Salary", "Contract", "hotscore")
+    h <- AllH %>% select(any_of(hCols)) %>% mutate(Type = "Hitter")
+    p <- AllP %>% select(any_of(pCols)) %>% mutate(Type = "Pitcher")
+    bind_rows(h, p) %>%
+      distinct(playerid, .keep_all = TRUE) %>%
+      arrange(-pDFL)
+  })
+
+  output$searchTable <- DT::renderDataTable({
+    rv$refreshCount
+    data <- searchData_r()
+    data <- markTargets(data, isolate(rv$targets))
+    data <- data %>% select(Target, Player, Type, Pos, MLB, Age, Owner = Team, Salary, Contract,
+                            DFL = pDFL, Hot = hotscore, playerid)
+    data <- data %>% select(-playerid)
+    datatable(data, selection = 'single',
+              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('Age'), 0) %>%
+      formatRound('Hot', 2) %>%
+      formatCurrency('Salary', digits = 0)
+  })
+
+  output$playerSnapshot <- renderUI({
+    sel <- input$searchTable_rows_selected
+    if (is.null(sel) || length(sel) == 0) {
+      return(tags$div(style = "color:#888; padding:12px; font-style:italic;",
+                      "Select a player from the table to see details."))
+    }
+    data <- searchData_r()
+    if (sel > nrow(data)) return(NULL)
+    pid <- as.character(data$playerid[sel])
+
+    playerH <- AllH %>% filter(playerid == pid)
+    playerP <- AllP %>% filter(playerid == pid)
+    isHitter <- nrow(playerH) > 0
+    if (!isHitter && nrow(playerP) == 0) {
+      return(tags$div(style = "color:gray; padding:12px;", "Player not found."))
+    }
+    player <- if (isHitter) playerH[1, ] else playerP[1, ]
+
+    playerName <- player$Player
+    playerPos  <- player$Pos
+    posElStr <- if (isHitter && !is.null(player$posEl) && !is.na(player$posEl) && player$posEl != "") {
+      paste0(" (", player$posEl, ")")
+    } else ""
+    playerAge <- round(player$Age)
+    playerMLB <- player$MLB
+    ownerStr <- if (!is.na(player$Team) && player$Team != "Free Agent") {
+      paste0(player$Team, "  —  $", player$Salary,
+             if (!is.null(player$Contract) && !is.na(player$Contract)) paste0(" (", player$Contract, "yr)") else "")
+    } else {
+      "Free Agent"
+    }
+
+    headerUI <- tags$div(
+      style = "padding:12px 16px; background:#2c3e50; color:white; border-radius:6px 6px 0 0;",
+      tags$div(style = "font-size:20px; font-weight:bold;", HTML(playerName)),
+      tags$div(style = "font-size:14px; margin-top:4px; color:#bdc3c7;",
+               paste0(playerPos, posElStr, "  |  ", playerMLB, "  |  Age ", playerAge)),
+      tags$div(style = "font-size:14px; margin-top:2px; color:#ecf0f1;", ownerStr)
+    )
+
+    hs <- if (!is.null(player$hotscore) && !is.na(player$hotscore)) round(player$hotscore, 2) else NA
+    heroLine <- tags$div(style = "display:flex; gap:24px; font-size:22px; font-weight:bold; margin-bottom:8px;",
+      tags$span(paste0("$", round(player$pDFL))),
+      tags$span(style = "color:#888;", "|"),
+      tags$span(paste0("Hotscore: ", ifelse(is.na(hs), "—", hs)))
+    )
+    sgp <- if (!is.null(player$pSGP) && !is.na(player$pSGP)) sprintf("%.2f", player$pSGP) else "—"
+    rnk <- if (!is.null(player$Rank) && !is.na(player$Rank)) round(player$Rank) else "—"
+    valLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px; margin-bottom:8px;",
+      tags$span(tags$strong("SGP: "), sgp),
+      tags$span(tags$strong("Rank: "), rnk)
+    )
+    if (isHitter) {
+      statLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px;",
+        tags$span(tags$strong("HR: "),  round(player$pHR)),
+        tags$span(tags$strong("RBI: "), round(player$pRBI)),
+        tags$span(tags$strong("R: "),   round(player$pR)),
+        tags$span(tags$strong("SB: "),  round(player$pSB)),
+        tags$span(tags$strong("AVG: "), sprintf("%.3f", player$pAVG))
+      )
+      actualLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:#666; margin-top:4px;",
+        tags$span("YTD:"),
+        tags$span(paste0("HR ",  ifelse(is.na(player$HR), 0, player$HR))),
+        tags$span(paste0("RBI ", ifelse(is.na(player$RBI), 0, player$RBI))),
+        tags$span(paste0("R ",   ifelse(is.na(player$R), 0, player$R))),
+        tags$span(paste0("SB ",  ifelse(is.na(player$SB), 0, player$SB))),
+        tags$span(paste0("AVG ", sprintf("%.3f", ifelse(is.na(player$AVG), 0, player$AVG))))
+      )
+    } else {
+      statLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:15px;",
+        tags$span(tags$strong("W: "),   round(player$pW)),
+        tags$span(tags$strong("SO: "),  round(player$pSO)),
+        tags$span(tags$strong("ERA: "), sprintf("%.2f", player$pERA)),
+        tags$span(tags$strong("SV: "),  round(player$pSV)),
+        tags$span(tags$strong("HLD: "), round(player$pHLD))
+      )
+      actualLine <- tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:#666; margin-top:4px;",
+        tags$span("YTD:"),
+        tags$span(paste0("W ",   ifelse(is.na(player$W), 0, player$W))),
+        tags$span(paste0("K ",   ifelse(is.na(player$K), 0, player$K))),
+        tags$span(paste0("ERA ", sprintf("%.2f", ifelse(is.na(player$ERA), 0, player$ERA)))),
+        tags$span(paste0("S ",   ifelse(is.na(player$S), 0, player$S))),
+        tags$span(paste0("HD ",  ifelse(is.na(player$HD), 0, player$HD)))
+      )
+    }
+    statsUI <- tags$div(
+      style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none;",
+      heroLine, valLine, statLine, actualLine
+    )
+
+    pool <- if (isHitter) AllH else AllP
+    comps <- pool %>% filter(Pos == playerPos, playerid != pid,
+                             pDFL >= player$pDFL - 10, pDFL <= player$pDFL + 10) %>%
+      arrange(abs(pDFL - player$pDFL)) %>% head(5)
+    if (nrow(comps) > 0) {
+      compRows <- lapply(seq_len(nrow(comps)), function(j) {
+        hsVal <- if (!is.na(comps$hotscore[j])) round(comps$hotscore[j], 2) else NA
+        hsColor <- if (is.na(hsVal)) "#888" else if (hsVal >= 2) "#2ecc71" else if (hsVal < -1) "#e74c3c" else "#666"
+        hsText <- if (is.na(hsVal)) "" else paste0("HS ", hsVal)
+        ownerText <- if (!is.na(comps$Team[j]) && comps$Team[j] != "Free Agent") comps$Team[j] else "FA"
+        tags$div(style = "font-size:14px; padding:2px 0;",
+          tags$span(style = "display:inline-block; width:180px;", HTML(comps$Player[j])),
+          tags$span(style = "display:inline-block; width:60px;", paste0("$", round(comps$pDFL[j]))),
+          tags$span(style = "display:inline-block; width:140px; color:#666;", ownerText),
+          tags$span(style = paste0("color:", hsColor, ";"), hsText)
+        )
+      })
+      comparablesUI <- tags$div(
+        tags$strong(style = "font-size:16px;", "Comparable Players"),
+        tags$div(style = "font-size:12px; color:#888; margin-bottom:4px;",
+                 paste0("Same position, ±$10 DFL")),
+        tags$div(compRows)
+      )
+    } else {
+      comparablesUI <- tags$div(style = "color:#888; font-size:14px;", "No comparable players at this position.")
+    }
+
+    hasInjury <- !is.null(player$Injury) && !is.na(player$Injury) &&
+                 nchar(trimws(as.character(player$Injury))) > 0
+    injUI <- if (hasInjury) {
+      retStr <- if (!is.null(player$Expected.Return) && !is.na(player$Expected.Return) &&
+                    player$Expected.Return != "") {
+        tags$span(style = "margin-left:12px; color:#888;",
+                  paste0("(return: ", player$Expected.Return, ")"))
+      } else NULL
+      tags$div(style = "padding:10px 16px; background:#fff3cd; border:1px solid #ddd; border-top:none; font-size:14px;",
+        tags$div(tags$strong("Injury: "), player$Injury, retStr)
+      )
+    } else NULL
+
+    sectionStyle <- "border:1px solid #ddd; border-top:none; padding:12px 16px;"
+    tags$div(style = "border-radius:6px; overflow:hidden;",
+      headerUI,
+      statsUI,
+      tags$div(style = sectionStyle, comparablesUI),
+      injUI
+    )
+  })
+
+# --- Research tab: article scraping + LLM extraction ---
+  observeEvent(input$analyzeBtn, {
+    mode <- input$researchMode
+
+    if (mode == "url") {
+      url <- trimws(input$researchUrl)
+      if (url == "" || !grepl("^https?://", url)) {
+        showNotification("Please enter a valid URL", type = "warning")
+        return()
+      }
+    } else {
+      pastedText <- trimws(input$researchText)
+      if (pastedText == "" || nchar(pastedText) < 50) {
+        showNotification("Please paste article text (at least 50 characters)", type = "warning")
+        return()
+      }
+    }
+
+    shinyjs::disable("analyzeBtn")
+    showNotification("Fetching article...", type = "message", duration = NULL, id = "researchMsg")
+
+    tryCatch({
+      if (mode == "url") {
+        page <- rvest::read_html(url)
+        articleNodes <- page %>% rvest::html_nodes("article")
+        if (length(articleNodes) == 0) articleNodes <- page %>% rvest::html_nodes("#content")
+        if (length(articleNodes) == 0) articleNodes <- page %>% rvest::html_nodes(".post-content, .entry-content, .article-body")
+        if (length(articleNodes) > 0) {
+          articleText <- articleNodes %>% rvest::html_text2() %>% paste(collapse = "\n\n")
+        } else {
+          articleText <- page %>%
+            rvest::html_nodes("p, h1, h2, h3, h4, li") %>%
+            rvest::html_text2() %>%
+            paste(collapse = "\n\n")
+        }
+
+        pageTitle <- tryCatch(
+          page %>% rvest::html_node("title") %>% rvest::html_text2(),
+          error = function(e) "Unknown Article"
+        )
+        sourceDomain <- gsub("^https?://([^/]+).*", "\\1", url)
+      } else {
+        articleText <- pastedText
+        pageTitle <- "Pasted Article"
+        sourceDomain <- "manual"
+      }
+
+      if (nchar(articleText) > 12000) {
+        articleText <- substr(articleText, 1, 12000)
+      }
+
+      removeNotification("researchMsg")
+      showNotification("Analyzing with Claude...", type = "message", duration = NULL, id = "researchMsg")
+
+      prompt <- paste0(
+        'You are a baseball fantasy analyst assistant. Extract all baseball players ',
+        'mentioned in the following article. For each player the author is highlighting ',
+        'as a target, sleeper, breakout, value pick, or otherwise recommending, return ',
+        'a JSON array with these fields:\n\n',
+        '- full_name: the player\'s full name (first and last)\n',
+        '- summary: one sentence describing why the author thinks this player is interesting\n',
+        '- tags: comma-separated list from these options: Sleeper, Breakout, Bounce-back, ',
+        'Value, Upside, Buy-low, Sell-high, Injury-risk, Closer, Holds, Steals, Power, ',
+        'AVG, Pitching, Strikeouts, Saves, Speed, Ratios\n\n',
+        'Only include players the author is specifically recommending or discussing ',
+        'positively. Skip players mentioned only in passing or as comparisons.\n\n',
+        'Return ONLY the raw JSON array. No markdown, no code fences, no explanation. Example:\n',
+        '[{"full_name": "Luis Arraez", "summary": "Hitting .340 in spring with strong ',
+        'lineup protection boosting BA and R upside", "tags": "Sleeper, AVG, Value"}]\n\n',
+        'Article text:\n', articleText
+      )
+
+      response <- callClaudeAPI(prompt, max_tokens = 4096)
+
+      if (is.null(response) || length(response) == 0 || is.na(response) || response == "") {
+        removeNotification("researchMsg")
+        showNotification("Empty response from Claude API", type = "error", duration = 15)
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
+      response <- gsub("^\\s*```json\\s*", "", response)
+      response <- gsub("^\\s*```\\s*", "", response)
+      response <- gsub("\\s*```\\s*$", "", response)
+      response <- trimws(response)
+
+      if (grepl("^\\[", response) && !grepl("\\]\\s*$", response)) {
+        lastBrace <- regexpr("\\}[^\\}]*$", response)
+        if (lastBrace > 0) {
+          response <- paste0(substr(response, 1, lastBrace), "]")
+        }
+      }
+
+      if (!grepl("^\\s*\\[", response)) {
+        retryPrompt <- paste0(
+          'Return ONLY a raw JSON array (no markdown, no code fences) of objects with fields: full_name, summary, tags. ',
+          'Example: [{"full_name":"Mike Trout","summary":"Still elite","tags":"Power"}]. ',
+          'Extract players recommended in this article:\n\n',
+          substr(articleText, 1, 4000)
+        )
+        response <- callClaudeAPI(retryPrompt, max_tokens = 4096)
+        response <- gsub("^\\s*```json\\s*", "", response)
+        response <- gsub("^\\s*```\\s*", "", response)
+        response <- gsub("\\s*```\\s*$", "", response)
+        response <- trimws(response)
+        if (!grepl("^\\s*\\[", response)) {
+          removeNotification("researchMsg")
+          cat("Research tab Claude API error:", substr(response, 1, 500), "\n")
+          showNotification(paste0("Claude API error: ", substr(response, 1, 200)), type = "error", duration = 30)
+          shinyjs::enable("analyzeBtn")
+          return()
+        }
+      }
+
+      extracted <- tryCatch(
+        jsonlite::fromJSON(response),
+        error = function(e) {
+          removeNotification("researchMsg")
+          cat("Research tab JSON parse error:", e$message, "\n")
+          showNotification(paste0("Failed to parse Claude response: ", e$message), type = "error", duration = 30)
+          shinyjs::enable("analyzeBtn")
+          return(NULL)
+        }
+      )
+
+      if (is.null(extracted) || !is.data.frame(extracted) || nrow(extracted) == 0) {
+        removeNotification("researchMsg")
+        showNotification("No players found in this article", type = "warning")
+        rv$researchH <- data.frame()
+        rv$researchP <- data.frame()
+        rv$researchUnmatched <- character(0)
+        rv$researchTitle <- pageTitle
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
+      removeNotification("researchMsg")
+      showNotification("Matching players...", type = "message", duration = NULL, id = "researchMsg")
+
+      availH <- filter(AllH, Team == 'Free Agent')
+      availP <- filter(AllP, Team == 'Free Agent')
+      allAvail <- bind_rows(
+        availH %>% mutate(poolType = "H"),
+        availP %>% mutate(poolType = "P")
+      )
+      cleanNames <- tolower(allAvail$Player)
+
+      matchedRows <- list()
+      unmatched <- character(0)
+
+      for (i in seq_len(nrow(extracted))) {
+        fname <- extracted$full_name[i]
+        fnameL <- tolower(fname)
+
+        exactIdx <- which(cleanNames == fnameL)
+        if (length(exactIdx) > 0) {
+          row <- allAvail[exactIdx[1], ]
+          row$Tags <- extracted$tags[i]
+          row$Summary <- extracted$summary[i]
+          row$fuzzy <- FALSE
+          matchedRows <- c(matchedRows, list(row))
+          next
+        }
+
+        fuzzyIdx <- agrep(fnameL, cleanNames, max.distance = 0.15, ignore.case = TRUE)
+        if (length(fuzzyIdx) > 0) {
+          row <- allAvail[fuzzyIdx[1], ]
+          row$Tags <- extracted$tags[i]
+          row$Summary <- extracted$summary[i]
+          row$fuzzy <- TRUE
+          matchedRows <- c(matchedRows, list(row))
+        } else {
+          unmatched <- c(unmatched, fname)
+        }
+      }
+
+      if (length(matchedRows) == 0) {
+        removeNotification("researchMsg")
+        showNotification("No matched free agents found", type = "warning")
+        rv$researchH <- data.frame()
+        rv$researchP <- data.frame()
+        rv$researchUnmatched <- unmatched
+        rv$researchTitle <- pageTitle
+        shinyjs::enable("analyzeBtn")
+        return()
+      }
+
+      matched <- bind_rows(matchedRows)
+
+      matched$Player <- ifelse(matched$fuzzy,
+                               paste0("~ ", matched$Player),
+                               matched$Player)
+
+      mH <- matched %>% filter(poolType == "H") %>%
+        arrange(-pDFL) %>%
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP,
+               HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG,
+               Injury, Expected.Return, playerid)
+
+      mP <- matched %>% filter(poolType == "P") %>%
+        arrange(-pDFL) %>%
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP,
+               W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, `K/9` = `pK/9`,
+               Injury, Expected.Return, playerid)
+
+      rv$researchH <- mH
+      rv$researchP <- mP
+      rv$researchUnmatched <- unmatched
+      rv$researchTitle <- paste0(pageTitle, " (", sourceDomain, ")")
+
+      removeNotification("researchMsg")
+      showNotification(paste0("Found ", nrow(matched), " free agent(s) from article"), type = "message")
+      shinyjs::enable("analyzeBtn")
+
+    }, error = function(e) {
+      removeNotification("researchMsg")
+      cat("Research tab error:", e$message, "\n")
+      showNotification(paste0("Error: ", e$message), type = "error", duration = 30)
+      shinyjs::enable("analyzeBtn")
+    })
+  })
+
+  output$researchH <- DT::renderDataTable({
+    df <- rv$researchH
+    if (is.null(df) || nrow(df) == 0) {
+      return(datatable(data.frame(Message = "No hitters found. Paste an article URL and click Analyze."),
+                       options = list(dom = 't'), selection = 'none'))
+    }
+    df <- markTargets(df, isolate(rv$targets))
+    df <- df %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(df, escape = FALSE,
+              options = list(pageLength = 20)) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('SGP', 'AVG'), 3) %>%
+      formatRound(c('Age', 'HR', 'RBI', 'R', 'SB'), 0)
+  })
+
+  output$researchP <- DT::renderDataTable({
+    df <- rv$researchP
+    if (is.null(df) || nrow(df) == 0) {
+      return(datatable(data.frame(Message = "No pitchers found. Paste an article URL and click Analyze."),
+                       options = list(dom = 't'), selection = 'none'))
+    }
+    df <- markTargets(df, isolate(rv$targets))
+    df <- df %>% select(Target, everything(), -playerid, -isTarget)
+    datatable(df, escape = FALSE,
+              options = list(pageLength = 20)) %>%
+      formatCurrency('DFL') %>%
+      formatRound(c('SGP', 'ERA', 'K/9'), 3) %>%
+      formatRound(c('Age', 'W', 'SO', 'SV', 'HLD'), 0)
+  })
+
+  output$researchStatus <- renderUI({
+    title <- rv$researchTitle
+    nH <- nrow(rv$researchH)
+    nP <- nrow(rv$researchP)
+    if (title == "" && nH == 0 && nP == 0) return(NULL)
+    tags$div(style = "margin-top:10px; font-size:13px; line-height:1.6;",
+      tags$strong(title),
+      tags$br(),
+      paste0(nH, " hitter(s), ", nP, " pitcher(s) found")
+    )
+  })
+
+  output$researchUnmatched <- renderUI({
+    um <- rv$researchUnmatched
+    if (length(um) == 0) return(NULL)
+    tags$div(style = "margin-top:10px; font-size:12px; color:#888;",
+      tags$em(paste0("Could not match: ", paste(um, collapse = ", ")))
+    )
   })
 
 })

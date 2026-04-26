@@ -30,13 +30,32 @@ computer <- 'mac'
 #computer <- 'Windows'
 #computer <- Sys.info()['sysname']
 
+# --- LeagueEval settings: which projection source is the active one ---
+# Drives both the in-line pipeline below (used for Excel + Shiny default) and
+# alternate pool builds at the end of file for live-switching in the Shiny app.
+leagueEvalSettingsFile <- "../leagueEvalSettings.json"
+leagueEvalSettings <- tryCatch({
+  if (file.exists(leagueEvalSettingsFile)) fromJSON(leagueEvalSettingsFile) else list()
+}, error = function(e) list())
+activeProj <- if (!is.null(leagueEvalSettings$projSource)) leagueEvalSettings$projSource else 'atc'
+if (!activeProj %in% c('atc','steamer','batx')) activeProj <- 'atc'
+projFiles <- list(
+  atc     = list(h = "../atcHROS.json",     p = "../atcPROS.json"),
+  steamer = list(h = "../steamerHROS.json", p = "../steamerPROS.json"),
+  batx    = list(h = "../batxHROS.json",    p = "../batxPROS.json")
+)
+
 
 # Update data files
-fd <- file.info("../steamerHROS.json")$mtime
+# Re-fetch if any required projection file is missing or any is older than 10 hours.
+projAllFiles <- c(unlist(lapply(projFiles, function(x) c(x$h, x$p))))
+projMissing  <- !all(file.exists(projAllFiles))
+projAges     <- sapply(projAllFiles, function(f) {
+  m <- file.info(f)$mtime
+  if (is.na(m)) Inf else as.integer(difftime(Sys.time(), m, units = "hours"))
+})
 cd <- Sys.time()
-dt <- as.integer(difftime(cd, fd, units = "hours"))
-#dt <- 9
-if (dt > 10) {
+if (projMissing || any(projAges > 10)) {
   # Use Playwright-based fetch for FanGraphs (bypasses Cloudflare)
   system(str_c("node ../scripts/fgFetchInSeason.js ", cyear))
   system("bash ../scripts/salaryinfo.sh")
@@ -134,11 +153,9 @@ dev.off()
 #pitchers <- read.fg("steamerP2020.csv")
 # Once Season Starts
 
-pitchers <- read.fg("../steamerPROS.json")
-#pitchers <- read.fg("../batxPROS.json")
-
-hitters <- read.fg("../batxHROS.json")
-#hitters <- read.fg("../steamerHROS.json")
+# Active projection source (driven by leagueEvalSettings.json — see top of file)
+pitchers <- read.fg(projFiles[[activeProj]]$p)
+hitters  <- read.fg(projFiles[[activeProj]]$h)
 
 
 hitters$Pos <- replace(hitters$Pos,is.na(hitters$Pos),'DH')
@@ -315,6 +332,10 @@ if ("playerid.x" %in% names(injOrig)) {
 
 # Coerce playerid to character before joins
 injOrig$playerid <- as.character(injOrig$playerid)
+
+# Snapshot of clean injOrig before downstream dollar joins/HTML mutation
+# Used by alternate projection pool builds at end of file (one snapshot, reused per source)
+injOrigBase <- injOrig
 
 # Week before draft - manual download file
 # injOrig <- read.xlsx("../roster-resource-download.xlsx")
@@ -874,4 +895,158 @@ prospectH <- prospectH %>% select(-fg,-playerid)
 prospectP <- prospectP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
 prospectP$Player <- prospectP$fg
 prospectP <- prospectP %>% select(-fg,-playerid)
+
+# ============================================================
+# Alternate projection pools (for Shiny live-switching in LeagueEval)
+#
+# The inline pipeline above produces the "active" projection's results into the
+# globals AllH/AllP/RTot/RTotTop/rrcResults/candTrades/problems/injOrig (driven
+# by activeProj at top of file). To support live-switching projection sources in
+# the Shiny app, we also build pools for the other two sources and store all
+# three in `leaguePools`. Server.R reassigns the active globals on toggle.
+# ============================================================
+
+buildAltLeaguePool <- function(hFile, pFile) {
+  # Mirrors the projection-dependent path of the inline pipeline above.
+  # Closes over: Allhitters, Allpitchers, ytdp2, pedf, aWeek, tWeeks,
+  #              inj, stand, twostarts, stuff, rrc, st, injOrigBase
+
+  # 1. Load projections + pSGP
+  hitters  <- read.fg(hFile)
+  pitchers <- read.fg(pFile)
+  hitters$Pos  <- replace(hitters$Pos, is.na(hitters$Pos), 'DH')
+  hitters$pSGP <- hitSGP(hitters)
+  hitters  <- select(hitters, -Player, -MLB, -Pos)
+  pitchers <- select(pitchers, -Player, -MLB, -Pos)
+  pitchers <- distinct(pitchers, playerid, .keep_all = TRUE)
+
+  # 2. Build AllH / AllP and pHLD blend
+  AllH <- inner_join(Allhitters, hitters, by = c('playerid'), copy = FALSE)
+  AllP <- inner_join(Allpitchers, pitchers, by = c('playerid'), copy = FALSE)
+  AllP <- left_join(AllP, ytdp2, by = c('playerid'), copy = FALSE, relationship = "many-to-many")
+  AllP$pHLD <- with(AllP, round(((HD/2)*(tWeeks-aWeek)*.3)+((yHLD/aWeek)*(tWeeks-aWeek)*.7)), 0)
+  AllP$pHLD <- ifelse(is.na(AllP$pHLD), 0, AllP$pHLD)
+  AllP$pSGP <- pitSGP(AllP)
+
+  # 3. Position eligibility
+  AllH <- left_join(AllH, pedf, by = c('playerid'), relationship = "many-to-many")
+  AllH <- mutate(AllH, Position = firstPos(posEl))
+  AllH <- mutate(AllH, Position = ifelse((Pos %in% c('SS','2B','C') & str_detect(posEl, Pos) == TRUE), Pos, Position))
+  AllH <- distinct(AllH); AllP <- distinct(AllP)
+
+  # 4. Dollars (preLPP)
+  nlist <- preLPP(AllH, AllP, data.frame(), 1, 50, 40)
+  AllH <- left_join(AllH, nlist[[1]], by = c('playerid'), relationship = "many-to-many") %>% rename(pDFL = zDFL)
+  AllP <- left_join(AllP, nlist[[2]], by = c('playerid'), relationship = "many-to-many") %>% rename(pDFL = zDFL)
+  AllH$pDFL <- replace(AllH$pDFL, is.na(AllH$pDFL), 0)
+  AllP$pDFL <- replace(AllP$pDFL, is.na(AllP$pDFL), 0)
+
+  # 5. Hot scores
+  r <- hotScores(Allhitters, Allpitchers)
+  AllH <- left_join(AllH, r[[1]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
+  AllP <- left_join(AllP, r[[2]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
+
+  # 6. Positional zScores
+  r <- zScores(AllH, AllP)
+  AllH <- left_join(AllH, rename(r[[1]], pScore = zScore), by = c('playerid'), relationship = "many-to-many")
+  AllP <- left_join(AllP, rename(r[[2]], pScore = zScore), by = c('playerid'), relationship = "many-to-many")
+
+  # 7. Salary, injuries, MLB stand, two-starts, Pitching+
+  AllH <- AllH %>% addSalary()
+  AllP <- AllP %>% addSalary()
+  AllH <- left_join(AllH, inj, by = c('Player'), relationship = "many-to-many")
+  AllP <- left_join(AllP, inj, by = c('Player'), relationship = "many-to-many")
+  AllP <- left_join(AllP, stand, by = c('MLB'), relationship = "many-to-many")
+  AllP <- left_join(AllP, twostarts, relationship = "many-to-many")
+  AllP <- left_join(AllP, stuff, relationship = "many-to-many")
+  AllP <- AllP %>% mutate(Pos = ifelse(is.na(Pos), 'SP', Pos))
+
+  # 8. Free Agents (used for rrcResults)
+  FAP <- filter(AllP, Team == 'Free Agent') %>% select(-Team)
+
+  # 9. rrcResults (Reliever Detail)
+  rrcResults <- inner_join(rrc, FAP, by = c('playerid')) %>% arrange(-pDFL) %>%
+    select(Player, Pos, pDFL, pSGP, Role, Tags, Rank, pSV, pHLD, pW, pSO, pERA,
+           `pK/9`, `pBB/9`, pGS, W, K, S, HD, ERA, hotscore, LVG, MLB, Season, L10,
+           Injury, Expected.Return, playerid)
+
+  # 10. RTot (Standings tab — Talent)
+  RH <- filter(AllH, Team != 'Free Agent') %>% group_by(Team) %>% summarize(hDFL = sum(pDFL))
+  RP <- filter(AllP, Team != 'Free Agent') %>% group_by(Team) %>% summarize(piDFL = sum(pDFL))
+  RTot <- inner_join(RH, RP, by = c('Team')) %>%
+    mutate(tDFL = hDFL + piDFL, hRank = rank(-hDFL), pRank = rank(-piDFL)) %>%
+    inner_join(st, by = c('Team')) %>%
+    select(Team, hDFL, hRank, piDFL, pRank, tDFL, Actual) %>% arrange(-tDFL)
+  RTot$zScore <- as.numeric(scale(RTot$tDFL))
+
+  # 11. RTotTop (top-N variant)
+  RH2 <- filter(AllH, Team != 'Free Agent') %>% group_by(Team) %>% filter(rank(-pDFL) <= 9) %>% summarize(hDFL = sum(pDFL))
+  RP2 <- filter(AllP, Team != 'Free Agent') %>% group_by(Team) %>% filter(rank(-pDFL) <= 8) %>% summarize(piDFL = sum(pDFL))
+  RTotTop <- inner_join(RH2, RP2, by = c('Team')) %>%
+    mutate(tDFL = hDFL + piDFL, hRank = rank(-hDFL), pRank = rank(-piDFL)) %>%
+    inner_join(st, by = c('Team')) %>%
+    select(Team, hDFL, hRank, piDFL, pRank, tDFL, Actual) %>% arrange(-tDFL)
+  RTotTop$zScore <- as.numeric(scale(RTotTop$tDFL))
+
+  # 12. candTrades (Dumpers)
+  bottom <- RTot %>% filter(Actual > 7) %>% select(Team)
+  candH <- AllH %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
+  candP <- AllP %>% filter(Team %in% bottom$Team, Salary > 20) %>% select(Player, Team, pDFL, Salary, Contract)
+  candTrades <- bind_rows(candH, candP) %>% arrange(Team, -pDFL)
+
+  # 13. problems (Desperate)
+  newHurt  <- AllH %>% mutate(idate = as_date(Injury, format = "%m/%d")) %>%
+    filter(!is.na(Injury) & idate > today() - 7 & Team != "Free Agent") %>%
+    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+  newHurt2 <- AllP %>% mutate(idate = as_date(Injury, format = "%m/%d")) %>%
+    filter(!is.na(Injury) & idate > today() - 7 & Team != "Free Agent") %>%
+    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+  newHurt  <- bind_rows(newHurt, newHurt2) %>% arrange(Team)
+  newSlump  <- AllH %>% filter(pDFL > 15 & hotscore < 3 & Team != "Free Agent") %>%
+    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+  newSlump2 <- AllP %>% filter(pDFL > 8 & hotscore < 3 & Team != "Free Agent") %>%
+    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+  newSlump  <- bind_rows(newSlump, newSlump2) %>% arrange(Team)
+  problems  <- bind_rows(newHurt, newSlump) %>% arrange(Team)
+
+  # 14. injOrig joined with dollars + FA filter
+  dollars <- bind_rows(AllH %>% select(playerid, pDFL, Team), AllP %>% select(playerid, pDFL, Team))
+  injOrigOut <- left_join(injOrigBase, dollars, relationship = "many-to-many")
+  injOrigOut$pDFL[is.na(injOrigOut$pDFL)] <- 0
+  injOrigOut$Team[is.na(injOrigOut$Team)] <- 'Free Agent'
+  injOrigOut <- injOrigOut %>% filter(Team == 'Free Agent') %>% select(-X, -birth_year, -Team)
+
+  # 15. HTML hyperlinks (matches inline pipeline final state)
+  fgLink <- function(df) {
+    df %>% mutate(fg = paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/", playerid, "/stats'>", Player, "</a>")) %>%
+      mutate(Player = fg) %>% select(-fg)
+  }
+  AllH       <- fgLink(AllH)
+  AllP       <- fgLink(AllP)
+  rrcResults <- fgLink(rrcResults)
+  injOrigOut <- fgLink(injOrigOut)
+
+  list(AllH = AllH, AllP = AllP, RTot = RTot, RTotTop = RTotTop,
+       rrcResults = rrcResults, candTrades = candTrades, problems = problems,
+       injOrig = injOrigOut)
+}
+
+# Capture the active pool that the inline pipeline already produced
+leaguePools <- list()
+leaguePools[[activeProj]] <- list(
+  AllH = AllH, AllP = AllP, RTot = RTot, RTotTop = RTotTop,
+  rrcResults = rrcResults, candTrades = candTrades,
+  problems = problems, injOrig = injOrig
+)
+
+# Build the other two pools
+for (src in setdiff(c('atc','steamer','batx'), activeProj)) {
+  leaguePools[[src]] <- tryCatch(
+    buildAltLeaguePool(projFiles[[src]]$h, projFiles[[src]]$p),
+    error = function(e) {
+      warning("Failed to build alt pool for '", src, "': ", e$message)
+      leaguePools[[activeProj]]
+    }
+  )
+}
 

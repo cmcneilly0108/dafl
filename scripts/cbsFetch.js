@@ -40,7 +40,7 @@ async function waitForLogin(context) {
   });
 
   const page = visibleContext.pages()[0] || await visibleContext.newPage();
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
   console.log('Waiting for successful login...');
   await page.waitForFunction(
@@ -104,7 +104,7 @@ async function main() {
       args: ['--disable-blink-features=AutomationControlled'],
     });
     const page = context.pages()[0] || await context.newPage();
-    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
     console.log('Please log in to CBS Sports. The script will continue automatically.\n');
     await page.waitForFunction(
@@ -131,7 +131,7 @@ async function main() {
 
   // Navigate to league page first (needed for fetch() to have correct cookie context)
   console.log('Testing session...');
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
   // Test session with first endpoint using in-browser fetch
   const testUrl = BASE_URL + ENDPOINTS[0].path;

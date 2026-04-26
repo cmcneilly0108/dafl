@@ -3,6 +3,7 @@
 library("plotly")
 library("bslib")
 library("DT")
+library("shinyjs")
 
 
 shinyUI(
@@ -12,6 +13,16 @@ shinyUI(
     # "pulse", "sandstone", "simplex", "sketchy", "slate", "solar", "spacelab", "superhero", "united", "yeti"
     theme = bs_theme(bootswatch = "flatly"),
     "DAFL Evaluator, v3.0",
+    header = tagList(
+      shinyjs::useShinyjs(),
+      tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000; display:flex; gap:8px;",
+        actionButton('settingsBtn', 'Settings',
+                     class = 'btn-default btn-sm'),
+        actionButton('refreshBtn', 'Refresh Data',
+                      class = 'btn-success btn-sm',
+                      icon = icon('refresh'))
+      )
+    ),
     tags$head(tags$script(HTML("
       Shiny.addCustomMessageHandler('toggleStar', function(msg) {
         var els = document.querySelectorAll('[id=\"tgt-' + msg.pid + '\"]');
@@ -26,11 +37,6 @@ shinyUI(
         });
       });
     "))),
-    header = tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
-      actionButton('refreshBtn', 'Refresh Data',
-                    class = 'btn-success btn-sm',
-                    icon = icon('refresh'))
-    ),
     tabPanel("Standings",
              tabsetPanel(
                type = 'tabs',
@@ -102,33 +108,54 @@ shinyUI(
              )
     ),
     tabPanel(
-      "Positional Surplus",
-      sidebarLayout(
-        sidebarPanel(
-          selectizeInput(
-            'e2',
-            'Select Position',
-            choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
-          ),
-          sliderInput(
-            "pd",
-            "pDFL",
-            min = 0,
-            max = 30,
-            value = 10
-          ),
-          width = 2
+      "Surplus",
+      tabsetPanel(
+        type = 'tabs',
+        tabPanel(
+          "Positional",
+          sidebarLayout(
+            sidebarPanel(
+              selectizeInput(
+                'e2',
+                'Select Position',
+                choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
+              ),
+              sliderInput(
+                "pd",
+                "pDFL",
+                min = 0,
+                max = 30,
+                value = 10
+              ),
+              width = 2
+            ),
+            mainPanel(DT::dataTableOutput("tprofile"))
+          )
         ),
-        mainPanel(DT::dataTableOutput("tprofile"))
+        tabPanel(
+          "Statistical",
+          mainPanel(
+            h2("Team Tiers by Category"),
+            tags$div(style = "font-size:13px; color:#666; margin-bottom:8px;",
+                     "High = ranks 1–4, Medium = ranks 5–9, Low = ranks 10–13. ERA ranked low-to-high."),
+            DT::dataTableOutput("statSurplus")
+          )
+        )
       )
     ),
     tabPanel(
       "Prospects",
-        mainPanel(
-          tabsetPanel(
-            type = 'tabs',
-            tabPanel('Hitters', DT::dataTableOutput("ProHit")),
-            tabPanel('Pitchers', DT::dataTableOutput("ProPit"))
+        sidebarLayout(
+          sidebarPanel(
+            checkboxInput('faProspects','Free Agents Only'),
+            width = 2
+          ),
+          mainPanel(
+            tabsetPanel(
+              type = 'tabs',
+              tabPanel('Hitters', DT::dataTableOutput("ProHit")),
+              tabPanel('Pitchers', DT::dataTableOutput("ProPit"))
+            )
           )
         )
     ),
@@ -150,6 +177,44 @@ shinyUI(
              verticalLayout(
                h2("Targeted Players"),
                DT::dataTableOutput("targetTable")
+             )),
+    tabPanel("Player Snapshot",
+             fluidRow(
+               column(7, DT::dataTableOutput("searchTable")),
+               column(5, uiOutput("playerSnapshot"))
+             )),
+    tabPanel("Research",
+             sidebarLayout(fluid = FALSE,
+               sidebarPanel(
+                 radioButtons('researchMode', 'Input Mode',
+                              choices = c('Paste Article Text' = 'paste', 'Scrape URL' = 'url'),
+                              selected = 'paste', inline = TRUE),
+                 conditionalPanel(
+                   condition = "input.researchMode == 'url'",
+                   textInput('researchUrl', 'Article URL',
+                             placeholder = 'https://www.fangraphs.com/...')
+                 ),
+                 conditionalPanel(
+                   condition = "input.researchMode == 'paste'",
+                   textAreaInput('researchText', 'Article Text',
+                                 placeholder = 'Copy and paste article text here...',
+                                 rows = 8)
+                 ),
+                 actionButton('analyzeBtn', 'Analyze Article',
+                              class = 'btn-primary',
+                              style = 'width:100%; margin-bottom:10px;'),
+                 uiOutput('researchStatus'),
+                 width = 3
+               ),
+               mainPanel(
+                 tabsetPanel(id = 'researchTab', type = 'tabs',
+                   tabPanel('Hitters',
+                            DT::dataTableOutput('researchH')),
+                   tabPanel('Pitchers',
+                            DT::dataTableOutput('researchP'))
+                 ),
+                 uiOutput('researchUnmatched')
+               )
              ))
   )
 )
