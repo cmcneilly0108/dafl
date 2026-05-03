@@ -246,6 +246,11 @@ shinyServer(function(input, output,session) {
     rv$refreshCount
     team <- input$teamSelect
     if (is.null(team) || team == '') return(NULL)
+    # cstand uses short nicknames (via the nicks join in inSeasonPulse.r);
+    # AllH / AllP use full team names. Map for the tier lookup only.
+    shortTeam <- if (exists("nicks") && team %in% nicks$Team) {
+      nicks$Short[match(team, nicks$Team)]
+    } else team
 
     cats <- list(
       list(name = "HR",  col = "HR",  reverse = FALSE, kind = "H",   sortKey = "pHR"),
@@ -273,7 +278,7 @@ shinyServer(function(input, output,session) {
       v <- suppressWarnings(as.numeric(cstand[[catCol]]))
       ord <- if (reverse) order(v, na.last = TRUE) else order(-v, na.last = TRUE)
       teamsRanked <- cstand$Team[ord]
-      r <- which(teamsRanked == team)
+      r <- which(teamsRanked == shortTeam)
       if (length(r) == 0) return(list(tier = NA_character_, value = NA_real_))
       list(tier  = if (r <= 4) 'High' else if (r <= 9) 'Medium' else 'Low',
            value = v[ord][r])
