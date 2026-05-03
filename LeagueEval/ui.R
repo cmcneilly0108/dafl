@@ -104,12 +104,7 @@ shinyUI(
     tabPanel("Category Status",
              sidebarLayout(
                sidebarPanel(
-                 selectizeInput(
-                   'teamSelect',
-                   'Team',
-                   choices  = teams,
-                   selected = if ('Liquor Crickets' %in% teams) 'Liquor Crickets' else teams[1]
-                 ),
+                 selectizeInput('teamSelect', 'Team', choices = NULL),
                  width = 2
                ),
                mainPanel(

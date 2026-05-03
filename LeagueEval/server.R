@@ -132,6 +132,7 @@ shinyServer(function(input, output,session) {
       source("../code/inSeasonPulse.r", local = globalenv())
       teams <<- sort(unique(RTot$Team))
       updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
+      updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
       updateSelectizeInput(session, 'choice', choices = trending$Player, server = TRUE)
       rv$refreshCount <- rv$refreshCount + 1
       removeNotification("refreshMsg")
@@ -163,6 +164,7 @@ shinyServer(function(input, output,session) {
 
 # By Team
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
+  updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
   output$tname <- renderText({ input$e1 })
 
   dtTeamH <- reactive({
