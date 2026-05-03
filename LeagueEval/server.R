@@ -356,6 +356,8 @@ shinyServer(function(input, output,session) {
         Category   = c$name,
         Tier       = tierLabel,
         TierBg     = if (is.na(t$tier)) "" else t$tier,
+        TierRank   = if (is.na(t$tier)) 4L
+                     else switch(t$tier, High = 1L, Medium = 2L, Low = 3L),
         Contributors = paste(contribs, collapse = ", "),
         check.names = FALSE,
         stringsAsFactors = FALSE
@@ -367,9 +369,15 @@ shinyServer(function(input, output,session) {
 
     datatable(df,
               options = list(paging = FALSE, info = FALSE, searching = FALSE,
-                             ordering = FALSE, autoWidth = FALSE,
+                             ordering = TRUE, autoWidth = FALSE,
+                             order = list(),  # preserve default category order on initial render
                              columnDefs = list(
-                               list(targets = which(names(df) == "TierBg") - 1, visible = FALSE),
+                               list(targets = which(names(df) == "TierBg")   - 1, visible = FALSE),
+                               list(targets = which(names(df) == "TierRank") - 1, visible = FALSE),
+                               list(targets = which(names(df) == "Tier") - 1,
+                                    orderData = which(names(df) == "TierRank") - 1),
+                               list(targets = which(names(df) == "Top 4 Contributors") - 1,
+                                    orderable = FALSE),
                                list(targets = 0, width = "60px"),
                                list(targets = 1, width = "180px")
                              )),
