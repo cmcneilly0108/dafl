@@ -102,9 +102,23 @@ shinyUI(
                )
              )),
     tabPanel("Category Status",
-             mainPanel(
-               h2("Points by Category"),
-               DT::dataTableOutput("catSummary")
+             sidebarLayout(
+               sidebarPanel(
+                 selectizeInput(
+                   'teamSelect',
+                   'Team',
+                   choices  = teams,
+                   selected = if ('Liquor Crickets' %in% teams) 'Liquor Crickets' else teams[1]
+                 ),
+                 width = 2
+               ),
+               mainPanel(
+                 h2("Team Category Detail"),
+                 DT::dataTableOutput("teamCatDetail"),
+                 br(),
+                 h2("Points by Category"),
+                 DT::dataTableOutput("catSummary")
+               )
              )
     ),
     tabPanel(
