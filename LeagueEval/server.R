@@ -239,7 +239,143 @@ shinyServer(function(input, output,session) {
       add_trace(color=~Player,type="scatter",mode = "markers",marker=list(size=15))
   })
 
-# Category Status
+# Category Status — per-team detail (new)
+  output$teamCatDetail <- DT::renderDataTable({
+    rv$refreshCount
+    team <- input$teamSelect
+    if (is.null(team) || team == '') return(NULL)
+
+    cats <- list(
+      list(name = "HR",  col = "HR",  reverse = FALSE, kind = "H",   sortKey = "pHR"),
+      list(name = "RBI", col = "RBI", reverse = FALSE, kind = "H",   sortKey = "pRBI"),
+      list(name = "R",   col = "R",   reverse = FALSE, kind = "H",   sortKey = "pR"),
+      list(name = "SB",  col = "SB",  reverse = FALSE, kind = "H",   sortKey = "pSB"),
+      list(name = "BA",  col = "BA",  reverse = FALSE, kind = "BA"),
+      list(name = "W",   col = "W",   reverse = FALSE, kind = "P",   sortKey = "pW"),
+      list(name = "K",   col = "K",   reverse = FALSE, kind = "P",   sortKey = "pSO"),
+      list(name = "SV",  col = "S",   reverse = FALSE, kind = "P",   sortKey = "pSV"),
+      list(name = "HD",  col = "HD",  reverse = FALSE, kind = "P",   sortKey = "pHLD"),
+      list(name = "ERA", col = "ERA", reverse = TRUE,  kind = "ERA")
+    )
+
+    fmtVal <- function(catName, x) {
+      if (is.na(x))                  ""
+      else if (catName == "BA")      sprintf("%.3f", x)
+      else if (catName == "ERA")     sprintf("%.2f", x)
+      else                           as.character(round(x))
+    }
+
+    # Tier for the selected team in one category. cstand is a global from
+    # inSeasonPulse.r with one row per team and columns matching `col`.
+    computeTier <- function(catCol, reverse) {
+      v <- suppressWarnings(as.numeric(cstand[[catCol]]))
+      ord <- if (reverse) order(v, na.last = TRUE) else order(-v, na.last = TRUE)
+      teamsRanked <- cstand$Team[ord]
+      r <- which(teamsRanked == team)
+      if (length(r) == 0) return(list(tier = NA_character_, value = NA_real_))
+      list(tier  = if (r <= 4) 'High' else if (r <= 9) 'Medium' else 'Low',
+           value = v[ord][r])
+    }
+
+    # Position display for a hitter row — prefer Position (eligibility-derived)
+    # if present, fall back to Pos.
+    hitterPos <- function(df) {
+      if ("Position" %in% colnames(df)) df$Position else df$Pos
+    }
+
+    # Top 4 hitters for a counting category (HR / RBI / R / SB).
+    topHitters <- function(sortKey) {
+      df <- AllH %>% filter(Team == team)
+      if (!sortKey %in% colnames(df) || nrow(df) == 0) return(character(0))
+      df <- df %>% arrange(desc(.data[[sortKey]]), Player) %>% head(4)
+      mapply(function(p, ps, v) sprintf("%s (%s, %d)", p, ps, round(v)),
+             df$Player, hitterPos(df), df[[sortKey]],
+             USE.NAMES = FALSE)
+    }
+
+    # Top 4 hitters for BA — volume-weighted (pAVG - 0.250) * pAB. Falls back
+    # to pAVG desc when pAB is missing from the projection.
+    topBA <- function() {
+      df <- AllH %>% filter(Team == team)
+      if (nrow(df) == 0 || !"pAVG" %in% colnames(df)) return(character(0))
+      if ("pAB" %in% colnames(df)) {
+        df <- df %>% filter(pAB > 0) %>%
+          mutate(.k = (pAVG - 0.250) * pAB) %>%
+          arrange(desc(.k), Player) %>% head(4)
+      } else {
+        df <- df %>% arrange(desc(pAVG), Player) %>% head(4)
+      }
+      mapply(function(p, ps, avg) sprintf("%s (%s, %.3f)", p, ps, avg),
+             df$Player, hitterPos(df), df$pAVG, USE.NAMES = FALSE)
+    }
+
+    # Top 4 pitchers for a counting category (W / K / SV / HD).
+    topPitchers <- function(sortKey) {
+      df <- AllP %>% filter(Team == team)
+      if (!sortKey %in% colnames(df) || nrow(df) == 0) return(character(0))
+      df <- df %>% arrange(desc(.data[[sortKey]]), Player) %>% head(4)
+      mapply(function(p, ps, v) sprintf("%s (%s, %d)", p, ps, round(v)),
+             df$Player, df$Pos, df[[sortKey]],
+             USE.NAMES = FALSE)
+    }
+
+    # Top 4 pitchers for ERA — volume-weighted (4.00 - pERA) * pIP / 9. Falls
+    # back to pERA asc when pIP is missing.
+    topERA <- function() {
+      df <- AllP %>% filter(Team == team)
+      if (nrow(df) == 0 || !"pERA" %in% colnames(df)) return(character(0))
+      if ("pIP" %in% colnames(df)) {
+        df <- df %>% filter(pIP > 0) %>%
+          mutate(.k = (4.00 - pERA) * pIP / 9) %>%
+          arrange(desc(.k), Player) %>% head(4)
+      } else {
+        df <- df %>% arrange(pERA, Player) %>% head(4)
+      }
+      mapply(function(p, ps, era) sprintf("%s (%s, %.2f)", p, ps, era),
+             df$Player, df$Pos, df$pERA, USE.NAMES = FALSE)
+    }
+
+    rows <- lapply(cats, function(c) {
+      t <- computeTier(c$col, c$reverse)
+      tierLabel <- if (is.na(t$tier)) ""
+                   else sprintf("%s (%s)", t$tier, fmtVal(c$name, t$value))
+      contribs <- switch(c$kind,
+                         "H"   = topHitters(c$sortKey),
+                         "P"   = topPitchers(c$sortKey),
+                         "BA"  = topBA(),
+                         "ERA" = topERA(),
+                         character(0))
+      data.frame(
+        Category   = c$name,
+        Tier       = tierLabel,
+        TierBg     = if (is.na(t$tier)) "" else t$tier,
+        Contributors = paste(contribs, collapse = ", "),
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    })
+    df <- do.call(rbind, rows)
+    # Rename to display label only at the end (commas/keys clean above).
+    names(df)[names(df) == "Contributors"] <- "Top 4 Contributors"
+
+    datatable(df,
+              options = list(paging = FALSE, info = FALSE, searching = FALSE,
+                             ordering = FALSE, autoWidth = FALSE,
+                             columnDefs = list(
+                               list(targets = which(names(df) == "TierBg") - 1, visible = FALSE),
+                               list(targets = 0, width = "60px"),
+                               list(targets = 1, width = "180px")
+                             )),
+              rownames = FALSE, escape = FALSE) %>%
+      formatStyle('Tier',
+                  valueColumns = 'TierBg',
+                  backgroundColor = styleEqual(
+                    c('High', 'Medium', 'Low'),
+                    c('#d4edda', '#fff3cd', '#f8d7da')
+                  ))
+  })
+
+# Category Status — league-wide opportunity (existing)
   output$catSummary <- DT::renderDataTable({
     rv$refreshCount
     datatable(catSummary,options = list(pageLength = 20)) %>%
