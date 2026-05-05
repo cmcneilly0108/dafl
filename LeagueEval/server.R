@@ -268,17 +268,15 @@ shinyServer(function(input, output,session) {
                'pW','pSO','pSV','pHLD','pERA','pIP')
     hOnly <- AllH %>% filter(Team == teamName)
     hOnly <- hOnly[, intersect(hCols, colnames(hOnly)), drop = FALSE]
-    if (nrow(hOnly) > 0) hOnly$.kind <- 'H'
     pOnly <- AllP %>% filter(Team == teamName)
     pOnly <- pOnly[, intersect(pCols, colnames(pOnly)), drop = FALSE]
-    if (nrow(pOnly) > 0) pOnly$.kind <- 'P'
     bind_rows(hOnly, pOnly) %>% arrange(-pDFL)
   }
 
   rosterA <- reactive({ rv$refreshCount; buildRoster(input$tradeTeamA) })
   rosterB <- reactive({ rv$refreshCount; buildRoster(input$tradeTeamB) })
 
-  renderRoster <- function(roster) {
+  rosterTable <- function(roster) {
     req(roster)
     visibleCols <- intersect(
       c('Player','Pos','pDFL','Salary','Contract','hotscore','Injury'),
@@ -287,15 +285,15 @@ shinyServer(function(input, output,session) {
     display <- roster[, visibleCols, drop = FALSE]
     datatable(display,
               selection = list(mode = 'multiple'),
-              options = list(pageLength = 30, paging = FALSE,
+              options = list(paging = FALSE,
                              searching = FALSE, info = FALSE),
               rownames = FALSE) %>%
       formatCurrency(intersect(c('pDFL','Salary'), visibleCols)) %>%
       formatRound(intersect('hotscore', visibleCols), 2)
   }
 
-  output$tradeRosterA <- DT::renderDataTable({ renderRoster(rosterA()) })
-  output$tradeRosterB <- DT::renderDataTable({ renderRoster(rosterB()) })
+  output$tradeRosterA <- DT::renderDataTable({ rosterTable(rosterA()) })
+  output$tradeRosterB <- DT::renderDataTable({ rosterTable(rosterB()) })
 
   # Trade Eval — summary helpers
   catCounting <- list(
