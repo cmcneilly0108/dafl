@@ -133,6 +133,12 @@ shinyServer(function(input, output,session) {
       teams <<- sort(unique(RTot$Team))
       updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
       updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
+      updateSelectizeInput(session, 'tradeTeamA',
+                           choices = c('Pick a team' = '', teams),
+                           selected = '')
+      updateSelectizeInput(session, 'tradeTeamB',
+                           choices = c('Pick a team' = '', teams),
+                           selected = '')
       updateSelectizeInput(session, 'choice', choices = trending$Player, server = TRUE)
       rv$refreshCount <- rv$refreshCount + 1
       removeNotification("refreshMsg")
@@ -165,6 +171,12 @@ shinyServer(function(input, output,session) {
 # By Team
   updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
   updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
+  updateSelectizeInput(session, 'tradeTeamA',
+                       choices = c('Pick a team' = '', teams),
+                       selected = '')
+  updateSelectizeInput(session, 'tradeTeamB',
+                       choices = c('Pick a team' = '', teams),
+                       selected = '')
   output$tname <- renderText({ input$e1 })
 
   dtTeamH <- reactive({
@@ -240,6 +252,10 @@ shinyServer(function(input, output,session) {
       add_lines(color=~Player,line = list(width=5)) %>%
       add_trace(color=~Player,type="scatter",mode = "markers",marker=list(size=15))
   })
+
+# Trade Eval — team-name labels
+  output$tradeTeamAName <- renderText({ input$tradeTeamA })
+  output$tradeTeamBName <- renderText({ input$tradeTeamB })
 
 # Category Status — per-team detail (new)
   output$teamCatDetail <- DT::renderDataTable({
