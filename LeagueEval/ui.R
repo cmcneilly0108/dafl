@@ -152,6 +152,26 @@ shinyUI(
         )
       )
     ),
+    tabPanel("Trade Eval",
+             sidebarLayout(
+               sidebarPanel(
+                 selectizeInput('tradeTeamA', 'Team A', choices = NULL),
+                 selectizeInput('tradeTeamB', 'Team B', choices = NULL),
+                 width = 2
+               ),
+               mainPanel(
+                 fluidRow(
+                   column(6, h4(textOutput('tradeTeamAName')),
+                          DT::dataTableOutput('tradeRosterA')),
+                   column(6, h4(textOutput('tradeTeamBName')),
+                          DT::dataTableOutput('tradeRosterB'))
+                 ),
+                 br(),
+                 h3('Trade Summary'),
+                 DT::dataTableOutput('tradeSummary')
+               )
+             )
+    ),
     tabPanel(
       "Prospects",
         sidebarLayout(
