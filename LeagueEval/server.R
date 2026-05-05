@@ -257,6 +257,46 @@ shinyServer(function(input, output,session) {
   output$tradeTeamAName <- renderText({ input$tradeTeamA })
   output$tradeTeamBName <- renderText({ input$tradeTeamB })
 
+  # Trade Eval — roster builder. Carries hidden projection columns (pHR/pAVG/pAB
+  # for hitters; pW/pERA/pIP/etc. for pitchers) so the summary reactive can
+  # compute deltas without re-querying AllH / AllP.
+  buildRoster <- function(teamName) {
+    if (is.null(teamName) || teamName == '') return(NULL)
+    hCols <- c('Player','Pos','pDFL','Salary','Contract','hotscore','Injury',
+               'pHR','pRBI','pR','pSB','pAVG','pAB')
+    pCols <- c('Player','Pos','pDFL','Salary','Contract','hotscore','Injury',
+               'pW','pSO','pSV','pHLD','pERA','pIP')
+    hOnly <- AllH %>% filter(Team == teamName)
+    hOnly <- hOnly[, intersect(hCols, colnames(hOnly)), drop = FALSE]
+    if (nrow(hOnly) > 0) hOnly$.kind <- 'H'
+    pOnly <- AllP %>% filter(Team == teamName)
+    pOnly <- pOnly[, intersect(pCols, colnames(pOnly)), drop = FALSE]
+    if (nrow(pOnly) > 0) pOnly$.kind <- 'P'
+    bind_rows(hOnly, pOnly) %>% arrange(-pDFL)
+  }
+
+  rosterA <- reactive({ rv$refreshCount; buildRoster(input$tradeTeamA) })
+  rosterB <- reactive({ rv$refreshCount; buildRoster(input$tradeTeamB) })
+
+  renderRoster <- function(roster) {
+    req(roster)
+    visibleCols <- intersect(
+      c('Player','Pos','pDFL','Salary','Contract','hotscore','Injury'),
+      colnames(roster)
+    )
+    display <- roster[, visibleCols, drop = FALSE]
+    datatable(display,
+              selection = list(mode = 'multiple'),
+              options = list(pageLength = 30, paging = FALSE,
+                             searching = FALSE, info = FALSE),
+              rownames = FALSE) %>%
+      formatCurrency(intersect(c('pDFL','Salary'), visibleCols)) %>%
+      formatRound(intersect('hotscore', visibleCols), 2)
+  }
+
+  output$tradeRosterA <- DT::renderDataTable({ renderRoster(rosterA()) })
+  output$tradeRosterB <- DT::renderDataTable({ renderRoster(rosterB()) })
+
 # Category Status — per-team detail (new)
   output$teamCatDetail <- DT::renderDataTable({
     rv$refreshCount
