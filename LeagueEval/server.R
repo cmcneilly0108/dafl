@@ -390,11 +390,53 @@ shinyServer(function(input, output,session) {
                   ))
   })
 
-# Category Status — league-wide opportunity (existing)
+# Category Status — Points by Category for the selected team.
+# Mirrors the pvResults / myscores / catSummary computation in inSeasonPulse.r,
+# but parameterised on input$teamSelect (the global catSummary is hardcoded to
+# 'Cricket' and is left intact for the weekly xlsx pipeline).
   output$catSummary <- DT::renderDataTable({
     rv$refreshCount
-    datatable(catSummary,options = list(pageLength = 20)) %>%
-      formatRound(c('pvp','pvm','opportunity'),2)
+    team <- input$teamSelect
+    if (is.null(team) || team == '') return(NULL)
+    shortTeam <- if (exists("nicks") && team %in% nicks$Team) {
+      nicks$Short[match(team, nicks$Team)]
+    } else team
+    if (!shortTeam %in% cstand$Team) return(NULL)
+
+    # Counting categories only — pvCat doesn't apply to BA/ERA.
+    pvCats <- c('HR','RBI','SB','R','W','HD','S','K')
+    pvRows <- lapply(pvCats, function(cat) {
+      myVal <- as.numeric(cstand[cstand$Team == shortTeam, cat])
+      r <- pvCat(cstand[[cat]], 0.3, myVal)
+      data.frame(category = cat, pvp = r[[1]], pvm = r[[2]], opportunity = r[[3]],
+                 stringsAsFactors = FALSE)
+    })
+    pvDf <- do.call(rbind, pvRows) %>% arrange(-opportunity)
+
+    # Per-category rank for the selected team. ERA ranked low-to-high, the rest
+    # high-to-low (lower score = the team is worse in that category).
+    rankCats <- list(
+      list(cat='W',  rev=FALSE), list(cat='K',  rev=FALSE),
+      list(cat='S',  rev=FALSE), list(cat='HD', rev=FALSE),
+      list(cat='ERA',rev=TRUE),  list(cat='HR', rev=FALSE),
+      list(cat='RBI',rev=FALSE), list(cat='R',  rev=FALSE),
+      list(cat='SB', rev=FALSE), list(cat='BA', rev=FALSE)
+    )
+    msRows <- lapply(rankCats, function(rc) {
+      v <- suppressWarnings(as.numeric(cstand[[rc$cat]]))
+      ord <- if (rc$rev) order(-v, na.last = TRUE) else order(v, na.last = TRUE)
+      data.frame(category = rc$cat,
+                 score = which(cstand$Team[ord] == shortTeam),
+                 stringsAsFactors = FALSE)
+    })
+    msDf <- do.call(rbind, msRows) %>% arrange(score)
+
+    teamCatSummary <- left_join(msDf, pvDf, by = 'category',
+                                relationship = "many-to-many") %>%
+      arrange(-opportunity)
+
+    datatable(teamCatSummary, options = list(pageLength = 20)) %>%
+      formatRound(c('pvp','pvm','opportunity'), 2)
   })
 
 # Positional Surplus
