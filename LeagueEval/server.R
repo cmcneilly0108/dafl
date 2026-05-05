@@ -287,7 +287,7 @@ shinyServer(function(input, output,session) {
               selection = list(mode = 'multiple'),
               options = list(paging = FALSE,
                              searching = FALSE, info = FALSE),
-              rownames = FALSE) %>%
+              rownames = FALSE, escape = FALSE) %>%
       formatCurrency(intersect(c('pDFL','Salary'), visibleCols)) %>%
       formatRound(intersect('hotscore', visibleCols), 2)
   }
@@ -364,43 +364,56 @@ shinyServer(function(input, output,session) {
               rB[input$tradeRosterB_rows_selected, , drop = FALSE]
             else rB[0, , drop = FALSE]
 
-    countingRows <- lapply(catCounting, function(c) {
+    # Two-row summary: each team and the categories where they come out ahead.
+    aheadA <- character(0)
+    aheadB <- character(0)
+    addStat <- function(name, deltaA, deltaB, fmt, lowerBetter = FALSE, bold = FALSE) {
+      fav <- function(v) !is.na(v) && v != 0 && (if (lowerBetter) v < 0 else v > 0)
+      label <- function(v) {
+        s <- sprintf("%s (%s)", name, fmt(v))
+        if (bold) paste0("<strong>", s, "</strong>") else s
+      }
+      if (fav(deltaA)) aheadA <<- c(aheadA, label(deltaA))
+      if (fav(deltaB)) aheadB <<- c(aheadB, label(deltaB))
+    }
+
+    # Order: HR, RBI, R, SB, BA, W, K, SV, HD, ERA, pDFL.
+    for (c in catCounting[1:4]) {  # HR, RBI, R, SB
       out <- if (c$col %in% colnames(selA)) sum0(selA[[c$col]]) else 0
       inc <- if (c$col %in% colnames(selB)) sum0(selB[[c$col]]) else 0
       deltaA <- inc - out
-      data.frame(Category = c$name,
-                 A = fmtCount(deltaA),
-                 B = fmtCount(-deltaA),
-                 stringsAsFactors = FALSE)
-    })
-
-    baA <- rateDelta(rA, selA, selB, 'pAVG', 'pAB')
-    baB <- rateDelta(rB, selB, selA, 'pAVG', 'pAB')
-    baRow <- data.frame(Category = 'BA',
-                        A = fmtBA(baA), B = fmtBA(baB),
-                        stringsAsFactors = FALSE)
-
-    eraA <- rateDelta(rA, selA, selB, 'pERA', 'pIP')
-    eraB <- rateDelta(rB, selB, selA, 'pERA', 'pIP')
-    eraRow <- data.frame(Category = 'ERA',
-                         A = fmtERA(eraA), B = fmtERA(eraB),
-                         stringsAsFactors = FALSE)
-
+      addStat(c$name, deltaA, -deltaA, fmtCount)
+    }
+    addStat('BA', rateDelta(rA, selA, selB, 'pAVG', 'pAB'),
+                  rateDelta(rB, selB, selA, 'pAVG', 'pAB'), fmtBA)
+    for (c in catCounting[5:8]) {  # W, K, SV, HD
+      out <- if (c$col %in% colnames(selA)) sum0(selA[[c$col]]) else 0
+      inc <- if (c$col %in% colnames(selB)) sum0(selB[[c$col]]) else 0
+      deltaA <- inc - out
+      addStat(c$name, deltaA, -deltaA, fmtCount)
+    }
+    addStat('ERA', rateDelta(rA, selA, selB, 'pERA', 'pIP'),
+                   rateDelta(rB, selB, selA, 'pERA', 'pIP'),
+                   fmtERA, lowerBetter = TRUE)
     outDFL <- if ('pDFL' %in% colnames(selA)) sum0(selA$pDFL) else 0
     incDFL <- if ('pDFL' %in% colnames(selB)) sum0(selB$pDFL) else 0
     dflDelta <- incDFL - outDFL
-    dflRow <- data.frame(Category = 'pDFL',
-                         A = fmtDFL(dflDelta), B = fmtDFL(-dflDelta),
-                         stringsAsFactors = FALSE)
+    addStat('pDFL', dflDelta, -dflDelta, fmtDFL, bold = TRUE)
 
-    df <- do.call(rbind, c(countingRows[1:4], list(baRow),
-                           countingRows[5:8], list(eraRow, dflRow)))
-    names(df) <- c('Category', input$tradeTeamA, input$tradeTeamB)
+    df <- data.frame(
+      Team = c(input$tradeTeamA, input$tradeTeamB),
+      `Comes out ahead on` = c(
+        if (length(aheadA) > 0) paste(aheadA, collapse = ", ") else "—",
+        if (length(aheadB) > 0) paste(aheadB, collapse = ", ") else "—"
+      ),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
 
     datatable(df,
               options = list(paging = FALSE, info = FALSE, searching = FALSE,
                              ordering = FALSE, dom = 't'),
-              rownames = FALSE)
+              rownames = FALSE, escape = FALSE)
   })
 
 # Category Status — per-team detail (new)
