@@ -297,6 +297,114 @@ shinyServer(function(input, output,session) {
   output$tradeRosterA <- DT::renderDataTable({ renderRoster(rosterA()) })
   output$tradeRosterB <- DT::renderDataTable({ renderRoster(rosterB()) })
 
+  # Trade Eval — summary helpers
+  catCounting <- list(
+    list(name='HR',  col='pHR'),  list(name='RBI', col='pRBI'),
+    list(name='R',   col='pR'),   list(name='SB',  col='pSB'),
+    list(name='W',   col='pW'),   list(name='K',   col='pSO'),
+    list(name='SV',  col='pSV'),  list(name='HD',  col='pHLD')
+  )
+
+  sum0 <- function(x) sum(x, na.rm = TRUE)
+
+  weightedRate <- function(rows, rateCol, volCol) {
+    if (!rateCol %in% colnames(rows) || !volCol %in% colnames(rows)) return(NA_real_)
+    v <- rows[[volCol]]; r <- rows[[rateCol]]
+    ok <- !is.na(v) & !is.na(r) & v > 0
+    if (!any(ok)) return(NA_real_)
+    sum(r[ok] * v[ok]) / sum(v[ok])
+  }
+
+  rateDelta <- function(fullRoster, outgoing, incoming, rateCol, volCol) {
+    before <- weightedRate(fullRoster, rateCol, volCol)
+    kept   <- fullRoster %>% filter(!Player %in% outgoing$Player)
+    after  <- weightedRate(bind_rows(kept, incoming), rateCol, volCol)
+    if (is.na(before) || is.na(after)) return(NA_real_)
+    after - before
+  }
+
+  fmtCount <- function(x) {
+    if (is.na(x) || x == 0) '0'
+    else if (x > 0) sprintf('+%d', round(x))
+    else sprintf('%d', round(x))
+  }
+  fmtBA <- function(x) {
+    if (is.na(x)) '—'
+    else if (x == 0) '0.000'
+    else if (x > 0) sprintf('+%.3f', x)
+    else sprintf('%.3f', x)
+  }
+  fmtERA <- function(x) {
+    if (is.na(x)) '—'
+    else if (x == 0) '0.00'
+    else if (x > 0) sprintf('+%.2f', x)
+    else sprintf('%.2f', x)
+  }
+  fmtDFL <- function(x) {
+    if (is.na(x) || x == 0) '$0'
+    else if (x > 0) sprintf('+$%d', round(x))
+    else sprintf('-$%d', round(abs(x)))
+  }
+
+  output$tradeSummary <- DT::renderDataTable({
+    rv$refreshCount
+    req(input$tradeTeamA, input$tradeTeamB)
+
+    if (input$tradeTeamA == input$tradeTeamB) {
+      return(datatable(
+        data.frame(Note = "Pick two different teams"),
+        options = list(paging = FALSE, info = FALSE, searching = FALSE,
+                       ordering = FALSE, dom = 't'),
+        rownames = FALSE))
+    }
+
+    rA <- rosterA(); rB <- rosterB()
+    selA <- if (length(input$tradeRosterA_rows_selected) > 0)
+              rA[input$tradeRosterA_rows_selected, , drop = FALSE]
+            else rA[0, , drop = FALSE]
+    selB <- if (length(input$tradeRosterB_rows_selected) > 0)
+              rB[input$tradeRosterB_rows_selected, , drop = FALSE]
+            else rB[0, , drop = FALSE]
+
+    countingRows <- lapply(catCounting, function(c) {
+      out <- if (c$col %in% colnames(selA)) sum0(selA[[c$col]]) else 0
+      inc <- if (c$col %in% colnames(selB)) sum0(selB[[c$col]]) else 0
+      deltaA <- inc - out
+      data.frame(Category = c$name,
+                 A = fmtCount(deltaA),
+                 B = fmtCount(-deltaA),
+                 stringsAsFactors = FALSE)
+    })
+
+    baA <- rateDelta(rA, selA, selB, 'pAVG', 'pAB')
+    baB <- rateDelta(rB, selB, selA, 'pAVG', 'pAB')
+    baRow <- data.frame(Category = 'BA',
+                        A = fmtBA(baA), B = fmtBA(baB),
+                        stringsAsFactors = FALSE)
+
+    eraA <- rateDelta(rA, selA, selB, 'pERA', 'pIP')
+    eraB <- rateDelta(rB, selB, selA, 'pERA', 'pIP')
+    eraRow <- data.frame(Category = 'ERA',
+                         A = fmtERA(eraA), B = fmtERA(eraB),
+                         stringsAsFactors = FALSE)
+
+    outDFL <- if ('pDFL' %in% colnames(selA)) sum0(selA$pDFL) else 0
+    incDFL <- if ('pDFL' %in% colnames(selB)) sum0(selB$pDFL) else 0
+    dflDelta <- incDFL - outDFL
+    dflRow <- data.frame(Category = 'pDFL',
+                         A = fmtDFL(dflDelta), B = fmtDFL(-dflDelta),
+                         stringsAsFactors = FALSE)
+
+    df <- do.call(rbind, c(countingRows[1:4], list(baRow),
+                           countingRows[5:8], list(eraRow, dflRow)))
+    names(df) <- c('Category', input$tradeTeamA, input$tradeTeamB)
+
+    datatable(df,
+              options = list(paging = FALSE, info = FALSE, searching = FALSE,
+                             ordering = FALSE, dom = 't'),
+              rownames = FALSE)
+  })
+
 # Category Status — per-team detail (new)
   output$teamCatDetail <- DT::renderDataTable({
     rv$refreshCount
