@@ -111,7 +111,7 @@ Have to convert Team to MLB
 #fgh <- read.csv(str_c('../atcH',as.character(year),'.csv',sep=''),stringsAsFactors=FALSE, encoding="UTF-8")
 #fgh <- read.fg('../steamerH2023.csv')
 
-fgh <- read_json('../steamerH2026.json',simplifyVector = TRUE)
+fgh <- read_json('../steamerHROS.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgh)) {
 } else {
   if ("playerids" %in% colnames(fgh)) {
@@ -124,7 +124,7 @@ fgh <- select(fgh,playerid,Player=PlayerName,MLB=Team)
 
 #fgh <- select(fgh,playerid,Player,MLB=Team)
 
-fgp <- read_json('../steamerP2026.json',simplifyVector = TRUE)
+fgp <- read_json('../steamerPROS.json',simplifyVector = TRUE)
 if ("playerid" %in% colnames(fgp)) {
 } else {
   if ("playerids" %in% colnames(fgp)) {
