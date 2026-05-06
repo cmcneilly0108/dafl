@@ -198,8 +198,9 @@ noidmatch <- rbind(noidmatchfg,noidmatchfgpros)
 
 sameName <- inner_join(noidmatch,mymaster,by=c('Player','MLB'))
 repl <- select(sameName,playerid = playerid.y,newid = playerid.x)
-# remove rows if newid is an 'sa' number
-#repl <- filter(repl,str_starts(newid,'sa'))
+# FG promotes minor leaguers from saXXXX -> numeric ids but never the reverse;
+# block numeric -> sa replacements to stop ~20 prospects oscillating each run.
+repl <- repl %>% filter(!(str_starts(newid, 'sa') & !str_starts(playerid, 'sa')))
 
 mymaster <- left_join(mymaster,repl)
 mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
