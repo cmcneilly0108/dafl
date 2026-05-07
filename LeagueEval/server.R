@@ -727,6 +727,28 @@ shinyServer(function(input, output,session) {
       formatRound('AB', 0)
   })
 
+# Streamers — pitchers
+  output$streamersPitchers <- DT::renderDataTable({
+    rv$refreshCount
+    rv$targets  # react to target changes
+    df <- AllP %>%
+      select(playerid, Player, Pos, Team, INN, W, K, S, HD, ERA,
+             zW, zSO, zSV, zHLD, zxER, pDFL)
+    if (isTRUE(input$faStreamers)) df <- filter(df, Team == 'Free Agent')
+    df <- df %>% arrange(desc(pDFL))
+    ff <- markTargets(df, isolate(rv$targets)) %>%
+      select(Target, Player, Pos, Team, INN, W, K, S, HD, ERA,
+             zW, zSO, zSV, zHLD, zxER, pDFL,
+             -playerid, -isTarget)
+    datatable(ff,
+              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
+              filter = 'top', escape = FALSE) %>%
+      formatCurrency('pDFL') %>%
+      formatRound(c('zW','zSO','zSV','zHLD','zxER'), 2) %>%
+      formatRound('ERA', 2) %>%
+      formatRound(c('INN','W','K','S','HD'), 0)
+  })
+
 # My Targets
   output$targetTable <- DT::renderDataTable({
     rv$targets  # react to target changes
