@@ -205,6 +205,7 @@ shinyUI(
     tabPanel("My Targets",
              verticalLayout(
                h2("Targeted Players"),
+               checkboxInput('faTargets', 'Free Agents Only', value = TRUE),
                DT::dataTableOutput("targetTable")
              )),
     tabPanel("Player Snapshot",

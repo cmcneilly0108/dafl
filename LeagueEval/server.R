@@ -710,10 +710,11 @@ shinyServer(function(input, output,session) {
     rv$targets  # react to target changes
     rv$refreshCount
     allPlayers <- bind_rows(
-      AllH %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return),
-      AllP %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return)
+      AllH %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, Team),
+      AllP %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, Team)
     ) %>% distinct(playerid, .keep_all = TRUE)
     info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
+    if (isTRUE(input$faTargets)) info <- filter(info, Team == 'Free Agent')
     ff <- markTargets(info, rv$targets) %>% select(Target, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, -playerid, -isTarget)
     datatable(ff,
               options = list(paging = FALSE, info = FALSE, autoWidth = FALSE),
