@@ -908,7 +908,7 @@ calcGoals <- function(p,h,targets,t) {
   gmet <- rbind(hg,pg) %>% arrange(pc)
 }
 
-hotScores <- function(toph,topp,tm=FALSE) {
+hotScores <- function(toph,topp,tm=FALSE,withZ=FALSE) {
   toph <- filter(toph,AB>0)
   topp <- filter(topp,INN>0)
   mHR <- mean(toph$HR)
@@ -962,13 +962,24 @@ hotScores <- function(toph,topp,tm=FALSE) {
   ih2 <- toph
   ip2 <- topp
 
+  hZcols <- c('zHR','zR','zRBI','zSB','zxH')
+  pZcols <- c('zW','zSO','zHLD','zSV','zxER')
   if (tm) {
-    bhitters <- select(ih2,playerid,zScore,Team)
-    bpitchers <- select(ip2,playerid,zScore,Team)
-
+    if (withZ) {
+      bhitters  <- select(ih2, playerid, Team, zScore, all_of(hZcols))
+      bpitchers <- select(ip2, playerid, Team, zScore, all_of(pZcols))
+    } else {
+      bhitters  <- select(ih2, playerid, zScore, Team)
+      bpitchers <- select(ip2, playerid, zScore, Team)
+    }
   } else {
-    bhitters <- select(ih2,playerid,zScore)
-    bpitchers <- select(ip2,playerid,zScore)
+    if (withZ) {
+      bhitters  <- select(ih2, playerid, zScore, all_of(hZcols))
+      bpitchers <- select(ip2, playerid, zScore, all_of(pZcols))
+    } else {
+      bhitters  <- select(ih2, playerid, zScore)
+      bpitchers <- select(ip2, playerid, zScore)
+    }
   }
 
   list(bhitters,bpitchers)
