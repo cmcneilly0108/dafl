@@ -127,7 +127,10 @@ shinyServer(function(input, output,session) {
 
 # --- Refresh Data ---
   observeEvent(input$refreshBtn, {
+    removeModal()
     showNotification("Refreshing data... this may take a minute", type = "message", duration = NULL, id = "refreshMsg")
+    Sys.setenv(DAFL_FORCE_REFRESH = "1")
+    on.exit(Sys.unsetenv("DAFL_FORCE_REFRESH"), add = TRUE)
     tryCatch({
       source("../code/inSeasonPulse.r", local = globalenv())
       teams <<- sort(unique(RTot$Team))
