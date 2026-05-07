@@ -115,6 +115,7 @@ shinyServer(function(input, output,session) {
     ) %>% distinct(playerid, .keep_all = TRUE)
     pName <- allPlayers$Player[allPlayers$playerid == pid]
     if (length(pName) == 0) pName <- "Player"
+    pName <- gsub("<[^>]+>", "", pName)
     if (pid %in% rv$targets) {
       rv$targets <- rv$targets[rv$targets != pid]
       isNowTarget <- FALSE
