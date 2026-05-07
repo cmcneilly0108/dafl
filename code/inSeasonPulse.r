@@ -244,7 +244,7 @@ AllP$pDFL <- replace(AllP$pDFL,is.na(AllP$pDFL),0)
 # Generate recent zScores
 toph <- Allhitters
 topp <- Allpitchers
-r <- hotScores(toph,topp)
+r <- hotScores(toph,topp,withZ=TRUE)
 oh <- r[[1]]
 op <- r[[2]]
 
@@ -942,7 +942,7 @@ buildAltLeaguePool <- function(hFile, pFile) {
   AllP$pDFL <- replace(AllP$pDFL, is.na(AllP$pDFL), 0)
 
   # 5. Hot scores
-  r <- hotScores(Allhitters, Allpitchers)
+  r <- hotScores(Allhitters, Allpitchers, withZ = TRUE)
   AllH <- left_join(AllH, r[[1]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
   AllP <- left_join(AllP, r[[2]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
 
