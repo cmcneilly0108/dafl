@@ -41,7 +41,7 @@ shinyServer(function(input, output,session) {
 
   projSource <- reactiveVal(initialProjSource)
 
-  # --- Settings modal: projection source ---
+  # --- Settings modal: projection source + Refresh Data ---
   observeEvent(input$settingsBtn, {
     showModal(modalDialog(
       title = "Settings",
@@ -53,6 +53,10 @@ shinyServer(function(input, output,session) {
                                'THE BAT X' = 'batx'),
                    selected = isolate(projSource()),
                    inline = TRUE),
+      tags$hr(),
+      actionButton('refreshBtn', 'Refresh Data',
+                   class = 'btn-success btn-sm',
+                   icon = icon('refresh')),
       footer = modalButton("Close")
     ))
   })
