@@ -712,49 +712,47 @@ shinyServer(function(input, output,session) {
       formatCurrency('pDFL')
   })
 
-# Streamers — hitters
-  output$streamersHitters <- DT::renderDataTable({
+# Streamers
+  output$streamersTable <- DT::renderDataTable({
     rv$refreshCount
     rv$targets  # react to target changes
-    df <- AllH %>%
-      select(playerid, Player, Pos, Team, AB, HR, R, RBI, SB, AVG,
-             zHR, zR, zRBI, zSB, zxH, pDFL)
-    if (isTRUE(input$faStreamers)) df <- filter(df, Team == 'Free Agent')
-    df <- df %>% arrange(desc(pDFL))
-    ff <- markTargets(df, isolate(rv$targets)) %>%
-      select(Target, Player, Pos, Team, AB, HR, R, RBI, SB, AVG,
-             zHR, zR, zRBI, zSB, zxH, pDFL,
-             -playerid, -isTarget)
-    datatable(ff,
-              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
-              filter = 'top', escape = FALSE) %>%
-      formatCurrency('pDFL') %>%
-      formatRound(c('zHR','zR','zRBI','zSB','zxH'), 2) %>%
-      formatRound('AVG', 3) %>%
-      formatRound('AB', 0)
-  })
+    stat <- input$streamersStat
+    req(stat)
+    hitterStats <- c('HR','R','RBI','SB','AVG')
 
-# Streamers — pitchers
-  output$streamersPitchers <- DT::renderDataTable({
-    rv$refreshCount
-    rv$targets  # react to target changes
-    df <- AllP %>%
-      select(playerid, Player, Pos, Team, INN, W, K, S, HD, ERA,
-             zW, zSO, zSV, zHLD, zxER, pDFL)
+    if (stat %in% hitterStats) {
+      df <- AllH %>% select(playerid, Player, Pos, Team,
+                            AB, HR, R, RBI, SB, AVG,
+                            pHR, pR, pRBI, pSB, pAVG,
+                            pDFL, hotscore)
+    } else {
+      df <- AllP %>% select(playerid, Player, Pos, Team,
+                            INN, W, K, S, HD, ERA,
+                            pW, pSO, pSV, pHLD, pERA,
+                            pDFL, hotscore)
+    }
     if (isTRUE(input$faStreamers)) df <- filter(df, Team == 'Free Agent')
-    df <- df %>% arrange(desc(pDFL))
+    if (stat == 'ERA') {
+      df <- df %>% arrange(.data[[stat]])
+    } else {
+      df <- df %>% arrange(desc(.data[[stat]]))
+    }
+    df <- head(df, 20)
     ff <- markTargets(df, isolate(rv$targets)) %>%
-      select(Target, Player, Pos, Team, INN, W, K, S, HD, ERA,
-             zW, zSO, zSV, zHLD, zxER, pDFL,
-             -playerid, -isTarget)
-    datatable(ff,
-              options = list(pageLength = 25, autoWidth = FALSE, info = FALSE),
-              filter = 'top', escape = FALSE) %>%
-      formatCurrency('pDFL') %>%
-      formatRound(c('zW','zSO','zSV','zHLD','zxER'), 2) %>%
-      formatRound('ERA', 2) %>%
-      formatRound('INN', 1) %>%
-      formatRound(c('W','K','S','HD'), 0)
+      select(Target, everything(), -playerid, -isTarget)
+    dt <- datatable(ff,
+                    options = list(pageLength = 20, autoWidth = FALSE, info = FALSE),
+                    escape = FALSE) %>%
+      formatCurrency('pDFL')
+    dt <- dt %>% formatRound('hotscore', 2)
+    if (stat %in% hitterStats) {
+      dt %>% formatRound(c('AVG','pAVG'), 3) %>%
+        formatRound(c('AB','pHR','pR','pRBI','pSB'), 0)
+    } else {
+      dt %>% formatRound(c('ERA','pERA'), 2) %>%
+        formatRound('INN', 1) %>%
+        formatRound(c('W','K','S','HD','pW','pSO','pSV','pHLD'), 0)
+    }
   })
 
 # My Targets

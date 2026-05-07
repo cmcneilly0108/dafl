@@ -200,14 +200,21 @@ shinyUI(
                DT::dataTableOutput("injOrig")
              )),
     tabPanel("Streamers",
-             verticalLayout(
-               h2("Streamers — last 14 days"),
-               checkboxInput('faStreamers', 'Free Agents Only', value = TRUE),
-               h3("Hitters"),
-               DT::dataTableOutput("streamersHitters"),
-               br(),
-               h3("Pitchers"),
-               DT::dataTableOutput("streamersPitchers")
+             sidebarLayout(
+               sidebarPanel(
+                 checkboxInput('faStreamers', 'Free Agents Only', value = TRUE),
+                 selectInput('streamersStat', 'Statistic',
+                             choices = list(
+                               Hitters = c('HR','R','RBI','SB','AVG'),
+                               Pitchers = c('W','K','S','HD','ERA')
+                             ),
+                             selected = 'SB'),
+                 width = 2
+               ),
+               mainPanel(
+                 h2("Streamers — last 14 days"),
+                 DT::dataTableOutput("streamersTable")
+               )
              )),
     tabPanel("My Targets",
              verticalLayout(
