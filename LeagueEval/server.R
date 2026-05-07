@@ -746,7 +746,8 @@ shinyServer(function(input, output,session) {
       formatCurrency('pDFL') %>%
       formatRound(c('zW','zSO','zSV','zHLD','zxER'), 2) %>%
       formatRound('ERA', 2) %>%
-      formatRound(c('INN','W','K','S','HD'), 0)
+      formatRound('INN', 1) %>%
+      formatRound(c('W','K','S','HD'), 0)
   })
 
 # My Targets
