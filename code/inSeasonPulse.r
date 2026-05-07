@@ -45,6 +45,9 @@ projFiles <- list(
   batx    = list(h = "../batxHROS.json",    p = "../batxPROS.json")
 )
 
+# When set (e.g. by Shiny's Refresh Data button), bypass file-age cache
+# checks below and refetch from every upstream source.
+forceRefresh <- nchar(Sys.getenv("DAFL_FORCE_REFRESH")) > 0
 
 # Update data files
 # Re-fetch if any required projection file is missing or any is older than 10 hours.
@@ -55,7 +58,7 @@ projAges     <- sapply(projAllFiles, function(f) {
   if (is.na(m)) Inf else as.integer(difftime(Sys.time(), m, units = "hours"))
 })
 cd <- Sys.time()
-if (projMissing || any(projAges > 10)) {
+if (forceRefresh || projMissing || any(projAges > 10)) {
   # Use Playwright-based fetch for FanGraphs (bypasses Cloudflare)
   system(str_c("node ../scripts/fgFetchInSeason.js ", cyear))
   system("bash ../scripts/salaryinfo.sh")
@@ -63,7 +66,7 @@ if (projMissing || any(projAges > 10)) {
 
 # CBS endpoints - separate check since they're slow
 cbsAge <- as.integer(difftime(cd, file.info("../AllHitters.csv")$mtime, units = "hours"))
-if (is.na(cbsAge) || cbsAge > 10) {
+if (forceRefresh || is.na(cbsAge) || cbsAge > 10) {
   system("node ../scripts/cbsFetch.js")
 }
 
@@ -293,7 +296,7 @@ injAge <- if (is.na(injFile)) Inf else as.integer(difftime(Sys.time(), injFile, 
 stuffFile <- file.info("../latestStuff.csv")$mtime
 stuffAge <- if (is.na(stuffFile)) Inf else as.integer(difftime(Sys.time(), stuffFile, units = "hours"))
 
-if (injAge < 20) {
+if (!forceRefresh && injAge < 20) {
   cat("Using cached injuries file (", injAge, " hours old)\n")
   injOrig <- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
   injOrig <- injOrig %>% rename(`Latest Update` = `Latest.Update`, `Injury / Surgery Date` = `Injury...Surgery.Date`)
@@ -309,7 +312,7 @@ if (injAge < 20) {
   })
 }
 
-if (stuffAge < 20) {
+if (!forceRefresh && stuffAge < 20) {
   cat("Using cached Stuff+ file (", stuffAge, " hours old)\n")
   stuff <- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
     rename(`Pitching+` = `Pitching.`)
