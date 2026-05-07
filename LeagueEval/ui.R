@@ -15,12 +15,9 @@ shinyUI(
     "DAFL Evaluator, v3.0",
     header = tagList(
       shinyjs::useShinyjs(),
-      tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000; display:flex; gap:8px;",
+      tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
         actionButton('settingsBtn', 'Settings',
-                     class = 'btn-default btn-sm'),
-        actionButton('refreshBtn', 'Refresh Data',
-                      class = 'btn-success btn-sm',
-                      icon = icon('refresh'))
+                     class = 'btn-default btn-sm')
       )
     ),
     tags$head(tags$script(HTML("
