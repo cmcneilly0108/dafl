@@ -11,6 +11,8 @@ library("xml2")
 library("rvest")
 library("httr")
 
+# When bumping cyear/lastyear each season, also update YEAR in
+# code/run_data_loads.sh (the daily launchd data-load job hardcodes the year).
 cyear <- "2026"
 lastyear <- "2025"
 # it's been .75 for 2024 and 2025, but .89 in 2023
