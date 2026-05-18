@@ -198,9 +198,10 @@ noidmatch <- rbind(noidmatchfg,noidmatchfgpros)
 
 sameName <- inner_join(noidmatch,mymaster,by=c('Player','MLB'))
 repl <- select(sameName,playerid = playerid.y,newid = playerid.x)
-# FG promotes minor leaguers from saXXXX -> numeric ids but never the reverse;
-# block numeric -> sa replacements to stop ~20 prospects oscillating each run.
-repl <- repl %>% filter(!(str_starts(newid, 'sa') & !str_starts(playerid, 'sa')))
+# Never downgrade a real FG numeric id to an sa-prefix (CBS/minor-master) id.
+# Prospects file lists MLB players who still have sa-ids; without this filter
+# their real FG id in mymaster gets overwritten and joins on playerid break.
+repl <- filter(repl, !str_starts(newid, 'sa'))
 
 mymaster <- left_join(mymaster,repl)
 mymaster <- mutate(mymaster,playerid = ifelse(is.na(newid),playerid,newid)) %>% select(-newid)
