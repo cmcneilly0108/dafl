@@ -59,206 +59,214 @@ shinyUI(
         )
       )
     ),
-    tabPanel("By Position",
-             sidebarLayout(
-               sidebarPanel(selectizeInput(
-                 'e3',
-                 'Select Position',
-                 choices = c('Hitters','C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
-               ),
-               checkboxInput('fa','Free Agents Only'),
-               value=TRUE,width = 1),
-               mainPanel(DT::dataTableOutput("topPlayers"))
-             )),
-    tabPanel("Reliever Detail",
-             verticalLayout(
-               h2("Roster Resource"),
-               DT::dataTableOutput("rrcResults")
-             )
-    ),
-    tabPanel(
-      "Player Trends",
-      selectizeInput(
-        "choice",
-        "Pick Player",
+    navbarMenu("Players",
+      tabPanel("Player Snapshot",
+               fluidRow(
+                 column(7, DT::dataTableOutput("searchTable")),
+                 column(5, uiOutput("playerSnapshot"))
+               )),
+      tabPanel(
+        "Player Trends",
+        selectizeInput(
+          "choice",
+          "Pick Player",
 #        choices = trending$Player,
-        choices = NULL,
-        selected = NULL,
-        multiple = TRUE
-      ),
-      plotlyOutput("lcgraph",height="800px")
+          choices = NULL,
+          selected = NULL,
+          multiple = TRUE
+        ),
+        plotlyOutput("lcgraph",height="800px")
 
+      ),
+      tabPanel("My Targets",
+               verticalLayout(
+                 h2("Targeted Players"),
+                 checkboxInput('faTargets', 'Free Agents Only', value = TRUE),
+                 DT::dataTableOutput("targetTable")
+               ))
     ),
-    tabPanel("LC Trends",
-             mainPanel(
-               tabsetPanel(
-                 type = 'tabs',
-                 tabPanel('Standings', plotOutput("g1")),
-                 tabPanel('Hitting', plotOutput("g2")),
-                 tabPanel('Pitching', plotOutput("g3"))
+    navbarMenu("Free Agents",
+      tabPanel("By Position",
+               sidebarLayout(
+                 sidebarPanel(selectizeInput(
+                   'e3',
+                   'Select Position',
+                   choices = c('Hitters','C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
+                 ),
+                 checkboxInput('fa','Free Agents Only'),
+                 value=TRUE,width = 1),
+                 mainPanel(DT::dataTableOutput("topPlayers"))
+               )),
+      tabPanel("Reliever Detail",
+               verticalLayout(
+                 h2("Roster Resource"),
+                 DT::dataTableOutput("rrcResults")
                )
-             )),
-    tabPanel("Category Status",
-             sidebarLayout(
-               sidebarPanel(
-                 selectizeInput('teamSelect', 'Team', choices = NULL),
-                 width = 2
-               ),
-               mainPanel(
-                 h2("Team Category Detail"),
-                 DT::dataTableOutput("teamCatDetail"),
-                 br(),
-                 h2("Points by Category"),
-                 DT::dataTableOutput("catSummary")
-               )
-             )
-    ),
-    tabPanel(
-      "Surplus",
-      tabsetPanel(
-        type = 'tabs',
-        tabPanel(
-          "Positional",
+      ),
+      tabPanel("Streamers",
+               sidebarLayout(
+                 sidebarPanel(
+                   checkboxInput('faStreamers', 'Free Agents Only', value = TRUE),
+                   selectInput('streamersStat', 'Statistic',
+                               choices = list(
+                                 Hitters = c('HR','R','RBI','SB','AVG'),
+                                 Pitchers = c('W','K','S','HD','ERA')
+                               ),
+                               selected = 'SB'),
+                   width = 2
+                 ),
+                 mainPanel(
+                   h2("Streamers — last 14 days"),
+                   DT::dataTableOutput("streamersTable")
+                 )
+               )),
+      tabPanel(
+        "Prospects",
           sidebarLayout(
             sidebarPanel(
-              selectizeInput(
-                'e2',
-                'Select Position',
-                choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
-              ),
-              sliderInput(
-                "pd",
-                "pDFL",
-                min = 0,
-                max = 30,
-                value = 10
-              ),
+              checkboxInput('faProspects','Free Agents Only'),
               width = 2
             ),
-            mainPanel(DT::dataTableOutput("tprofile"))
+            mainPanel(
+              tabsetPanel(
+                type = 'tabs',
+                tabPanel('Hitters', DT::dataTableOutput("ProHit")),
+                tabPanel('Pitchers', DT::dataTableOutput("ProPit"))
+              )
+            )
           )
-        ),
-        tabPanel(
-          "Statistical",
-          mainPanel(
-            h2("Team Tiers by Category"),
-            tags$div(style = "font-size:13px; color:#666; margin-bottom:8px;",
-                     "High = ranks 1–4, Medium = ranks 5–9, Low = ranks 10–13. ERA ranked low-to-high."),
-            DT::dataTableOutput("statSurplus")
-          )
-        )
-      )
+      ),
+      tabPanel("Injured",
+               verticalLayout(
+                 DT::dataTableOutput("injOrig")
+               ))
     ),
-    tabPanel("Trade Eval",
-             sidebarLayout(
-               sidebarPanel(
-                 selectizeInput('tradeTeamA', 'Team A', choices = NULL),
-                 selectizeInput('tradeTeamB', 'Team B', choices = NULL),
-                 width = 2
-               ),
-               mainPanel(
-                 fluidRow(
-                   column(6, h4(textOutput('tradeTeamAName')),
-                          DT::dataTableOutput('tradeRosterA')),
-                   column(6, h4(textOutput('tradeTeamBName')),
-                          DT::dataTableOutput('tradeRosterB'))
+    navbarMenu("Analysis",
+      tabPanel("Category Status by Team",
+               sidebarLayout(
+                 sidebarPanel(
+                   selectizeInput('teamSelect', 'Team', choices = NULL),
+                   width = 2
                  ),
-                 br(),
-                 h3('Trade Summary'),
-                 DT::dataTableOutput('tradeSummary')
+                 mainPanel(
+                   h2("Team Category Detail"),
+                   DT::dataTableOutput("teamCatDetail"),
+                   br(),
+                   h2("Points by Category"),
+                   DT::dataTableOutput("catSummary")
+                 )
                )
-             )
-    ),
-    tabPanel(
-      "Prospects",
-        sidebarLayout(
-          sidebarPanel(
-            checkboxInput('faProspects','Free Agents Only'),
-            width = 2
+      ),
+      tabPanel(
+        "Surplus by Team",
+        tabsetPanel(
+          type = 'tabs',
+          tabPanel(
+            "Positional",
+            sidebarLayout(
+              sidebarPanel(
+                selectizeInput(
+                  'e2',
+                  'Select Position',
+                  choices = c('C', '1B', '2B', 'SS', '3B', 'OF', 'SP', 'MR', 'CL')
+                ),
+                sliderInput(
+                  "pd",
+                  "pDFL",
+                  min = 0,
+                  max = 30,
+                  value = 10
+                ),
+                width = 2
+              ),
+              mainPanel(DT::dataTableOutput("tprofile"))
+            )
           ),
-          mainPanel(
-            tabsetPanel(
-              type = 'tabs',
-              tabPanel('Hitters', DT::dataTableOutput("ProHit")),
-              tabPanel('Pitchers', DT::dataTableOutput("ProPit"))
+          tabPanel(
+            "Statistical",
+            mainPanel(
+              h2("Team Tiers by Category"),
+              tags$div(style = "font-size:13px; color:#666; margin-bottom:8px;",
+                       "High = ranks 1–4, Medium = ranks 5–9, Low = ranks 10–13. ERA ranked low-to-high."),
+              DT::dataTableOutput("statSurplus")
             )
           )
         )
+      ),
+      tabPanel("Trade Eval",
+               sidebarLayout(
+                 sidebarPanel(
+                   selectizeInput('tradeTeamA', 'Team A', choices = NULL),
+                   selectizeInput('tradeTeamB', 'Team B', choices = NULL),
+                   width = 2
+                 ),
+                 mainPanel(
+                   fluidRow(
+                     column(6, h4(textOutput('tradeTeamAName')),
+                            DT::dataTableOutput('tradeRosterA')),
+                     column(6, h4(textOutput('tradeTeamBName')),
+                            DT::dataTableOutput('tradeRosterB'))
+                   ),
+                   br(),
+                   h3('Trade Summary'),
+                   DT::dataTableOutput('tradeSummary')
+                 )
+               )
+      )
     ),
-    tabPanel("Dumpers",
-             mainPanel(
-               h2("Who Could Be Dumping"),
-               DT::dataTableOutput("cTrades")
-             )),
-    tabPanel("Desperate",
-             mainPanel(
-               h2("Who Could Be Desperate"),
-               DT::dataTableOutput("problems")
-             )),
-    tabPanel("Injured",
-             verticalLayout(
-               DT::dataTableOutput("injOrig")
-             )),
-    tabPanel("Streamers",
-             sidebarLayout(
-               sidebarPanel(
-                 checkboxInput('faStreamers', 'Free Agents Only', value = TRUE),
-                 selectInput('streamersStat', 'Statistic',
-                             choices = list(
-                               Hitters = c('HR','R','RBI','SB','AVG'),
-                               Pitchers = c('W','K','S','HD','ERA')
-                             ),
-                             selected = 'SB'),
-                 width = 2
-               ),
+    navbarMenu("Signals",
+      tabPanel("Dumpers",
                mainPanel(
-                 h2("Streamers — last 14 days"),
-                 DT::dataTableOutput("streamersTable")
-               )
-             )),
-    tabPanel("My Targets",
-             verticalLayout(
-               h2("Targeted Players"),
-               checkboxInput('faTargets', 'Free Agents Only', value = TRUE),
-               DT::dataTableOutput("targetTable")
-             )),
-    tabPanel("Player Snapshot",
-             fluidRow(
-               column(7, DT::dataTableOutput("searchTable")),
-               column(5, uiOutput("playerSnapshot"))
-             )),
-    tabPanel("Research",
-             sidebarLayout(fluid = FALSE,
-               sidebarPanel(
-                 radioButtons('researchMode', 'Input Mode',
-                              choices = c('Paste Article Text' = 'paste', 'Scrape URL' = 'url'),
-                              selected = 'paste', inline = TRUE),
-                 conditionalPanel(
-                   condition = "input.researchMode == 'url'",
-                   textInput('researchUrl', 'Article URL',
-                             placeholder = 'https://www.fangraphs.com/...')
-                 ),
-                 conditionalPanel(
-                   condition = "input.researchMode == 'paste'",
-                   textAreaInput('researchText', 'Article Text',
-                                 placeholder = 'Copy and paste article text here...',
-                                 rows = 8)
-                 ),
-                 actionButton('analyzeBtn', 'Analyze Article',
-                              class = 'btn-primary',
-                              style = 'width:100%; margin-bottom:10px;'),
-                 uiOutput('researchStatus'),
-                 width = 3
-               ),
+                 h2("Who Could Be Dumping"),
+                 DT::dataTableOutput("cTrades")
+               )),
+      tabPanel("Desperate",
                mainPanel(
-                 tabsetPanel(id = 'researchTab', type = 'tabs',
-                   tabPanel('Hitters',
-                            DT::dataTableOutput('researchH')),
-                   tabPanel('Pitchers',
-                            DT::dataTableOutput('researchP'))
+                 h2("Who Could Be Desperate"),
+                 DT::dataTableOutput("problems")
+               )),
+      tabPanel("LC Trends",
+               mainPanel(
+                 tabsetPanel(
+                   type = 'tabs',
+                   tabPanel('Standings', plotOutput("g1")),
+                   tabPanel('Hitting', plotOutput("g2")),
+                   tabPanel('Pitching', plotOutput("g3"))
+                 )
+               )),
+      tabPanel("Research",
+               sidebarLayout(fluid = FALSE,
+                 sidebarPanel(
+                   radioButtons('researchMode', 'Input Mode',
+                                choices = c('Paste Article Text' = 'paste', 'Scrape URL' = 'url'),
+                                selected = 'paste', inline = TRUE),
+                   conditionalPanel(
+                     condition = "input.researchMode == 'url'",
+                     textInput('researchUrl', 'Article URL',
+                               placeholder = 'https://www.fangraphs.com/...')
+                   ),
+                   conditionalPanel(
+                     condition = "input.researchMode == 'paste'",
+                     textAreaInput('researchText', 'Article Text',
+                                   placeholder = 'Copy and paste article text here...',
+                                   rows = 8)
+                   ),
+                   actionButton('analyzeBtn', 'Analyze Article',
+                                class = 'btn-primary',
+                                style = 'width:100%; margin-bottom:10px;'),
+                   uiOutput('researchStatus'),
+                   width = 3
                  ),
-                 uiOutput('researchUnmatched')
-               )
-             ))
+                 mainPanel(
+                   tabsetPanel(id = 'researchTab', type = 'tabs',
+                     tabPanel('Hitters',
+                              DT::dataTableOutput('researchH')),
+                     tabPanel('Pitchers',
+                              DT::dataTableOutput('researchP'))
+                   ),
+                   uiOutput('researchUnmatched')
+                 )
+               ))
+    )
   )
 )

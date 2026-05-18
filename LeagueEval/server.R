@@ -57,6 +57,9 @@ shinyServer(function(input, output,session) {
       actionButton('refreshBtn', 'Refresh Data',
                    class = 'btn-success btn-sm',
                    icon = icon('refresh')),
+      actionButton('reloadBtn', 'Reload from Disk',
+                   class = 'btn-primary btn-sm',
+                   icon = icon('rotate-right')),
       footer = modalButton("Close")
     ))
   })
@@ -154,6 +157,32 @@ shinyServer(function(input, output,session) {
     }, error = function(e) {
       removeNotification("refreshMsg")
       showNotification(paste0("Refresh failed: ", e$message), type = "error", duration = 10)
+    })
+  })
+
+
+# --- Reload from Disk (re-read files, skip upstream fetch when files are fresh) ---
+  observeEvent(input$reloadBtn, {
+    removeModal()
+    showNotification("Reloading from disk...", type = "message", duration = NULL, id = "reloadMsg")
+    tryCatch({
+      source("../code/inSeasonPulse.r", local = globalenv())
+      teams <<- sort(unique(RTot$Team))
+      updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
+      updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
+      updateSelectizeInput(session, 'tradeTeamA',
+                           choices = c('Pick a team' = '', teams),
+                           selected = '')
+      updateSelectizeInput(session, 'tradeTeamB',
+                           choices = c('Pick a team' = '', teams),
+                           selected = '')
+      updateSelectizeInput(session, 'choice', choices = trending$Player, server = TRUE)
+      rv$refreshCount <- rv$refreshCount + 1
+      removeNotification("reloadMsg")
+      showNotification("Reloaded from disk!", type = "message")
+    }, error = function(e) {
+      removeNotification("reloadMsg")
+      showNotification(paste0("Reload failed: ", e$message), type = "error", duration = 10)
     })
   })
 
