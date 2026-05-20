@@ -164,8 +164,13 @@ gTrend  <- dbGetQuery(conn, "SELECT * FROM GuardiansHotscore ORDER BY snapshot_d
 # Compute current IL board by walking the full transactions table forward.
 allTxn <- dbGetQuery(conn, "SELECT * FROM GuardiansTransactions ORDER BY txn_date")
 gIL <- if (nrow(allTxn) > 0) {
-  ils  <- allTxn[grepl("IL|Injured List|Disabled", allTxn$type, ignore.case = TRUE), ]
-  acts <- allTxn[grepl("Activated", allTxn$type, ignore.case = TRUE), ]
+  # IL placements come through as type="Status Change" — search descriptions.
+  # Match "injured list" / "IL" / "Disabled List" with a phrase that implies
+  # *placement* (not transfer or activation).
+  ils  <- allTxn[grepl("placed.*(injured list|disabled list|IL\\b)|transferred.*injured list",
+                        allTxn$description, ignore.case = TRUE), ]
+  acts <- allTxn[grepl("activated.*(injured list|disabled list|IL\\b)|reinstated",
+                        allTxn$description, ignore.case = TRUE), ]
   if (nrow(ils) == 0) {
     data.frame(txn_date = character(0), mlb_id = integer(0),
                player = character(0), type = character(0),

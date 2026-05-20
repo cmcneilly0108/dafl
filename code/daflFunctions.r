@@ -1888,9 +1888,11 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
     af <- affiliates[i, ]
     tryCatch({
+      # MLB → 40-man (active + IL); MiLB → full season (more fluid rosters).
+      rosterType <- if (identical(af$level, "MLB")) "40Man" else "fullSeason"
       r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
                                                    season = as.integer(season),
-                                                   roster_type = "fullSeason"))
+                                                   roster_type = rosterType))
       if (is.null(r) || nrow(r) == 0) return(NULL)
       data.frame(
         mlb_id  = as.integer(r$person_id),
@@ -2120,18 +2122,25 @@ pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
     return(emptyResult())
   }
   txns <- j$transactions
-  # The API's nested objects appear as flat columns named with `.` separators
-  # via simplifyDataFrame; e.g. `person.id`, `person.fullName`, `toTeam.id`,
-  # `fromTeam.id`. Fall back gracefully if those columns are absent.
+  # Helper for the flat top-level columns (id, date, typeDesc, description).
   pick <- function(col, default = NA) if (col %in% names(txns)) txns[[col]] else default
+  # Helper for the nested data-frame columns (person, toTeam, fromTeam).
+  # simplifyDataFrame=TRUE keeps them as nested data frames (one row per txn),
+  # NOT as dot-separated flat columns, so access them via txns[[parent]][[child]].
+  pickNested <- function(parent, child, default = NA) {
+    if (!parent %in% names(txns)) return(default)
+    p <- txns[[parent]]
+    if (!is.data.frame(p) || !(child %in% names(p))) return(default)
+    p[[child]]
+  }
   data.frame(
     txn_id       = as.character(pick("id")),
     txn_date     = as.character(pick("date")),
-    mlb_id       = suppressWarnings(as.integer(pick("person.id"))),
-    player       = as.character(pick("person.fullName")),
+    mlb_id       = suppressWarnings(as.integer(pickNested("person", "id"))),
+    player       = as.character(pickNested("person", "fullName")),
     type         = as.character(pick("typeDesc")),
-    from_team_id = suppressWarnings(as.integer(pick("fromTeam.id"))),
-    to_team_id   = suppressWarnings(as.integer(pick("toTeam.id"))),
+    from_team_id = suppressWarnings(as.integer(pickNested("fromTeam", "id"))),
+    to_team_id   = suppressWarnings(as.integer(pickNested("toTeam", "id"))),
     description  = as.character(pick("description")),
     stringsAsFactors = FALSE
   )
