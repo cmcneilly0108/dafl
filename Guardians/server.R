@@ -96,7 +96,7 @@ shinyServer(function(input, output, session) {
         d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
         if (st$role[1] == "H" && !is.na(st$avg[1])) {
           ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
-          sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s / .%s / .%s",
+          sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
                   zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
                   d3(st$avg[1]), d3(st$obp[1]), d3(ops))
         } else if (st$role[1] == "P" && !is.na(st$era[1])) {
@@ -161,7 +161,7 @@ shinyServer(function(input, output, session) {
     df <- df %>%
       mutate(ops = ifelse(is.na(obp) | is.na(slg), NA_real_, obp + slg),
              Season = ifelse(role == "H",
-                  sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s / .%s / .%s",
+                  sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
                           ifelse(is.na(ab), 0L, as.integer(ab)),
                           ifelse(is.na(r), 0L, as.integer(r)),
                           ifelse(is.na(hr), 0L, as.integer(hr)),
