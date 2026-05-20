@@ -85,15 +85,20 @@ shinyServer(function(input, output, session) {
           tags$div(style = "color:#888; font-style:italic; padding-bottom:12px;",
                    "No roster.")))
       }
-      # Per-player stat line.
+      # Per-player stat line. OPS = OBP + SLG (computed on the fly since
+      # GuardiansStats stores both but not OPS directly). OPS+ is not exposed
+      # by mlb_stats; raw OPS is the closest available.
       lineFor <- function(pid) {
         st <- gStats[gStats$mlb_id == pid, ]
         if (nrow(st) == 0) return("")
+        zi <- function(x) ifelse(is.na(x), 0L, as.integer(x))
+        zr <- function(x) ifelse(is.na(x), 0, x)
+        d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
         if (st$role[1] == "H" && !is.na(st$avg[1])) {
-          sprintf(".%s / %d HR / .%s OBP",
-                  sub("^0\\.", "", sprintf("%.3f", st$avg[1])),
-                  ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
-                  sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$obp[1]), 0, st$obp[1]))))
+          ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
+          sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s / .%s / .%s",
+                  zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
+                  d3(st$avg[1]), d3(st$obp[1]), d3(ops))
         } else if (st$role[1] == "P" && !is.na(st$era[1])) {
           sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
                   st$era[1],
@@ -140,7 +145,8 @@ shinyServer(function(input, output, session) {
     df <- gRoster %>%
       mutate(role = ifelse(pos %in% pitchPos, "P", "H")) %>%
       left_join(gHot %>% select(mlb_id, hotscore), by = "mlb_id") %>%
-      left_join(gStats %>% select(mlb_id, avg, hr, obp, era, k9, whip),
+      left_join(gStats %>% select(mlb_id, ab, r, hr, rbi, sb,
+                                  avg, obp, slg, era, k9, whip),
                 by = "mlb_id")
     if (input$gHotRole != "A") df <- df %>% filter(role == input$gHotRole)
     if (input$gHotLevel != "All") df <- df %>% filter(level == input$gHotLevel)
@@ -148,12 +154,18 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Note = "No players match this filter"),
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
+    # OPS = OBP + SLG (computed on the fly; mlb_stats exposes OPS but not OPS+).
+    d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(x), 0, x)))
     df <- df %>%
-      mutate(Season = ifelse(role == "H",
-                  sprintf(".%s / %d HR / .%s OBP",
-                          sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(avg), 0, avg))),
-                          ifelse(is.na(hr), 0, as.integer(hr)),
-                          sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(obp), 0, obp)))),
+      mutate(ops = ifelse(is.na(obp) | is.na(slg), NA_real_, obp + slg),
+             Season = ifelse(role == "H",
+                  sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s / .%s / .%s",
+                          ifelse(is.na(ab), 0L, as.integer(ab)),
+                          ifelse(is.na(r), 0L, as.integer(r)),
+                          ifelse(is.na(hr), 0L, as.integer(hr)),
+                          ifelse(is.na(rbi), 0L, as.integer(rbi)),
+                          ifelse(is.na(sb), 0L, as.integer(sb)),
+                          d3(avg), d3(obp), d3(ops)),
                   sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
                           ifelse(is.na(era), 0, era),
                           ifelse(is.na(k9), 0, k9),
