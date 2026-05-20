@@ -62,19 +62,28 @@ shinyServer(function(input, output, session) {
         tags$div(style = "color:#888; font-style:italic;", "No roster.")))
     }
 
-    # Categorize each player into a field slot, "OF" floater, or bench.
+    # Categorize each player into a field slot, pitcher (split SP/RP via gs),
+    # or bench. Generic "OF" players fold into the RF slot per user request.
     pitchPos  <- c("P","SP","RP","CL","MR")
     fieldPos  <- c("C","1B","2B","3B","SS","LF","CF","RF")
     grouped <- list()
+    pitchers <- list(SP = character(0), RP = character(0))
     bench <- character(0)
     for (i in seq_len(nrow(sub))) {
-      p <- sub$pos[i]; nm <- sub$player[i]
-      slot <- if (p %in% pitchPos) "P"
-              else if (p %in% fieldPos) p
-              else if (identical(p, "OF")) "OF"
-              else NA
-      if (is.na(slot)) bench <- c(bench, paste0(nm, " (", p, ")"))
-      else grouped[[slot]] <- c(grouped[[slot]], nm)
+      p <- sub$pos[i]; nm <- sub$player[i]; pid <- sub$mlb_id[i]
+      if (p %in% pitchPos) {
+        st <- gStats[gStats$mlb_id == pid, ]
+        gs <- if (nrow(st) > 0 && !is.na(st$gs[1])) as.integer(st$gs[1]) else 0L
+        era <- if (nrow(st) > 0 && !is.na(st$era[1])) sprintf(" (%.2f)", st$era[1]) else ""
+        bucket <- if (gs >= 3) "SP" else "RP"
+        pitchers[[bucket]] <- c(pitchers[[bucket]], paste0(nm, era))
+      } else if (p %in% fieldPos) {
+        grouped[[p]] <- c(grouped[[p]], nm)
+      } else if (identical(p, "OF")) {
+        grouped[["RF"]] <- c(grouped[["RF"]], nm)
+      } else {
+        bench <- c(bench, paste0(nm, " (", p, ")"))
+      }
     }
 
     # Render the SVG diamond as a raw string. The 600x600 viewBox scales
@@ -114,14 +123,37 @@ shinyServer(function(input, output, session) {
       playersAt("CF", 300,  70),
       playersAt("LF", 130, 130),
       playersAt("RF", 470, 130),
-      playersAt("OF", 300, 180),   # floater slot for generic OF
       playersAt("3B", 150, 340),
       playersAt("SS", 235, 285),
       playersAt("2B", 365, 285),
       playersAt("1B", 450, 340),
-      playersAt("P",  300, 395),
+      # Mound circle stays as a visual element; pitcher names live in the
+      # SP/RP columns to the right of the diamond.
+      '<text x="300" y="385" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">P</text>',
       playersAt("C",  300, 580),
       '</svg>'
+    )
+
+    # SP / RP side columns. ERA in parens for quick scanning.
+    pitcherCol <- function(label, names) {
+      if (length(names) == 0) {
+        return(tagList(
+          tags$h5(label, style = "margin-bottom:4px;"),
+          tags$div(style = "color:#888; font-style:italic; font-size:13px;",
+                   "—")
+        ))
+      }
+      tagList(
+        tags$h5(paste0(label, " (", length(names), ")"),
+                style = "margin-bottom:4px;"),
+        tags$div(style = "font-size:13px;",
+                 do.call(tagList,
+                         lapply(names, function(x) tags$div(style="padding:2px 0;", x))))
+      )
+    }
+    sideUI <- fluidRow(
+      column(width = 6, pitcherCol("SP", pitchers$SP)),
+      column(width = 6, pitcherCol("RP", pitchers$RP))
     )
 
     benchUI <- if (length(bench) > 0) {
@@ -166,7 +198,10 @@ shinyServer(function(input, output, session) {
 
     tagList(
       header,
-      HTML(svg),
+      fluidRow(
+        column(width = 8, HTML(svg)),
+        column(width = 4, sideUI)
+      ),
       benchUI,
       tags$div(style = "margin-top:20px;", statTable)
     )

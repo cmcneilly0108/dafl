@@ -1774,10 +1774,19 @@ initGuardiansDB <- function(dbPath = "DAFL.db") {
       r INTEGER, rbi INTEGER, sb INTEGER, bb INTEGER, k INTEGER,
       avg REAL, obp REAL, slg REAL, woba REAL,
       ip REAL, w INTEGER, l INTEGER, sv INTEGER, hld INTEGER,
-      so INTEGER, bb_p INTEGER,
+      so INTEGER, bb_p INTEGER, gs INTEGER,
       era REAL, fip REAL, k9 REAL, bb9 REAL, whip REAL,
       PRIMARY KEY (snapshot_date, mlb_id)
     )")
+
+  # Add gs column to GuardiansStats if pre-existing schema lacks it.
+  statsCols <- tryCatch(
+    dbGetQuery(conn, "PRAGMA table_info(GuardiansStats)"),
+    error = function(e) NULL
+  )
+  if (!is.null(statsCols) && !"gs" %in% statsCols$name) {
+    dbExecute(conn, "ALTER TABLE GuardiansStats ADD COLUMN gs INTEGER")
+  }
 
   dbExecute(conn, "
     CREATE TABLE IF NOT EXISTS GuardiansTransactions (
@@ -1971,7 +1980,7 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
       woba = NA_real_,
       ip = NA_real_, w = NA_integer_, l = NA_integer_,
       sv = NA_integer_, hld = NA_integer_,
-      so = NA_integer_, bb_p = NA_integer_,
+      so = NA_integer_, bb_p = NA_integer_, gs = NA_integer_,
       era = NA_real_, fip = NA_real_, k9 = NA_real_,
       bb9 = NA_real_, whip = NA_real_,
       stringsAsFactors = FALSE
@@ -1991,6 +2000,7 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
       hld = suppressWarnings(as.integer(safe(df, "holds"))),
       so  = suppressWarnings(as.integer(safe(df, "strike_outs"))),
       bb_p = suppressWarnings(as.integer(safe(df, "base_on_balls"))),
+      gs  = suppressWarnings(as.integer(safe(df, "games_started"))),
       era = suppressWarnings(as.numeric(safe(df, "era"))),
       fip = NA_real_,
       k9  = suppressWarnings(as.numeric(safe(df, "strikeouts_per9inn"))),
@@ -2008,7 +2018,7 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
       r = integer(0), rbi = integer(0), sb = integer(0), bb = integer(0), k = integer(0),
       avg = numeric(0), obp = numeric(0), slg = numeric(0), woba = numeric(0),
       ip = numeric(0), w = integer(0), l = integer(0), sv = integer(0),
-      hld = integer(0), so = integer(0), bb_p = integer(0),
+      hld = integer(0), so = integer(0), bb_p = integer(0), gs = integer(0),
       era = numeric(0), fip = numeric(0), k9 = numeric(0),
       bb9 = numeric(0), whip = numeric(0),
       stringsAsFactors = FALSE
