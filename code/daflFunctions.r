@@ -1806,14 +1806,15 @@ initGuardiansDB <- function(dbPath = "DAFL.db") {
 }
 
 # Hardcoded fallback table — the Guardians org affiliates as of 2026.
-# Used when mlb_team_affiliates() fails. team_id values are MLB's stable
-# affiliate IDs (verify with mlb_team_affiliates(team_ids = 114) on first run).
+# Used when mlb_team_affiliates() fails. Values verified against the live API.
+# Note: in MLB Stats API, both ACL and DSL use sport_id 16 ("Rookie"); we
+# differentiate by team_name pattern.
 .guardiansAffiliatesFallback <- function() {
   data.frame(
-    level    = c("MLB",     "AAA",      "AA",     "A+",         "A",        "ACL",          "DSL"),
-    sport_id = c(1L,        11L,        12L,      13L,          14L,        16L,             17L),
-    team_id  = c(114L,      445L,       402L,     437L,         538L,       5454L,           4189L),
-    name     = c("Cleveland", "Columbus", "Akron", "Lake County","Lynchburg","ACL Guardians","DSL Guardians"),
+    level    = c("MLB",       "AAA",      "AA",          "A+",          "A",       "ACL",           "DSL"),
+    sport_id = c(1L,          11L,        12L,           13L,           14L,       16L,             16L),
+    team_id  = c(114L,        445L,       402L,          437L,          481L,      5374L,           5506L),
+    name     = c("Guardians", "Clippers", "RubberDucks", "Captains",    "Howlers", "ACL Guardians", "DSL CLE Goryl"),
     stringsAsFactors = FALSE
   )
 }
@@ -1830,22 +1831,31 @@ resolveGuardiansAffiliates <- function(cachePath = "../data/guardiansAffiliates.
     return(read.csv(cachePath, stringsAsFactors = FALSE))
   }
   out <- tryCatch({
-    af <- baseballr::mlb_team_affiliates(team_ids = 114)
+    af <- baseballr::mlb_team_affiliates(team_ids = 114, season = as.integer(cyear))
     if (is.null(af) || nrow(af) == 0) stop("empty affiliates from baseballr")
-    # baseballr returns columns like sport_id, team_id, team_name, sport_name.
-    # Map to our schema. We always include MLB (114) as the parent row.
+    # baseballr returns columns sport_id, team_id, team_name (+ many more).
+    # Filter out sport_id 21 (Indians Alt Site / Org / Prospects — not real
+    # affiliates). Keep one row per level; for sport_id 16 (Rookie), the
+    # first team starting with "ACL" is ACL, "DSL" is DSL.
     parent <- data.frame(level = "MLB", sport_id = 1L, team_id = 114L,
-                         name = "Cleveland", stringsAsFactors = FALSE)
-    sportToLevel <- c(`11` = "AAA", `12` = "AA", `13` = "A+", `14` = "A",
-                      `16` = "ACL", `17` = "DSL")
+                         name = "Guardians", stringsAsFactors = FALSE)
+    af <- af[af$sport_id %in% c(11L, 12L, 13L, 14L, 16L), , drop = FALSE]
+    af$level <- ifelse(af$sport_id == 11L, "AAA",
+                ifelse(af$sport_id == 12L, "AA",
+                ifelse(af$sport_id == 13L, "A+",
+                ifelse(af$sport_id == 14L, "A",
+                ifelse(grepl("^ACL", af$team_name), "ACL",
+                ifelse(grepl("^DSL", af$team_name), "DSL", NA_character_))))))
+    af <- af[!is.na(af$level), , drop = FALSE]
+    # Keep first team per level (deterministic by row order from API).
+    af <- af[!duplicated(af$level), , drop = FALSE]
     children <- data.frame(
-      level    = unname(sportToLevel[as.character(af$sport_id)]),
+      level    = af$level,
       sport_id = as.integer(af$sport_id),
       team_id  = as.integer(af$team_id),
       name     = af$team_name,
       stringsAsFactors = FALSE
     )
-    children <- children[!is.na(children$level), ]
     rbind(parent, children)
   }, error = function(e) {
     warning("resolveGuardiansAffiliates: API failed (", e$message,

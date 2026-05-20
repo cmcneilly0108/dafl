@@ -151,14 +151,15 @@ Append after the `initGuardiansDB` function:
 
 ```r
 # Hardcoded fallback table — the Guardians org affiliates as of 2026.
-# Used when mlb_team_affiliates() fails. team_id values are MLB's stable
-# affiliate IDs (verify with mlb_team_affiliates(team_ids = 114) on first run).
+# Used when mlb_team_affiliates() fails. Values verified against the live API.
+# Note: in MLB Stats API, both ACL and DSL use sport_id 16 ("Rookie"); we
+# differentiate by team_name pattern.
 .guardiansAffiliatesFallback <- function() {
   data.frame(
-    level    = c("MLB",     "AAA",      "AA",     "A+",         "A",        "ACL",          "DSL"),
-    sport_id = c(1L,        11L,        12L,      13L,          14L,        16L,            17L),
-    team_id  = c(114L,      445L,       402L,     437L,         538L,       5454L,          4189L),
-    name     = c("Cleveland", "Columbus", "Akron", "Lake County","Lynchburg","ACL Guardians","DSL Guardians"),
+    level    = c("MLB",       "AAA",      "AA",          "A+",          "A",       "ACL",           "DSL"),
+    sport_id = c(1L,          11L,        12L,           13L,           14L,       16L,             16L),
+    team_id  = c(114L,        445L,       402L,          437L,          481L,      5374L,           5506L),
+    name     = c("Guardians", "Clippers", "RubberDucks", "Captains",    "Howlers", "ACL Guardians", "DSL CLE Goryl"),
     stringsAsFactors = FALSE
   )
 }
@@ -175,22 +176,31 @@ resolveGuardiansAffiliates <- function(cachePath = "../data/guardiansAffiliates.
     return(read.csv(cachePath, stringsAsFactors = FALSE))
   }
   out <- tryCatch({
-    af <- baseballr::mlb_team_affiliates(team_ids = 114)
+    af <- baseballr::mlb_team_affiliates(team_ids = 114, season = as.integer(cyear))
     if (is.null(af) || nrow(af) == 0) stop("empty affiliates from baseballr")
-    # baseballr returns columns like sport_id, team_id, team_name, sport_name.
-    # Map to our schema. We always include MLB (114) as the parent row.
+    # baseballr returns columns sport_id, team_id, team_name (+ many more).
+    # Filter out sport_id 21 (Indians Alt Site / Org / Prospects — not real
+    # affiliates). Keep one row per level; for sport_id 16 (Rookie), the
+    # first team starting with "ACL" is ACL, "DSL" is DSL.
     parent <- data.frame(level = "MLB", sport_id = 1L, team_id = 114L,
-                         name = "Cleveland", stringsAsFactors = FALSE)
-    sportToLevel <- c(`11` = "AAA", `12` = "AA", `13` = "A+", `14` = "A",
-                      `16` = "ACL", `17` = "DSL")
+                         name = "Guardians", stringsAsFactors = FALSE)
+    af <- af[af$sport_id %in% c(11L, 12L, 13L, 14L, 16L), , drop = FALSE]
+    af$level <- ifelse(af$sport_id == 11L, "AAA",
+                ifelse(af$sport_id == 12L, "AA",
+                ifelse(af$sport_id == 13L, "A+",
+                ifelse(af$sport_id == 14L, "A",
+                ifelse(grepl("^ACL", af$team_name), "ACL",
+                ifelse(grepl("^DSL", af$team_name), "DSL", NA_character_))))))
+    af <- af[!is.na(af$level), , drop = FALSE]
+    # Keep first team per level (deterministic by row order from API).
+    af <- af[!duplicated(af$level), , drop = FALSE]
     children <- data.frame(
-      level    = unname(sportToLevel[as.character(af$sport_id)]),
+      level    = af$level,
       sport_id = as.integer(af$sport_id),
       team_id  = as.integer(af$team_id),
       name     = af$team_name,
       stringsAsFactors = FALSE
     )
-    children <- children[!is.na(children$level), ]
     rbind(parent, children)
   }, error = function(e) {
     warning("resolveGuardiansAffiliates: API failed (", e$message,
@@ -232,14 +242,17 @@ git commit -m "feat(guardians): resolve org affiliate IDs with hardcoded fallbac
 # Pull today's roster for every Guardians affiliate. Returns a data frame
 # with one row per (player, level). team_id is the affiliate id; level is
 # MLB / AAA / AA / A+ / A / ACL / DSL.
+#
+# Uses baseballr::mlb_rosters (not mlb_team_roster — that name doesn't exist
+# in baseballr 1.6.0).
 pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
                                 season = cyear) {
   rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
     af <- affiliates[i, ]
     tryCatch({
-      r <- baseballr::mlb_team_roster(team_id = af$team_id,
-                                      season = as.integer(season),
-                                      roster_type = "fullSeason")
+      r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
+                                                   season = as.integer(season),
+                                                   roster_type = "fullSeason"))
       if (is.null(r) || nrow(r) == 0) return(NULL)
       data.frame(
         mlb_id  = as.integer(r$person_id),
@@ -289,18 +302,26 @@ git commit -m "feat(guardians): pull org roster via baseballr::mlb_team_roster"
 # Returns a data frame keyed by mlb_id with a `role` column ("H"/"P"). When an
 # affiliate has no games yet (spring training, DSL not yet active) the call
 # returns NULL for that level and is dropped.
+#
+# baseballr 1.6.0 signature: mlb_stats(stat_type, stat_group, sport_ids, team_id,
+# season, player_pool). `player_pool = "all"` is required to get per-player rows
+# (without it, you get a handful of aggregate-split rows).
 pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
                                season = cyear) {
   pullOne <- function(af, group) {
     tryCatch({
-      s <- baseballr::mlb_stats(stats = "season",
-                                group = group,
-                                season = as.integer(season),
-                                sport_id = af$sport_id,
-                                team_id = af$team_id)
+      s <- suppressMessages(baseballr::mlb_stats(
+        stat_type   = "season",
+        stat_group  = group,
+        season      = as.integer(season),
+        sport_ids   = af$sport_id,
+        team_id     = af$team_id,
+        player_pool = "all"
+      ))
       if (is.null(s) || nrow(s) == 0) return(NULL)
       s$level    <- af$level
       s$role     <- if (group == "hitting") "H" else "P"
+      # mlb_stats returns column `player_id` (singular).
       s$mlb_id   <- as.integer(s$player_id)
       s
     }, error = function(e) {
@@ -312,17 +333,21 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
   pitRows <- lapply(seq_len(nrow(affiliates)), function(i) pullOne(affiliates[i, ], "pitching"))
 
   # baseballr's column names vary by group; coerce to our schema. Missing
-  # columns become NA so the bind_rows below stays well-formed.
+  # columns become NA so the rbind below stays well-formed.
   normH <- function(df) {
     if (is.null(df)) return(NULL)
     safe <- function(col) if (col %in% names(df)) df[[col]] else NA
     data.frame(
       mlb_id = df$mlb_id, level = df$level, role = "H",
-      pa = safe("plate_appearances"), ab = safe("at_bats"),
-      h  = safe("hits"), hr = safe("home_runs"),
-      r  = safe("runs"), rbi = safe("rbi"),
-      sb = safe("stolen_bases"), bb = safe("base_on_balls"),
-      k  = safe("strike_outs"),
+      pa = suppressWarnings(as.integer(safe("plate_appearances"))),
+      ab = suppressWarnings(as.integer(safe("at_bats"))),
+      h  = suppressWarnings(as.integer(safe("hits"))),
+      hr = suppressWarnings(as.integer(safe("home_runs"))),
+      r  = suppressWarnings(as.integer(safe("runs"))),
+      rbi = suppressWarnings(as.integer(safe("rbi"))),
+      sb = suppressWarnings(as.integer(safe("stolen_bases"))),
+      bb = suppressWarnings(as.integer(safe("base_on_balls"))),
+      k  = suppressWarnings(as.integer(safe("strike_outs"))),
       avg = suppressWarnings(as.numeric(safe("avg"))),
       obp = suppressWarnings(as.numeric(safe("obp"))),
       slg = suppressWarnings(as.numeric(safe("slg"))),
@@ -344,9 +369,12 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
       r = NA_integer_, rbi = NA_integer_, sb = NA_integer_, bb = NA_integer_,
       k = NA_integer_, avg = NA_real_, obp = NA_real_, slg = NA_real_, woba = NA_real_,
       ip  = suppressWarnings(as.numeric(safe("innings_pitched"))),
-      w   = safe("wins"), l = safe("losses"),
-      sv  = safe("saves"), hld = safe("holds"),
-      so  = safe("strike_outs"), bb_p = safe("base_on_balls"),
+      w   = suppressWarnings(as.integer(safe("wins"))),
+      l   = suppressWarnings(as.integer(safe("losses"))),
+      sv  = suppressWarnings(as.integer(safe("saves"))),
+      hld = suppressWarnings(as.integer(safe("holds"))),
+      so  = suppressWarnings(as.integer(safe("strike_outs"))),
+      bb_p = suppressWarnings(as.integer(safe("base_on_balls"))),
       era = suppressWarnings(as.numeric(safe("era"))),
       fip = NA_real_,
       k9  = suppressWarnings(as.numeric(safe("strikeouts_per9inn"))),
@@ -385,48 +413,53 @@ git commit -m "feat(guardians): pull org season stats via baseballr::mlb_stats"
 - [ ] **Step 1: Add `pullGuardiansTransactions()` to `code/daflFunctions.r`**
 
 ```r
-# Pull the last `lookbackDays` of transactions for the Guardians org.
-# Returns one row per transaction matching our schema. Filters by team_id
-# matching any of the affiliate ids in either from_team_id or to_team_id.
+# Pull the last `lookbackDays` of transactions for the Guardians org. Returns
+# one row per transaction matching our schema.
+#
+# baseballr 1.6.0 has no transactions wrapper — call the MLB Stats API directly.
+# We narrow the query by teamId=114 (parent club); the API returns all txns
+# involving the parent OR any affiliate (call-ups, options, etc.). Response
+# has nested `person`/`toTeam`/`fromTeam` objects; we flatten them.
 pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
                                       lookbackDays = 30) {
+  emptyResult <- function() data.frame(
+    txn_id = character(0), txn_date = character(0),
+    mlb_id = integer(0), player = character(0), type = character(0),
+    from_team_id = integer(0), to_team_id = integer(0),
+    description = character(0),
+    stringsAsFactors = FALSE
+  )
   endDate   <- as.character(Sys.Date())
   startDate <- as.character(Sys.Date() - lookbackDays)
-  txns <- tryCatch({
-    baseballr::mlb_transactions(start_date = startDate, end_date = endDate)
+  j <- tryCatch({
+    resp <- httr::GET("https://statsapi.mlb.com/api/v1/transactions",
+                      query = list(teamId = 114,
+                                   startDate = startDate,
+                                   endDate = endDate))
+    httr::stop_for_status(resp)
+    jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"),
+                       simplifyDataFrame = TRUE)
   }, error = function(e) {
     warning("pullGuardiansTransactions failed: ", e$message); NULL
   })
-  if (is.null(txns) || nrow(txns) == 0) {
-    return(data.frame(
-      txn_id = character(0), txn_date = character(0),
-      mlb_id = integer(0), player = character(0), type = character(0),
-      from_team_id = integer(0), to_team_id = integer(0),
-      description = character(0),
-      stringsAsFactors = FALSE
-    ))
+  if (is.null(j) || is.null(j$transactions) ||
+      !is.data.frame(j$transactions) || nrow(j$transactions) == 0) {
+    return(emptyResult())
   }
-  affIds <- as.integer(affiliates$team_id)
-  hit <- (txns$from_team_id %in% affIds) | (txns$to_team_id %in% affIds)
-  txns <- txns[hit, , drop = FALSE]
-  if (nrow(txns) == 0) {
-    return(data.frame(
-      txn_id = character(0), txn_date = character(0),
-      mlb_id = integer(0), player = character(0), type = character(0),
-      from_team_id = integer(0), to_team_id = integer(0),
-      description = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
+  txns <- j$transactions
+  # The API's nested objects appear as flat columns named with `.` separators
+  # via simplifyDataFrame; e.g. `person.id`, `person.fullName`, `toTeam.id`,
+  # `fromTeam.id`. Fall back gracefully if those columns are absent.
+  pick <- function(col, default = NA) if (col %in% names(txns)) txns[[col]] else default
   data.frame(
-    txn_id       = as.character(txns$transaction_id),
-    txn_date     = as.character(txns$date),
-    mlb_id       = as.integer(txns$person_id),
-    player       = txns$person_full_name,
-    type         = txns$type_desc,
-    from_team_id = as.integer(txns$from_team_id),
-    to_team_id   = as.integer(txns$to_team_id),
-    description  = txns$description,
+    txn_id       = as.character(pick("id")),
+    txn_date     = as.character(pick("date")),
+    mlb_id       = suppressWarnings(as.integer(pick("person.id"))),
+    player       = as.character(pick("person.fullName")),
+    type         = as.character(pick("typeDesc")),
+    from_team_id = suppressWarnings(as.integer(pick("fromTeam.id"))),
+    to_team_id   = suppressWarnings(as.integer(pick("toTeam.id"))),
+    description  = as.character(pick("description")),
     stringsAsFactors = FALSE
   )
 }
@@ -782,10 +815,10 @@ gProspects <- tryCatch({
   )
 }, error = function(e) data.frame())
 
-# FG MLB depth chart (if available — for the right pane of the Depth Chart tab).
-gDepth <- tryCatch({
-  baseballr::fg_team_depth_chart(team = "CLE")
-}, error = function(e) data.frame())
+# FG MLB depth chart — not exposed by baseballr 1.6.0. Left as an empty
+# data frame placeholder; the UI degrades gracefully ("not available").
+# Future: implement via direct FG scraping if desired.
+gDepth <- data.frame()
 
 dbDisconnect(conn)
 cat("[guardians] Pulse complete: ", nrow(gRoster), " roster rows, ",
