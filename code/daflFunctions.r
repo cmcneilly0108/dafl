@@ -2013,6 +2013,9 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
 # has nested `person`/`toTeam`/`fromTeam` objects; we flatten them.
 pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
                                       lookbackDays = 30) {
+  # `affiliates` is accepted for API symmetry with sibling pullGuardians* helpers;
+  # the org-level transactions endpoint returns all levels for teamId=114, so
+  # we don't currently iterate over affiliate IDs here.
   emptyResult <- function() data.frame(
     txn_id = character(0), txn_date = character(0),
     mlb_id = integer(0), player = character(0), type = character(0),
