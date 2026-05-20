@@ -124,23 +124,24 @@ if (forceRefresh || !haveToday) {
     dbWriteTable(conn, "GuardiansTransactions", txns, append = TRUE)
   }
 
-  # HotScore: pull game logs for players with fg_id, compute, upsert.
-  eligible <- roster[!is.na(roster$fg_id) & nzchar(roster$fg_id), ]
-  # Restrict to roughly active players to keep the daily load sane.
-  # `role` is inferred from position (TWP/SP/RP/CL/MR/P → P; otherwise H).
+  # League-wide HotScore: pull league season stats per level, z-score each
+  # Guardian against the full cohort at their level. Drops the rolling-window
+  # concept — single season-to-date hotscore per (player, level).
+  leagueStats <- tryCatch(pullLeagueStats(affiliates),
+                          error = function(e) {
+                            warning("pullLeagueStats failed: ", e$message)
+                            list(H = NULL, P = NULL)
+                          })
+
+  # Roster -> single role assignment per player (pos infers H vs P).
   pitchPos <- c("P","SP","RP","CL","MR","TWP")
-  eligible$role <- ifelse(eligible$pos %in% pitchPos, "P", "H")
-  logsByPlayer <- list()
-  for (i in seq_len(nrow(eligible))) {
-    pid <- as.character(eligible$mlb_id[i])
-    logsByPlayer[[pid]] <- pullGuardiansGameLogs(eligible$fg_id[i], eligible$role[i])
-    Sys.sleep(0.2)  # gentle rate-limit
-  }
-  hs <- computeGuardiansHotscore(eligible[, c("mlb_id","fg_id","level","role")],
-                                 logsByPlayer, windows = c(7, 14, 30))
+  rosterForHS <- roster
+  rosterForHS$role <- ifelse(rosterForHS$pos %in% pitchPos, "P", "H")
+  hs <- computeGuardiansHotscore(rosterForHS[, c("mlb_id","level","role")],
+                                 leagueStats)
   if (nrow(hs) > 0) {
     hs$snapshot_date <- today
-    hs <- hs[, c("snapshot_date","mlb_id","level","role","window_days","hotscore")]
+    hs <- hs[, c("snapshot_date","mlb_id","level","role","hotscore")]
     dbExecute(conn, "DELETE FROM GuardiansHotscore WHERE snapshot_date = ?", params = list(today))
     dbWriteTable(conn, "GuardiansHotscore", hs, append = TRUE)
   }

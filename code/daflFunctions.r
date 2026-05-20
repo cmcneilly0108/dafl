@@ -1791,15 +1791,25 @@ initGuardiansDB <- function(dbPath = "DAFL.db") {
       description   TEXT
     )")
 
+  # GuardiansHotscore schema changed (dropped window_days). Drop the old
+  # version on first run with the new schema. Safe because hotscores are
+  # recomputed daily anyway.
+  oldSchema <- tryCatch(
+    dbGetQuery(conn, "PRAGMA table_info(GuardiansHotscore)"),
+    error = function(e) NULL
+  )
+  if (!is.null(oldSchema) && "window_days" %in% oldSchema$name) {
+    dbExecute(conn, "DROP TABLE GuardiansHotscore")
+  }
+
   dbExecute(conn, "
     CREATE TABLE IF NOT EXISTS GuardiansHotscore (
       snapshot_date TEXT NOT NULL,
       mlb_id        INTEGER NOT NULL,
       level         TEXT,
       role          TEXT,
-      window_days   INTEGER NOT NULL,
       hotscore      REAL,
-      PRIMARY KEY (snapshot_date, mlb_id, window_days)
+      PRIMARY KEY (snapshot_date, mlb_id)
     )")
 
   invisible(TRUE)
@@ -2004,6 +2014,75 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
   do.call(rbind, rows)
 }
 
+# Pull league-wide season hitting+pitching stats per level. Returns a list
+# list(H=<hitters df>, P=<pitchers df>) with the same column schema as the
+# normalised frames inside pullGuardiansStats. Used to z-score Guardians
+# against their level's full league cohort for HotScore.
+pullLeagueStats <- function(affiliates = resolveGuardiansAffiliates(),
+                            season = cyear) {
+  safe <- function(df, col) if (col %in% names(df)) df[[col]] else NA
+  pullOne <- function(sport_id, level, group) {
+    tryCatch({
+      s <- suppressMessages(baseballr::mlb_stats(
+        stat_type   = "season",
+        stat_group  = group,
+        season      = as.integer(season),
+        sport_ids   = sport_id,
+        player_pool = "all",
+        limit       = 5000
+      ))
+      if (is.null(s) || nrow(s) == 0) return(NULL)
+      s$level  <- level
+      s$mlb_id <- as.integer(s$player_id)
+      s
+    }, error = function(e) {
+      warning("pullLeagueStats: ", level, "/", group, " failed: ", e$message)
+      NULL
+    })
+  }
+  perLevel <- unique(affiliates[, c("sport_id", "level")])
+  hitRows <- lapply(seq_len(nrow(perLevel)), function(i)
+    pullOne(perLevel$sport_id[i], perLevel$level[i], "hitting"))
+  pitRows <- lapply(seq_len(nrow(perLevel)), function(i)
+    pullOne(perLevel$sport_id[i], perLevel$level[i], "pitching"))
+
+  normH <- function(df) {
+    if (is.null(df)) return(NULL)
+    data.frame(
+      mlb_id = df$mlb_id, level = df$level, role = "H",
+      pa  = suppressWarnings(as.integer(safe(df, "plate_appearances"))),
+      ab  = suppressWarnings(as.integer(safe(df, "at_bats"))),
+      h   = suppressWarnings(as.integer(safe(df, "hits"))),
+      hr  = suppressWarnings(as.integer(safe(df, "home_runs"))),
+      bb  = suppressWarnings(as.integer(safe(df, "base_on_balls"))),
+      avg = suppressWarnings(as.numeric(safe(df, "avg"))),
+      obp = suppressWarnings(as.numeric(safe(df, "obp"))),
+      slg = suppressWarnings(as.numeric(safe(df, "slg"))),
+      stringsAsFactors = FALSE
+    )
+  }
+  normP <- function(df) {
+    if (is.null(df)) return(NULL)
+    ipraw <- suppressWarnings(as.numeric(if ("innings_pitched" %in% names(df)) df$innings_pitched else NA))
+    df <- df[!is.na(ipraw) & ipraw > 0, , drop = FALSE]
+    if (nrow(df) == 0) return(NULL)
+    data.frame(
+      mlb_id = df$mlb_id, level = df$level, role = "P",
+      ip   = suppressWarnings(as.numeric(safe(df, "innings_pitched"))),
+      so   = suppressWarnings(as.integer(safe(df, "strike_outs"))),
+      bb_p = suppressWarnings(as.integer(safe(df, "base_on_balls"))),
+      hr   = suppressWarnings(as.integer(safe(df, "home_runs"))),
+      era  = suppressWarnings(as.numeric(safe(df, "era"))),
+      k9   = suppressWarnings(as.numeric(safe(df, "strikeouts_per9inn"))),
+      whip = suppressWarnings(as.numeric(safe(df, "whip"))),
+      stringsAsFactors = FALSE
+    )
+  }
+  hitDf <- do.call(rbind, lapply(hitRows, normH))
+  pitDf <- do.call(rbind, lapply(pitRows, normP))
+  list(H = hitDf, P = pitDf)
+}
+
 # Pull the last `lookbackDays` of transactions for the Guardians org. Returns
 # one row per transaction matching our schema.
 #
@@ -2087,71 +2166,83 @@ pullGuardiansGameLogs <- function(fg_id, role, season = cyear) {
   })
 }
 
-# Compute a daily hot score per (player, level, window). Cohort = all players
-# at the same level (so an A+ player is scored against A+ peers).
+# Compute a daily hot score per (player, level). Cohort = ALL players at the
+# same level across the entire league (from pullLeagueStats). An A+ Guardian
+# is scored against every other A+ player; an MLB Guardian against the whole
+# of MLB. Z-scoring against a 200+ player cohort gives the wide ±3 spread the
+# user expects (the prior org-only cohort capped at ±1.4 with n=3).
 #
 # Args:
-#   roster: data.frame with columns mlb_id, fg_id, level, role
-#   logsByPlayer: named list of game-log data frames keyed by mlb_id (as char)
-#   windows: integer vector of window sizes in days, e.g. c(7, 14, 30)
+#   roster: data.frame with mlb_id, level, role (Guardians org subset)
+#   leagueStats: list(H=<league hitters>, P=<league pitchers>) from pullLeagueStats
 #
-# Returns: long data.frame (mlb_id, level, role, window_days, hotscore)
-computeGuardiansHotscore <- function(roster, logsByPlayer, windows = c(7, 14, 30)) {
-  perPlayerWindow <- function(playerRow, win) {
-    pid <- as.character(playerRow$mlb_id)
-    logs <- logsByPlayer[[pid]]
-    if (is.null(logs)) return(NULL)
-    sub <- logs[logs$gl_date >= Sys.Date() - win, , drop = FALSE]
-    if (nrow(sub) == 0) return(NULL)
-    # Per-game core metric. Hitters: OPS-style ((H+BB)/PA * 1.2 + TB/AB).
-    # Pitchers: K - BB - 2*HR (per-game). Both crude but cohort-relative.
-    if (playerRow$role == "H") {
-      pa <- sum(suppressWarnings(as.numeric(sub$PA)), na.rm = TRUE)
-      ab <- sum(suppressWarnings(as.numeric(sub$AB)), na.rm = TRUE)
-      h  <- sum(suppressWarnings(as.numeric(sub$H)),  na.rm = TRUE)
-      bb <- sum(suppressWarnings(as.numeric(sub$BB)), na.rm = TRUE)
-      tb <- sum(suppressWarnings(as.numeric(sub$TB)), na.rm = TRUE)
-      if (pa < 5 || ab == 0) return(NULL)
-      metric <- ((h + bb) / pa) * 1.2 + (tb / ab)
-    } else {
-      ip <- sum(suppressWarnings(as.numeric(sub$IP)), na.rm = TRUE)
-      so <- sum(suppressWarnings(as.numeric(sub$SO)), na.rm = TRUE)
-      bb <- sum(suppressWarnings(as.numeric(sub$BB)), na.rm = TRUE)
-      hr <- sum(suppressWarnings(as.numeric(sub$HR)), na.rm = TRUE)
-      if (ip < 3) return(NULL)
-      metric <- (so - bb - 2 * hr) / ip
-    }
-    data.frame(mlb_id = playerRow$mlb_id, level = playerRow$level,
-               role = playerRow$role, window_days = win, metric = metric,
-               stringsAsFactors = FALSE)
+# Returns: data.frame(mlb_id, level, role, hotscore) — one row per Guardian
+#          who has enough activity (pa >= 20 hitters; ip >= 5 pitchers).
+computeGuardiansHotscore <- function(roster, leagueStats) {
+  metricH <- function(df) {
+    # OPS-style: ((H + BB) / PA) * 1.2 + (TB / AB).
+    # mlb_stats doesn't return total bases directly; reconstruct from slg * ab.
+    tb <- ifelse(is.na(df$slg) | is.na(df$ab), NA_real_, df$slg * df$ab)
+    metric <- ((df$h + df$bb) / df$pa) * 1.2 + (tb / df$ab)
+    df$metric <- ifelse(!is.na(df$pa) & df$pa >= 20 & !is.na(df$ab) & df$ab > 0,
+                        metric, NA_real_)
+    df
   }
+  metricP <- function(df) {
+    # (SO - BB - 2*HR) / IP, per inning.
+    metric <- (df$so - df$bb_p - 2 * df$hr) / df$ip
+    df$metric <- ifelse(!is.na(df$ip) & df$ip >= 5, metric, NA_real_)
+    df
+  }
+  zscoreByLevel <- function(df) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    df <- df[!is.na(df$metric), , drop = FALSE]
+    if (nrow(df) == 0) return(NULL)
+    # Per-level z-score against the whole league cohort.
+    out <- do.call(rbind, lapply(split(df, df$level), function(g) {
+      if (nrow(g) < 5) {
+        g$z <- 0
+      } else {
+        m <- mean(g$metric, na.rm = TRUE); s <- sd(g$metric, na.rm = TRUE)
+        g$z <- if (is.na(s) || s == 0) 0 else (g$metric - m) / s
+      }
+      g
+    }))
+    out
+  }
+  leagueH <- zscoreByLevel(metricH(leagueStats$H))
+  leagueP <- zscoreByLevel(metricP(leagueStats$P))
 
-  rows <- list()
-  for (i in seq_len(nrow(roster))) {
-    for (w in windows) {
-      r <- perPlayerWindow(roster[i, ], w)
-      if (!is.null(r)) rows[[length(rows) + 1]] <- r
-    }
-  }
+  # Filter to Guardians and emit the hotscore rows.
+  org <- as.integer(roster$mlb_id)
+  outH <- if (!is.null(leagueH)) {
+    sub <- leagueH[leagueH$mlb_id %in% org, , drop = FALSE]
+    if (nrow(sub) == 0) NULL else
+      data.frame(mlb_id = sub$mlb_id, level = sub$level, role = "H",
+                 hotscore = sub$z, stringsAsFactors = FALSE)
+  } else NULL
+  outP <- if (!is.null(leagueP)) {
+    sub <- leagueP[leagueP$mlb_id %in% org, , drop = FALSE]
+    if (nrow(sub) == 0) NULL else
+      data.frame(mlb_id = sub$mlb_id, level = sub$level, role = "P",
+                 hotscore = sub$z, stringsAsFactors = FALSE)
+  } else NULL
+  rows <- Filter(Negate(is.null), list(outH, outP))
   if (length(rows) == 0) {
     return(data.frame(mlb_id = integer(0), level = character(0),
-                      role = character(0), window_days = integer(0),
-                      hotscore = numeric(0), stringsAsFactors = FALSE))
+                      role = character(0), hotscore = numeric(0),
+                      stringsAsFactors = FALSE))
   }
-  raw <- do.call(rbind, rows)
-  # Z-score WITHIN (level, role, window_days). At least 3 players needed for
-  # a meaningful sd; otherwise hotscore = 0.
-  raw$hotscore <- NA_real_
-  groups <- split(seq_len(nrow(raw)), list(raw$level, raw$role, raw$window_days),
-                  drop = TRUE)
-  for (idx in groups) {
-    vals <- raw$metric[idx]
-    if (length(vals) >= 3 && sd(vals, na.rm = TRUE) > 0) {
-      raw$hotscore[idx] <- (vals - mean(vals, na.rm = TRUE)) / sd(vals, na.rm = TRUE)
-    } else {
-      raw$hotscore[idx] <- 0
-    }
-  }
-  raw[, c("mlb_id", "level", "role", "window_days", "hotscore")]
+  result <- do.call(rbind, rows)
+  # Dedup: a player on a rehab/option can appear at multiple levels in the
+  # league-wide pull. Keep the highest-level row per player (PK is mlb_id).
+  levelOrder <- c("MLB" = 1L, "AAA" = 2L, "AA" = 3L, "A+" = 4L, "A" = 5L,
+                  "ACL" = 6L, "DSL" = 7L)
+  result$lvlRank <- levelOrder[result$level]
+  result$lvlRank[is.na(result$lvlRank)] <- 99L
+  result <- result[order(result$mlb_id, result$lvlRank), ]
+  result <- result[!duplicated(result$mlb_id), ]
+  result$lvlRank <- NULL
+  result
 }
 
