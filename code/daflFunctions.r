@@ -1905,3 +1905,103 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   do.call(rbind, rosters)
 }
 
+# Pull season-to-date hitting and pitching stats for every Guardians affiliate.
+# Returns a data frame keyed by mlb_id with a `role` column ("H"/"P"). When an
+# affiliate has no games yet (spring training, DSL not yet active) the call
+# returns NULL for that level and is dropped.
+#
+# baseballr 1.6.0 signature: mlb_stats(stat_type, stat_group, sport_ids, team_id,
+# season, player_pool). `player_pool = "all"` is required to get per-player rows
+# (without it, you get a handful of aggregate-split rows).
+pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
+                               season = cyear) {
+  pullOne <- function(af, group) {
+    tryCatch({
+      s <- suppressMessages(baseballr::mlb_stats(
+        stat_type   = "season",
+        stat_group  = group,
+        season      = as.integer(season),
+        sport_ids   = af$sport_id,
+        team_id     = af$team_id,
+        player_pool = "all"
+      ))
+      if (is.null(s) || nrow(s) == 0) return(NULL)
+      s$level    <- af$level
+      s$role     <- if (group == "hitting") "H" else "P"
+      s$mlb_id   <- as.integer(s$player_id)
+      s
+    }, error = function(e) {
+      warning("pullGuardiansStats: ", af$level, "/", group, " failed: ", e$message)
+      NULL
+    })
+  }
+  hitRows <- lapply(seq_len(nrow(affiliates)), function(i) pullOne(affiliates[i, ], "hitting"))
+  pitRows <- lapply(seq_len(nrow(affiliates)), function(i) pullOne(affiliates[i, ], "pitching"))
+
+  normH <- function(df) {
+    if (is.null(df)) return(NULL)
+    safe <- function(col) if (col %in% names(df)) df[[col]] else NA
+    data.frame(
+      mlb_id = df$mlb_id, level = df$level, role = "H",
+      pa = suppressWarnings(as.integer(safe("plate_appearances"))),
+      ab = suppressWarnings(as.integer(safe("at_bats"))),
+      h  = suppressWarnings(as.integer(safe("hits"))),
+      hr = suppressWarnings(as.integer(safe("home_runs"))),
+      r  = suppressWarnings(as.integer(safe("runs"))),
+      rbi = suppressWarnings(as.integer(safe("rbi"))),
+      sb = suppressWarnings(as.integer(safe("stolen_bases"))),
+      bb = suppressWarnings(as.integer(safe("base_on_balls"))),
+      k  = suppressWarnings(as.integer(safe("strike_outs"))),
+      avg = suppressWarnings(as.numeric(safe("avg"))),
+      obp = suppressWarnings(as.numeric(safe("obp"))),
+      slg = suppressWarnings(as.numeric(safe("slg"))),
+      woba = NA_real_,
+      ip = NA_real_, w = NA_integer_, l = NA_integer_,
+      sv = NA_integer_, hld = NA_integer_,
+      so = NA_integer_, bb_p = NA_integer_,
+      era = NA_real_, fip = NA_real_, k9 = NA_real_,
+      bb9 = NA_real_, whip = NA_real_,
+      stringsAsFactors = FALSE
+    )
+  }
+  normP <- function(df) {
+    if (is.null(df)) return(NULL)
+    safe <- function(col) if (col %in% names(df)) df[[col]] else NA
+    data.frame(
+      mlb_id = df$mlb_id, level = df$level, role = "P",
+      pa = NA_integer_, ab = NA_integer_, h = NA_integer_, hr = NA_integer_,
+      r = NA_integer_, rbi = NA_integer_, sb = NA_integer_, bb = NA_integer_,
+      k = NA_integer_, avg = NA_real_, obp = NA_real_, slg = NA_real_, woba = NA_real_,
+      ip  = suppressWarnings(as.numeric(safe("innings_pitched"))),
+      w   = suppressWarnings(as.integer(safe("wins"))),
+      l   = suppressWarnings(as.integer(safe("losses"))),
+      sv  = suppressWarnings(as.integer(safe("saves"))),
+      hld = suppressWarnings(as.integer(safe("holds"))),
+      so  = suppressWarnings(as.integer(safe("strike_outs"))),
+      bb_p = suppressWarnings(as.integer(safe("base_on_balls"))),
+      era = suppressWarnings(as.numeric(safe("era"))),
+      fip = NA_real_,
+      k9  = suppressWarnings(as.numeric(safe("strikeouts_per9inn"))),
+      bb9 = suppressWarnings(as.numeric(safe("walks_per9inn"))),
+      whip = suppressWarnings(as.numeric(safe("whip"))),
+      stringsAsFactors = FALSE
+    )
+  }
+  rows <- c(lapply(hitRows, normH), lapply(pitRows, normP))
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0) {
+    return(data.frame(
+      mlb_id = integer(0), level = character(0), role = character(0),
+      pa = integer(0), ab = integer(0), h = integer(0), hr = integer(0),
+      r = integer(0), rbi = integer(0), sb = integer(0), bb = integer(0), k = integer(0),
+      avg = numeric(0), obp = numeric(0), slg = numeric(0), woba = numeric(0),
+      ip = numeric(0), w = integer(0), l = integer(0), sv = integer(0),
+      hld = integer(0), so = integer(0), bb_p = integer(0),
+      era = numeric(0), fip = numeric(0), k9 = numeric(0),
+      bb9 = numeric(0), whip = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+  do.call(rbind, rows)
+}
+
