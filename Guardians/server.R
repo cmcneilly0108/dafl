@@ -43,8 +43,83 @@ shinyServer(function(input, output, session) {
   })
 
   # Placeholder outputs — populated by later tasks.
-  output$gOrgTree     <- renderUI({ tags$div("Depth chart coming soon.") })
-  output$gDepthChart  <- DT::renderDataTable({ datatable(data.frame()) })
+  # One card per level. Inside each card, players sorted by position and one-
+  # line stat. ⬆/⬇ badge if the player's level changed in the last 7 days.
+  output$gOrgTree <- renderUI({
+    rv$refreshCount
+    if (nrow(gRoster) == 0) {
+      return(tags$div(style = "color:#888; font-style:italic;",
+                      "No roster snapshot available."))
+    }
+    levels <- c("MLB","AAA","AA","A+","A","ACL","DSL")
+
+    # Recent level changes (last 7 days) — query DB for snapshot history.
+    recentMoves <- tryCatch({
+      conn2 <- dbConnect(RSQLite::SQLite(), "../code/DAFL.db")
+      on.exit(dbDisconnect(conn2))
+      dbGetQuery(conn2, "
+        SELECT mlb_id, level, snapshot_date FROM GuardiansRoster
+        WHERE snapshot_date >= date(?, '-7 days')
+        ORDER BY mlb_id, snapshot_date",
+        params = list(as.character(Sys.Date())))
+    }, error = function(e) data.frame())
+    moveBadge <- function(pid) {
+      if (nrow(recentMoves) == 0) return("")
+      hist <- recentMoves[recentMoves$mlb_id == pid, ]
+      if (nrow(hist) < 2) return("")
+      levOrder <- c("DSL"=1,"ACL"=2,"A"=3,"A+"=4,"AA"=5,"AAA"=6,"MLB"=7)
+      first <- levOrder[hist$level[1]]; last <- levOrder[hist$level[nrow(hist)]]
+      if (is.na(first) || is.na(last) || first == last) return("")
+      if (last > first) " ⬆" else " ⬇"
+    }
+
+    levelCard <- function(lvl) {
+      sub <- gRoster[gRoster$level == lvl, ]
+      if (nrow(sub) == 0) {
+        return(tags$div(class = "card", style = "margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;",
+                        tags$h4(lvl), tags$div(style="color:#888;","No roster.")))
+      }
+      sub <- sub %>% arrange(pos, player)
+      rows <- lapply(seq_len(nrow(sub)), function(i) {
+        pid <- sub$mlb_id[i]
+        st <- gStats[gStats$mlb_id == pid, ]
+        line <- if (nrow(st) > 0) {
+          if (st$role[1] == "H" && !is.na(st$avg[1])) {
+            sprintf(" — .%s / %d HR / %.3f OBP",
+                    sub("^0\\.", "", sprintf("%.3f", st$avg[1])),
+                    ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
+                    ifelse(is.na(st$obp[1]), 0, st$obp[1]))
+          } else if (st$role[1] == "P" && !is.na(st$era[1])) {
+            sprintf(" — %.2f ERA / %.1f K/9 / %.2f WHIP",
+                    st$era[1],
+                    ifelse(is.na(st$k9[1]), 0, st$k9[1]),
+                    ifelse(is.na(st$whip[1]), 0, st$whip[1]))
+          } else ""
+        } else ""
+        tags$div(style = "font-size:13px; padding:2px 0;",
+                 tags$strong(sub$player[i]),
+                 tags$span(style="color:#888;", paste0(" (", sub$pos[i], ")")),
+                 tags$span(line),
+                 tags$span(style="color:#27ae60;", moveBadge(pid)))
+      })
+      tags$div(class = "card", style = "margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;",
+               tags$h4(paste0(lvl, " (", nrow(sub), ")")),
+               do.call(tagList, rows))
+    }
+
+    do.call(tagList, lapply(levels, levelCard))
+  })
+
+  output$gDepthChart <- DT::renderDataTable({
+    rv$refreshCount
+    if (!is.data.frame(gDepth) || nrow(gDepth) == 0) {
+      return(datatable(data.frame(Note = "FG depth chart not available"),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    datatable(gDepth,
+              options = list(pageLength = 30, dom = 't', autoWidth = FALSE),
+              rownames = FALSE)
+  })
   output$gHotTable    <- DT::renderDataTable({ datatable(data.frame()) })
   output$gPlayerCard  <- renderUI({ tags$div("Pick a player.") })
   output$gRisers      <- DT::renderDataTable({ datatable(data.frame()) })
