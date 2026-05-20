@@ -1805,3 +1805,55 @@ initGuardiansDB <- function(dbPath = "DAFL.db") {
   invisible(TRUE)
 }
 
+# Hardcoded fallback table — the Guardians org affiliates as of 2026.
+# Used when mlb_team_affiliates() fails. team_id values are MLB's stable
+# affiliate IDs (verify with mlb_team_affiliates(team_ids = 114) on first run).
+.guardiansAffiliatesFallback <- function() {
+  data.frame(
+    level    = c("MLB",     "AAA",      "AA",     "A+",         "A",        "ACL",          "DSL"),
+    sport_id = c(1L,        11L,        12L,      13L,          14L,        16L,             17L),
+    team_id  = c(114L,      445L,       402L,     437L,         538L,       5454L,           4189L),
+    name     = c("Cleveland", "Columbus", "Akron", "Lake County","Lynchburg","ACL Guardians","DSL Guardians"),
+    stringsAsFactors = FALSE
+  )
+}
+
+# Resolve Guardians org → affiliate IDs. Caches result in
+# `../data/guardiansAffiliates.csv` for one week. Falls back to the
+# hardcoded table if both the cache and the API fail.
+resolveGuardiansAffiliates <- function(cachePath = "../data/guardiansAffiliates.csv",
+                                       maxAgeDays = 7) {
+  cacheAgeDays <- if (file.exists(cachePath)) {
+    as.numeric(difftime(Sys.time(), file.info(cachePath)$mtime, units = "days"))
+  } else Inf
+  if (cacheAgeDays < maxAgeDays) {
+    return(read.csv(cachePath, stringsAsFactors = FALSE))
+  }
+  out <- tryCatch({
+    af <- baseballr::mlb_team_affiliates(team_ids = 114)
+    if (is.null(af) || nrow(af) == 0) stop("empty affiliates from baseballr")
+    # baseballr returns columns like sport_id, team_id, team_name, sport_name.
+    # Map to our schema. We always include MLB (114) as the parent row.
+    parent <- data.frame(level = "MLB", sport_id = 1L, team_id = 114L,
+                         name = "Cleveland", stringsAsFactors = FALSE)
+    sportToLevel <- c(`11` = "AAA", `12` = "AA", `13` = "A+", `14` = "A",
+                      `16` = "ACL", `17` = "DSL")
+    children <- data.frame(
+      level    = unname(sportToLevel[as.character(af$sport_id)]),
+      sport_id = as.integer(af$sport_id),
+      team_id  = as.integer(af$team_id),
+      name     = af$team_name,
+      stringsAsFactors = FALSE
+    )
+    children <- children[!is.na(children$level), ]
+    rbind(parent, children)
+  }, error = function(e) {
+    warning("resolveGuardiansAffiliates: API failed (", e$message,
+            "); using hardcoded fallback")
+    .guardiansAffiliatesFallback()
+  })
+  tryCatch(write.csv(out, cachePath, row.names = FALSE),
+           error = function(e) NULL)
+  out
+}
+
