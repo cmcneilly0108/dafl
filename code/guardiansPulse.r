@@ -183,13 +183,21 @@ gIL <- if (nrow(allTxn) > 0) {
 }
 
 # Prospect FV + tool grades, filtered to Guardians org.
+# On any failure, return a typed empty data frame so server.R's
+# `gProspects %>% filter(Name == ...)` doesn't crash with "object 'Name' not found".
 gProspects <- tryCatch({
   h <- getFGProspects(pos = "bat"); p <- getFGProspects(pos = "pit")
+  if (is.null(h) && is.null(p)) stop("both prospects pulls returned NULL")
   bind_rows(
-    h %>% filter(Org == "CLE") %>% mutate(role = "H"),
-    p %>% filter(Org == "CLE") %>% mutate(role = "P")
+    if (!is.null(h)) h %>% filter(Org == "CLE") %>% mutate(role = "H") else NULL,
+    if (!is.null(p)) p %>% filter(Org == "CLE") %>% mutate(role = "P") else NULL
   )
-}, error = function(e) data.frame())
+}, error = function(e) {
+  warning("gProspects failed: ", e$message)
+  data.frame(Name = character(0), FV = character(0),
+             Top.100 = integer(0), role = character(0),
+             stringsAsFactors = FALSE)
+})
 
 # FG MLB depth chart — not exposed by baseballr 1.6.0. Left as an empty
 # data frame placeholder; the UI degrades gracefully ("not available").

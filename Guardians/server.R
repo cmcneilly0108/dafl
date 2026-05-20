@@ -336,8 +336,12 @@ shinyServer(function(input, output, session) {
               rownames = FALSE)
   })
 
-  # Populate the player picker once the pulse globals are available.
-  updateSelectizeInput(session, 'gPlayerPick',
-                       choices = sort(unique(gRoster$player)),
-                       server = TRUE)
+  # Populate the player picker; re-runs whenever rv$refreshCount changes so
+  # newly-added players appear after the Refresh button is pressed.
+  observe({
+    rv$refreshCount
+    updateSelectizeInput(session, 'gPlayerPick',
+                         choices = sort(unique(gRoster$player)),
+                         server = TRUE)
+  })
 })
