@@ -95,15 +95,20 @@ if (forceRefresh || !haveToday) {
   # Idempotent upserts. SQLite REPLACE works because PK is (snapshot_date, mlb_id).
   dbExecute(conn, "DELETE FROM GuardiansRoster WHERE snapshot_date = ?", params = list(today))
   dbWriteTable(conn, "GuardiansRoster", roster, append = TRUE)
-  # Stats may have duplicate mlb_id rows (player on multiple levels, or two-way
-  # players with H and P rows). The PK is (snapshot_date, mlb_id) so we keep
-  # the highest-level row per mlb_id. For two-way players (H+P), pitcher row wins.
-  roleOrder  <- c("P" = 1, "H" = 2)
-  stats$levelRank <- levelOrder[stats$level]; stats$levelRank[is.na(stats$levelRank)] <- 99L
-  stats$roleRank  <- roleOrder[stats$role];   stats$roleRank[is.na(stats$roleRank)]   <- 99L
-  stats <- stats[order(stats$mlb_id, stats$levelRank, stats$roleRank), ]
+  # Stats may have duplicate mlb_id rows (player on multiple levels, or
+  # position players who pitched mop-up innings). PK is (snapshot_date, mlb_id),
+  # so dedup. Prefer H (hitter) by default — position players whose only "P"
+  # row is a token mop-up inning would otherwise overwrite their real batting
+  # line. For pure pitchers, the "H" row's pa/ab will be NA/0, so fall back
+  # to the P row in that case.
+  stats$rolePref <- ifelse(stats$role == "H" &
+                             (is.na(stats$pa) | stats$pa == 0L), 3L,
+                           ifelse(stats$role == "H", 1L, 2L))
+  stats$levelRank <- levelOrder[stats$level]
+  stats$levelRank[is.na(stats$levelRank)] <- 99L
+  stats <- stats[order(stats$mlb_id, stats$levelRank, stats$rolePref), ]
   stats <- stats[!duplicated(stats$mlb_id), ]
-  stats$levelRank <- NULL; stats$roleRank <- NULL
+  stats$levelRank <- NULL; stats$rolePref <- NULL
 
   dbExecute(conn, "DELETE FROM GuardiansStats  WHERE snapshot_date = ?", params = list(today))
   dbWriteTable(conn, "GuardiansStats", stats, append = TRUE)
