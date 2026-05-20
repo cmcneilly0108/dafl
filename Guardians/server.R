@@ -42,97 +42,134 @@ shinyServer(function(input, output, session) {
     })
   })
 
-  # Placeholder outputs — populated by later tasks.
-  # One card per level. Inside each card, players sorted by position and one-
-  # line stat. ⬆/⬇ badge if the player's level changed in the last 7 days.
-  output$gOrgTree <- renderUI({
+  # Depth Chart: one level at a time, shown as a baseball diamond with players
+  # placed at their roster positions. Non-fielding slots (DH/UT/IF/two-way)
+  # render in a "Bench" line under the diamond. A compact roster table with
+  # season stat lines sits below the diamond.
+  output$gDepthDiamond <- renderUI({
     rv$refreshCount
+    req(input$gDepthLevel)
     if (nrow(gRoster) == 0) {
       return(tags$div(style = "color:#888; font-style:italic;",
                       "No roster snapshot available."))
     }
-    levels <- c("MLB","AAA","AA","A+","A","ACL","DSL")
-
-    # Recent level changes (last 7 days) — query DB for snapshot history.
-    recentMoves <- tryCatch({
-      conn2 <- dbConnect(RSQLite::SQLite(), "../code/DAFL.db")
-      on.exit(dbDisconnect(conn2))
-      dbGetQuery(conn2, "
-        SELECT mlb_id, level, snapshot_date FROM GuardiansRoster
-        WHERE snapshot_date >= date(?, '-7 days')
-        ORDER BY mlb_id, snapshot_date",
-        params = list(as.character(Sys.Date())))
-    }, error = function(e) data.frame())
-    moveBadge <- function(pid) {
-      if (nrow(recentMoves) == 0) return("")
-      hist <- recentMoves[recentMoves$mlb_id == pid, ]
-      if (nrow(hist) < 2) return("")
-      levOrder <- c("DSL"=1,"ACL"=2,"A"=3,"A+"=4,"AA"=5,"AAA"=6,"MLB"=7)
-      first <- levOrder[hist$level[1]]; last <- levOrder[hist$level[nrow(hist)]]
-      if (is.na(first) || is.na(last) || first == last) return("")
-      if (last > first) " ⬆" else " ⬇"
+    lvl <- input$gDepthLevel
+    sub <- gRoster[gRoster$level == lvl, ]
+    header <- tags$h3(paste0(lvl, " (", nrow(sub), " active)"),
+                      style = "margin-bottom:10px;")
+    if (nrow(sub) == 0) {
+      return(tagList(header,
+        tags$div(style = "color:#888; font-style:italic;", "No roster.")))
     }
 
-    # Build one compact DT table per level. Each row carries the player's
-    # season line (hitter or pitcher) plus a Move arrow (⬆/⬇) for recent
-    # level changes. Sortable by all columns.
-    levelTable <- function(lvl) {
-      sub <- gRoster[gRoster$level == lvl, ]
-      header <- tags$h4(paste0(lvl, " (", nrow(sub), ")"),
-                        style = "margin-top:18px; margin-bottom:6px;")
-      if (nrow(sub) == 0) {
-        return(tagList(header,
-          tags$div(style = "color:#888; font-style:italic; padding-bottom:12px;",
-                   "No roster.")))
-      }
-      # Per-player stat line. OPS = OBP + SLG (computed on the fly since
-      # GuardiansStats stores both but not OPS directly). OPS+ is not exposed
-      # by mlb_stats; raw OPS is the closest available.
-      lineFor <- function(pid) {
-        st <- gStats[gStats$mlb_id == pid, ]
-        if (nrow(st) == 0) return("")
-        zi <- function(x) ifelse(is.na(x), 0L, as.integer(x))
-        zr <- function(x) ifelse(is.na(x), 0, x)
-        d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
-        if (st$role[1] == "H" && !is.na(st$avg[1])) {
-          ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
-          sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
-                  zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
-                  d3(st$avg[1]), d3(st$obp[1]), d3(ops))
-        } else if (st$role[1] == "P" && !is.na(st$era[1])) {
-          sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
-                  zr(st$ip[1]),
-                  zi(st$w[1]), zi(st$l[1]),
-                  zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]),
-                  zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
-        } else ""
-      }
-      df <- data.frame(
-        Move = sapply(sub$mlb_id, moveBadge),
-        Player = sub$player,
-        Pos = sub$pos,
-        Age = ifelse(is.na(sub$age), NA_real_, round(sub$age, 1)),
-        Line = sapply(sub$mlb_id, lineFor),
-        stringsAsFactors = FALSE
-      )
-      df <- df[order(df$Pos, df$Player), ]
-      tagList(header,
-        htmltools::tagList(
-          DT::datatable(df,
-                        options = list(paging = FALSE, dom = "t",
-                                       autoWidth = FALSE,
-                                       columnDefs = list(
-                                         list(targets = 0, width = "40px"),
-                                         list(targets = 1, width = "200px"),
-                                         list(targets = 2, width = "70px"),
-                                         list(targets = 3, width = "60px")
-                                       )),
-                        rownames = FALSE, escape = FALSE)
-        )
-      )
+    # Categorize each player into a field slot, "OF" floater, or bench.
+    pitchPos  <- c("P","SP","RP","CL","MR")
+    fieldPos  <- c("C","1B","2B","3B","SS","LF","CF","RF")
+    grouped <- list()
+    bench <- character(0)
+    for (i in seq_len(nrow(sub))) {
+      p <- sub$pos[i]; nm <- sub$player[i]
+      slot <- if (p %in% pitchPos) "P"
+              else if (p %in% fieldPos) p
+              else if (identical(p, "OF")) "OF"
+              else NA
+      if (is.na(slot)) bench <- c(bench, paste0(nm, " (", p, ")"))
+      else grouped[[slot]] <- c(grouped[[slot]], nm)
     }
 
-    do.call(tagList, lapply(levels, levelTable))
+    # Render the SVG diamond as a raw string. The 600x600 viewBox scales
+    # responsively via max-width on the wrapper.
+    esc <- function(s) htmltools::htmlEscape(s, attribute = FALSE)
+    playersAt <- function(slot, x, y) {
+      pl <- grouped[[slot]]
+      if (is.null(pl) || length(pl) == 0) return("")
+      # Position label above the names.
+      label <- sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">%s</text>',
+                       x, y - 14, slot)
+      # Player names stacked vertically, centered.
+      names <- paste(vapply(seq_along(pl), function(j) {
+        sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="12" stroke="#0F223E" stroke-width="0.3" paint-order="stroke">%s</text>',
+                x, y + (j - 1) * 14, esc(pl[j]))
+      }, character(1)), collapse = "")
+      paste0(label, names)
+    }
+
+    svg <- paste0(
+      '<svg viewBox="0 0 600 600" style="width:100%; max-width:640px; display:block; border-radius:8px;">',
+      # Outfield grass background
+      '<rect x="0" y="0" width="600" height="600" fill="#5a8d4e"/>',
+      # Warning track arc (just a stylistic curve)
+      '<path d="M 60 330 A 240 240 0 0 1 540 330" fill="none" stroke="#4a7741" stroke-width="14" opacity="0.6"/>',
+      # Infield dirt diamond
+      '<polygon points="300,540 510,330 300,120 90,330" fill="#c2a472" stroke="white" stroke-width="3"/>',
+      # Pitcher mound
+      '<circle cx="300" cy="380" r="32" fill="#a98b5e" stroke="white" stroke-width="2"/>',
+      # Bases (rotated squares)
+      '<rect x="500" y="322" width="16" height="16" fill="white" transform="rotate(45 508 330)"/>',  # 1B
+      '<rect x="292" y="112" width="16" height="16" fill="white" transform="rotate(45 300 120)"/>',  # 2B
+      '<rect x="84"  y="322" width="16" height="16" fill="white" transform="rotate(45 92  330)"/>',  # 3B
+      # Home plate
+      '<polygon points="290,540 310,540 315,548 300,560 285,548" fill="white"/>',
+      # Players at each slot
+      playersAt("CF", 300,  70),
+      playersAt("LF", 130, 130),
+      playersAt("RF", 470, 130),
+      playersAt("OF", 300, 180),   # floater slot for generic OF
+      playersAt("3B", 150, 340),
+      playersAt("SS", 235, 285),
+      playersAt("2B", 365, 285),
+      playersAt("1B", 450, 340),
+      playersAt("P",  300, 395),
+      playersAt("C",  300, 580),
+      '</svg>'
+    )
+
+    benchUI <- if (length(bench) > 0) {
+      tags$div(style = "margin-top:14px;",
+               tags$strong("Bench: "),
+               tags$span(paste(bench, collapse = "  ·  ")))
+    } else NULL
+
+    # Roster stat table for the selected level (same shape as before, just
+    # filtered to one level).
+    lineFor <- function(pid) {
+      st <- gStats[gStats$mlb_id == pid, ]
+      if (nrow(st) == 0) return("")
+      zi <- function(x) ifelse(is.na(x), 0L, as.integer(x))
+      zr <- function(x) ifelse(is.na(x), 0, x)
+      d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
+      if (st$role[1] == "H" && !is.na(st$avg[1])) {
+        ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
+        sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
+                zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
+                d3(st$avg[1]), d3(st$obp[1]), d3(ops))
+      } else if (st$role[1] == "P" && !is.na(st$era[1])) {
+        sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
+                zr(st$ip[1]),
+                zi(st$w[1]), zi(st$l[1]),
+                zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]),
+                zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
+      } else ""
+    }
+    df <- data.frame(
+      Player = sub$player,
+      Pos = sub$pos,
+      Age = ifelse(is.na(sub$age), NA_real_, round(sub$age, 1)),
+      Line = sapply(sub$mlb_id, lineFor),
+      stringsAsFactors = FALSE
+    )
+    df <- df[order(df$Pos, df$Player), ]
+    statTable <- DT::datatable(df,
+                               options = list(paging = FALSE, dom = "t",
+                                              autoWidth = FALSE),
+                               rownames = FALSE, escape = FALSE)
+
+    tagList(
+      header,
+      HTML(svg),
+      benchUI,
+      tags$div(style = "margin-top:20px;", statTable)
+    )
   })
 
   output$gHotTable <- DT::renderDataTable({

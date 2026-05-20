@@ -13,8 +13,15 @@ shinyUI(
       )
     ),
     tabPanel("Depth Chart",
-      h3("Org by Level"),
-      uiOutput("gOrgTree")
+      sidebarLayout(
+        sidebarPanel(
+          selectInput("gDepthLevel", "Level",
+                      choices = c("MLB","AAA","AA","A+","A","ACL","DSL"),
+                      selected = "MLB"),
+          width = 2
+        ),
+        mainPanel(uiOutput("gDepthDiamond"), width = 10)
+      )
     ),
     tabPanel("Hot / Cold",
       sidebarLayout(
