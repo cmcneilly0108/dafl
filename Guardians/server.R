@@ -106,9 +106,9 @@ shinyServer(function(input, output, session) {
     }
 
     svg <- paste0(
-      '<svg viewBox="0 0 600 600" style="width:100%; max-width:640px; display:block; border-radius:8px;">',
-      # Outfield grass background
-      '<rect x="0" y="0" width="600" height="600" fill="#5a8d4e"/>',
+      '<svg viewBox="0 0 600 640" style="width:100%; max-width:640px; display:block; border-radius:8px;">',
+      # Outfield grass background (extra height for catcher stack below home).
+      '<rect x="0" y="0" width="600" height="640" fill="#5a8d4e"/>',
       # Warning track arc (just a stylistic curve)
       '<path d="M 60 330 A 240 240 0 0 1 540 330" fill="none" stroke="#4a7741" stroke-width="14" opacity="0.6"/>',
       # Infield dirt diamond
@@ -132,7 +132,7 @@ shinyServer(function(input, output, session) {
       # Mound circle stays as a visual element; pitcher names live in the
       # SP/RP columns to the right of the diamond.
       '<text x="300" y="385" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">P</text>',
-      playersAt("C",  300, 580, upward = TRUE),
+      playersAt("C",  300, 580),
       '</svg>'
     )
 
