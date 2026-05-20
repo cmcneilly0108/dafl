@@ -2058,3 +2058,31 @@ pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
   )
 }
 
+# Pull last-30-day game logs for one player (used by HotScore). Tries FG MiLB
+# endpoint first (covers all MiLB levels). Returns a data frame with at least
+# `date`, `g` (games), and the role-specific counting stats. On any failure
+# returns NULL so the caller can skip the player without crashing.
+pullGuardiansGameLogs <- function(fg_id, role, season = cyear) {
+  if (is.na(fg_id) || !nzchar(as.character(fg_id))) return(NULL)
+  tryCatch({
+    if (role == "H") {
+      df <- baseballr::fg_milb_batter_game_logs(playerid = fg_id,
+                                                year = as.integer(season))
+    } else {
+      df <- baseballr::fg_milb_pitcher_game_logs(playerid = fg_id,
+                                                 year = as.integer(season))
+    }
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    # Standardise the date column name across baseballr versions.
+    dateCol <- intersect(c("Date", "date", "game_date"), names(df))[1]
+    if (is.na(dateCol)) return(NULL)
+    df$gl_date <- suppressWarnings(as.Date(df[[dateCol]]))
+    df <- df[!is.na(df$gl_date) & df$gl_date >= Sys.Date() - 30, , drop = FALSE]
+    if (nrow(df) == 0) return(NULL)
+    df
+  }, error = function(e) {
+    warning("pullGuardiansGameLogs(", fg_id, "/", role, ") failed: ", e$message)
+    NULL
+  })
+}
+
