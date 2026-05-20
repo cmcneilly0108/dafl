@@ -1896,6 +1896,12 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
       NULL
     })
   })
+  rosters <- Filter(Negate(is.null), rosters)
+  if (length(rosters) == 0) {
+    return(data.frame(mlb_id = integer(0), player = character(0),
+                      pos = character(0), level = character(0),
+                      team_id = integer(0), stringsAsFactors = FALSE))
+  }
   do.call(rbind, rosters)
 }
 
