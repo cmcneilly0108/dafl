@@ -2004,3 +2004,54 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
   do.call(rbind, rows)
 }
 
+# Pull the last `lookbackDays` of transactions for the Guardians org. Returns
+# one row per transaction matching our schema.
+#
+# baseballr 1.6.0 has no transactions wrapper — call the MLB Stats API directly.
+# We narrow the query by teamId=114 (parent club); the API returns all txns
+# involving the parent OR any affiliate (call-ups, options, etc.). Response
+# has nested `person`/`toTeam`/`fromTeam` objects; we flatten them.
+pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
+                                      lookbackDays = 30) {
+  emptyResult <- function() data.frame(
+    txn_id = character(0), txn_date = character(0),
+    mlb_id = integer(0), player = character(0), type = character(0),
+    from_team_id = integer(0), to_team_id = integer(0),
+    description = character(0),
+    stringsAsFactors = FALSE
+  )
+  endDate   <- as.character(Sys.Date())
+  startDate <- as.character(Sys.Date() - lookbackDays)
+  j <- tryCatch({
+    resp <- httr::GET("https://statsapi.mlb.com/api/v1/transactions",
+                      query = list(teamId = 114,
+                                   startDate = startDate,
+                                   endDate = endDate))
+    httr::stop_for_status(resp)
+    jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"),
+                       simplifyDataFrame = TRUE)
+  }, error = function(e) {
+    warning("pullGuardiansTransactions failed: ", e$message); NULL
+  })
+  if (is.null(j) || is.null(j$transactions) ||
+      !is.data.frame(j$transactions) || nrow(j$transactions) == 0) {
+    return(emptyResult())
+  }
+  txns <- j$transactions
+  # The API's nested objects appear as flat columns named with `.` separators
+  # via simplifyDataFrame; e.g. `person.id`, `person.fullName`, `toTeam.id`,
+  # `fromTeam.id`. Fall back gracefully if those columns are absent.
+  pick <- function(col, default = NA) if (col %in% names(txns)) txns[[col]] else default
+  data.frame(
+    txn_id       = as.character(pick("id")),
+    txn_date     = as.character(pick("date")),
+    mlb_id       = suppressWarnings(as.integer(pick("person.id"))),
+    player       = as.character(pick("person.fullName")),
+    type         = as.character(pick("typeDesc")),
+    from_team_id = suppressWarnings(as.integer(pick("fromTeam.id"))),
+    to_team_id   = suppressWarnings(as.integer(pick("toTeam.id"))),
+    description  = as.character(pick("description")),
+    stringsAsFactors = FALSE
+  )
+}
+
