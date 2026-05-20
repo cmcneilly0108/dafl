@@ -1927,7 +1927,6 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
       ))
       if (is.null(s) || nrow(s) == 0) return(NULL)
       s$level    <- af$level
-      s$role     <- if (group == "hitting") "H" else "P"
       s$mlb_id   <- as.integer(s$player_id)
       s
     }, error = function(e) {
@@ -1938,23 +1937,24 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
   hitRows <- lapply(seq_len(nrow(affiliates)), function(i) pullOne(affiliates[i, ], "hitting"))
   pitRows <- lapply(seq_len(nrow(affiliates)), function(i) pullOne(affiliates[i, ], "pitching"))
 
+  safe <- function(df, col) if (col %in% names(df)) df[[col]] else NA
+
   normH <- function(df) {
     if (is.null(df)) return(NULL)
-    safe <- function(col) if (col %in% names(df)) df[[col]] else NA
     data.frame(
       mlb_id = df$mlb_id, level = df$level, role = "H",
-      pa = suppressWarnings(as.integer(safe("plate_appearances"))),
-      ab = suppressWarnings(as.integer(safe("at_bats"))),
-      h  = suppressWarnings(as.integer(safe("hits"))),
-      hr = suppressWarnings(as.integer(safe("home_runs"))),
-      r  = suppressWarnings(as.integer(safe("runs"))),
-      rbi = suppressWarnings(as.integer(safe("rbi"))),
-      sb = suppressWarnings(as.integer(safe("stolen_bases"))),
-      bb = suppressWarnings(as.integer(safe("base_on_balls"))),
-      k  = suppressWarnings(as.integer(safe("strike_outs"))),
-      avg = suppressWarnings(as.numeric(safe("avg"))),
-      obp = suppressWarnings(as.numeric(safe("obp"))),
-      slg = suppressWarnings(as.numeric(safe("slg"))),
+      pa = suppressWarnings(as.integer(safe(df, "plate_appearances"))),
+      ab = suppressWarnings(as.integer(safe(df, "at_bats"))),
+      h  = suppressWarnings(as.integer(safe(df, "hits"))),
+      hr = suppressWarnings(as.integer(safe(df, "home_runs"))),
+      r  = suppressWarnings(as.integer(safe(df, "runs"))),
+      rbi = suppressWarnings(as.integer(safe(df, "rbi"))),
+      sb = suppressWarnings(as.integer(safe(df, "stolen_bases"))),
+      bb = suppressWarnings(as.integer(safe(df, "base_on_balls"))),
+      k  = suppressWarnings(as.integer(safe(df, "strike_outs"))),
+      avg = suppressWarnings(as.numeric(safe(df, "avg"))),
+      obp = suppressWarnings(as.numeric(safe(df, "obp"))),
+      slg = suppressWarnings(as.numeric(safe(df, "slg"))),
       woba = NA_real_,
       ip = NA_real_, w = NA_integer_, l = NA_integer_,
       sv = NA_integer_, hld = NA_integer_,
@@ -1966,24 +1966,23 @@ pullGuardiansStats <- function(affiliates = resolveGuardiansAffiliates(),
   }
   normP <- function(df) {
     if (is.null(df)) return(NULL)
-    safe <- function(col) if (col %in% names(df)) df[[col]] else NA
     data.frame(
       mlb_id = df$mlb_id, level = df$level, role = "P",
       pa = NA_integer_, ab = NA_integer_, h = NA_integer_, hr = NA_integer_,
       r = NA_integer_, rbi = NA_integer_, sb = NA_integer_, bb = NA_integer_,
       k = NA_integer_, avg = NA_real_, obp = NA_real_, slg = NA_real_, woba = NA_real_,
-      ip  = suppressWarnings(as.numeric(safe("innings_pitched"))),
-      w   = suppressWarnings(as.integer(safe("wins"))),
-      l   = suppressWarnings(as.integer(safe("losses"))),
-      sv  = suppressWarnings(as.integer(safe("saves"))),
-      hld = suppressWarnings(as.integer(safe("holds"))),
-      so  = suppressWarnings(as.integer(safe("strike_outs"))),
-      bb_p = suppressWarnings(as.integer(safe("base_on_balls"))),
-      era = suppressWarnings(as.numeric(safe("era"))),
+      ip  = suppressWarnings(as.numeric(safe(df, "innings_pitched"))),
+      w   = suppressWarnings(as.integer(safe(df, "wins"))),
+      l   = suppressWarnings(as.integer(safe(df, "losses"))),
+      sv  = suppressWarnings(as.integer(safe(df, "saves"))),
+      hld = suppressWarnings(as.integer(safe(df, "holds"))),
+      so  = suppressWarnings(as.integer(safe(df, "strike_outs"))),
+      bb_p = suppressWarnings(as.integer(safe(df, "base_on_balls"))),
+      era = suppressWarnings(as.numeric(safe(df, "era"))),
       fip = NA_real_,
-      k9  = suppressWarnings(as.numeric(safe("strikeouts_per9inn"))),
-      bb9 = suppressWarnings(as.numeric(safe("walks_per9inn"))),
-      whip = suppressWarnings(as.numeric(safe("whip"))),
+      k9  = suppressWarnings(as.numeric(safe(df, "strikeouts_per9inn"))),
+      bb9 = suppressWarnings(as.numeric(safe(df, "walks_per9inn"))),
+      whip = suppressWarnings(as.numeric(safe(df, "whip"))),
       stringsAsFactors = FALSE
     )
   }
