@@ -73,58 +73,66 @@ shinyServer(function(input, output, session) {
       if (last > first) " ⬆" else " ⬇"
     }
 
-    levelCard <- function(lvl) {
+    # Build one compact DT table per level. Each row carries the player's
+    # season line (hitter or pitcher) plus a Move arrow (⬆/⬇) for recent
+    # level changes. Sortable by all columns.
+    levelTable <- function(lvl) {
       sub <- gRoster[gRoster$level == lvl, ]
+      header <- tags$h4(paste0(lvl, " (", nrow(sub), ")"),
+                        style = "margin-top:18px; margin-bottom:6px;")
       if (nrow(sub) == 0) {
-        return(tags$div(class = "card", style = "margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;",
-                        tags$h4(lvl), tags$div(style="color:#888;","No roster.")))
+        return(tagList(header,
+          tags$div(style = "color:#888; font-style:italic; padding-bottom:12px;",
+                   "No roster.")))
       }
-      sub <- sub %>% arrange(pos, player)
-      rows <- lapply(seq_len(nrow(sub)), function(i) {
-        pid <- sub$mlb_id[i]
+      # Per-player stat line.
+      lineFor <- function(pid) {
         st <- gStats[gStats$mlb_id == pid, ]
-        line <- if (nrow(st) > 0) {
-          if (st$role[1] == "H" && !is.na(st$avg[1])) {
-            sprintf(" — .%s / %d HR / %.3f OBP",
-                    sub("^0\\.", "", sprintf("%.3f", st$avg[1])),
-                    ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
-                    ifelse(is.na(st$obp[1]), 0, st$obp[1]))
-          } else if (st$role[1] == "P" && !is.na(st$era[1])) {
-            sprintf(" — %.2f ERA / %.1f K/9 / %.2f WHIP",
-                    st$era[1],
-                    ifelse(is.na(st$k9[1]), 0, st$k9[1]),
-                    ifelse(is.na(st$whip[1]), 0, st$whip[1]))
-          } else ""
+        if (nrow(st) == 0) return("")
+        if (st$role[1] == "H" && !is.na(st$avg[1])) {
+          sprintf(".%s / %d HR / .%s OBP",
+                  sub("^0\\.", "", sprintf("%.3f", st$avg[1])),
+                  ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
+                  sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$obp[1]), 0, st$obp[1]))))
+        } else if (st$role[1] == "P" && !is.na(st$era[1])) {
+          sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
+                  st$era[1],
+                  ifelse(is.na(st$k9[1]), 0, st$k9[1]),
+                  ifelse(is.na(st$whip[1]), 0, st$whip[1]))
         } else ""
-        tags$div(style = "font-size:13px; padding:2px 0;",
-                 tags$strong(sub$player[i]),
-                 tags$span(style="color:#888;", paste0(" (", sub$pos[i], ")")),
-                 tags$span(line),
-                 tags$span(style="color:#27ae60;", moveBadge(pid)))
-      })
-      tags$div(class = "card", style = "margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;",
-               tags$h4(paste0(lvl, " (", nrow(sub), ")")),
-               do.call(tagList, rows))
+      }
+      df <- data.frame(
+        Move = sapply(sub$mlb_id, moveBadge),
+        Player = sub$player,
+        Pos = sub$pos,
+        Age = ifelse(is.na(sub$age), NA_real_, round(sub$age, 1)),
+        Line = sapply(sub$mlb_id, lineFor),
+        stringsAsFactors = FALSE
+      )
+      df <- df[order(df$Pos, df$Player), ]
+      tagList(header,
+        htmltools::tagList(
+          DT::datatable(df,
+                        options = list(paging = FALSE, dom = "t",
+                                       autoWidth = FALSE,
+                                       columnDefs = list(
+                                         list(targets = 0, width = "40px"),
+                                         list(targets = 1, width = "200px"),
+                                         list(targets = 2, width = "70px"),
+                                         list(targets = 3, width = "60px")
+                                       )),
+                        rownames = FALSE, escape = FALSE)
+        )
+      )
     }
 
-    do.call(tagList, lapply(levels, levelCard))
+    do.call(tagList, lapply(levels, levelTable))
   })
 
-  output$gDepthChart <- DT::renderDataTable({
-    rv$refreshCount
-    if (!is.data.frame(gDepth) || nrow(gDepth) == 0) {
-      return(datatable(data.frame(Note = "FG depth chart not available"),
-                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
-    }
-    datatable(gDepth,
-              options = list(pageLength = 30, dom = 't', autoWidth = FALSE),
-              rownames = FALSE)
-  })
   output$gHotTable <- DT::renderDataTable({
     rv$refreshCount
-    req(input$gHotWindow, input$gHotRole, input$gHotLevel)
-    win <- as.integer(input$gHotWindow)
-    df <- gHot %>% filter(window_days == win)
+    req(input$gHotRole, input$gHotLevel)
+    df <- gHot
     if (input$gHotRole != "A") df <- df %>% filter(role == input$gHotRole)
     if (input$gHotLevel != "All") df <- df %>% filter(level == input$gHotLevel)
     if (nrow(df) == 0) {
@@ -216,7 +224,7 @@ shinyServer(function(input, output, session) {
 
     # Trend plot — HotScore over snapshot_date (14d window) from gTrend
     trendDf <- gTrend %>%
-      filter(mlb_id == row$mlb_id, window_days == 14) %>%
+      filter(mlb_id == row$mlb_id) %>%
       mutate(snapshot_date = as.Date(snapshot_date)) %>%
       arrange(snapshot_date)
     trendUI <- if (nrow(trendDf) >= 5) {
@@ -241,7 +249,7 @@ shinyServer(function(input, output, session) {
     row <- gRoster %>% filter(player == nm)
     if (nrow(row) == 0) return(NULL)
     trendDf <- gTrend %>%
-      filter(mlb_id == row$mlb_id[1], window_days == 14) %>%
+      filter(mlb_id == row$mlb_id[1]) %>%
       mutate(snapshot_date = as.Date(snapshot_date)) %>%
       arrange(snapshot_date)
     if (nrow(trendDf) < 5) return(NULL)
@@ -258,9 +266,8 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Note = "Not enough history yet for risers."),
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
-    # Streaks on 14d HotScore
+    # Streaks on HotScore
     t14 <- gTrend %>%
-      filter(window_days == 14) %>%
       mutate(snapshot_date = as.Date(snapshot_date)) %>%
       arrange(mlb_id, snapshot_date)
     streaks <- t14 %>%

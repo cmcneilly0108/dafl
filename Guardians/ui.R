@@ -13,15 +13,12 @@ shinyUI(
       )
     ),
     tabPanel("Depth Chart",
-      fluidRow(
-        column(width = 8, h3("Org by Level"), uiOutput("gOrgTree")),
-        column(width = 4, h3("MLB Depth Chart"), DT::dataTableOutput("gDepthChart"))
-      )
+      h3("Org by Level"),
+      uiOutput("gOrgTree")
     ),
     tabPanel("Hot / Cold",
       sidebarLayout(
         sidebarPanel(
-          selectInput("gHotWindow", "Window (days)", choices = c(7, 14, 30), selected = 14),
           radioButtons("gHotRole", "Role", choices = c("Hitters" = "H", "Pitchers" = "P", "All" = "A"),
                        selected = "A", inline = TRUE),
           selectInput("gHotLevel", "Level", choices = c("All","MLB","AAA","AA","A+","A","ACL","DSL"),
