@@ -10,6 +10,7 @@ library("jsonlite")
 library("xml2")
 library("rvest")
 library("httr")
+library("RSQLite")
 
 # When bumping cyear/lastyear each season, also update YEAR in
 # code/run_data_loads.sh (the daily launchd data-load job hardcodes the year).
@@ -1738,5 +1739,69 @@ clearTrendingBefore <- function(year, dbPath = "DAFL.db") {
   deleted <- dbExecute(conn, "DELETE FROM Trending WHERE Date < ?", params = list(cutoff))
   message(sprintf("Deleted %d Trending rows before %s-01-01", deleted, year))
   invisible(deleted)
+}
+
+# ============================================================
+# Guardians Tracker — DB schema + helpers (see docs/superpowers/specs/2026-05-20-guardians-tracker-design.md)
+# ============================================================
+
+# Create the four Guardians-tracker tables if they don't exist.
+# Idempotent: safe to call on every pulse run.
+initGuardiansDB <- function(dbPath = "DAFL.db") {
+  conn <- dbConnect(RSQLite::SQLite(), dbPath)
+  on.exit(dbDisconnect(conn))
+
+  dbExecute(conn, "
+    CREATE TABLE IF NOT EXISTS GuardiansRoster (
+      snapshot_date TEXT NOT NULL,
+      mlb_id        INTEGER NOT NULL,
+      fg_id         TEXT,
+      player        TEXT,
+      pos           TEXT,
+      level         TEXT,
+      team_id       INTEGER,
+      age           REAL,
+      PRIMARY KEY (snapshot_date, mlb_id)
+    )")
+
+  dbExecute(conn, "
+    CREATE TABLE IF NOT EXISTS GuardiansStats (
+      snapshot_date TEXT NOT NULL,
+      mlb_id        INTEGER NOT NULL,
+      level         TEXT,
+      role          TEXT,
+      pa INTEGER, ab INTEGER, h INTEGER, hr INTEGER,
+      r INTEGER, rbi INTEGER, sb INTEGER, bb INTEGER, k INTEGER,
+      avg REAL, obp REAL, slg REAL, woba REAL,
+      ip REAL, w INTEGER, l INTEGER, sv INTEGER, hld INTEGER,
+      so INTEGER, bb_p INTEGER,
+      era REAL, fip REAL, k9 REAL, bb9 REAL, whip REAL,
+      PRIMARY KEY (snapshot_date, mlb_id)
+    )")
+
+  dbExecute(conn, "
+    CREATE TABLE IF NOT EXISTS GuardiansTransactions (
+      txn_id        TEXT PRIMARY KEY,
+      txn_date      TEXT NOT NULL,
+      mlb_id        INTEGER,
+      player        TEXT,
+      type          TEXT,
+      from_team_id  INTEGER,
+      to_team_id    INTEGER,
+      description   TEXT
+    )")
+
+  dbExecute(conn, "
+    CREATE TABLE IF NOT EXISTS GuardiansHotscore (
+      snapshot_date TEXT NOT NULL,
+      mlb_id        INTEGER NOT NULL,
+      level         TEXT,
+      role          TEXT,
+      window_days   INTEGER NOT NULL,
+      hotscore      REAL,
+      PRIMARY KEY (snapshot_date, mlb_id, window_days)
+    )")
+
+  invisible(TRUE)
 }
 
