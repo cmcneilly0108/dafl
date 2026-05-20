@@ -2,7 +2,7 @@
 #   docs/superpowers/specs/2026-05-20-guardians-tracker-design.md
 #
 # Reads/writes code/DAFL.db (tables GuardiansRoster/Stats/Transactions/Hotscore).
-# Hydrates globals (gRoster, gHot, gTxn, gIL, gProspects, gDepth, gTrend) for
+# Hydrates globals (gRoster, gStats, gHot, gTxn, gIL, gProspects, gDepth, gTrend) for
 # the Shiny app in Guardians/server.R.
 #
 # If today's snapshot already exists in DAFL.db and DAFL_FORCE_REFRESH is not
@@ -31,6 +31,9 @@ haveToday <- as.integer(dbGetQuery(conn,
 
 if (forceRefresh || !haveToday) {
   cat("[guardians] Fetching upstream (force=", forceRefresh, ", haveToday=", haveToday, ")\n", sep = "")
+
+  # Level rank used for dedup'ing players who appear on multiple affiliate rosters.
+  levelOrder <- c("MLB" = 1L, "AAA" = 2L, "AA" = 3L, "A+" = 4L, "A" = 5L, "ACL" = 6L, "DSL" = 7L)
 
   affiliates <- resolveGuardiansAffiliates()
   roster <- pullGuardiansRoster(affiliates)
@@ -80,7 +83,6 @@ if (forceRefresh || !haveToday) {
   # Players on multiple affiliate rosters appear more than once.
   # Keep the highest-level assignment per player so the PK (snapshot_date, mlb_id)
   # stays unique. Level order: MLB > AAA > AA > A+ > A > ACL > DSL.
-  levelOrder <- c("MLB" = 1, "AAA" = 2, "AA" = 3, "A+" = 4, "A" = 5, "ACL" = 6, "DSL" = 7)
   roster$levelRank <- levelOrder[roster$level]
   roster$levelRank[is.na(roster$levelRank)] <- 99L
   roster <- roster[order(roster$mlb_id, roster$levelRank), ]
@@ -96,9 +98,8 @@ if (forceRefresh || !haveToday) {
   # Stats may have duplicate mlb_id rows (player on multiple levels, or two-way
   # players with H and P rows). The PK is (snapshot_date, mlb_id) so we keep
   # the highest-level row per mlb_id. For two-way players (H+P), pitcher row wins.
-  levelOrder2 <- c("MLB" = 1, "AAA" = 2, "AA" = 3, "A+" = 4, "A" = 5, "ACL" = 6, "DSL" = 7)
   roleOrder  <- c("P" = 1, "H" = 2)
-  stats$levelRank <- levelOrder2[stats$level]; stats$levelRank[is.na(stats$levelRank)] <- 99L
+  stats$levelRank <- levelOrder[stats$level]; stats$levelRank[is.na(stats$levelRank)] <- 99L
   stats$roleRank  <- roleOrder[stats$role];   stats$roleRank[is.na(stats$roleRank)]   <- 99L
   stats <- stats[order(stats$mlb_id, stats$levelRank, stats$roleRank), ]
   stats <- stats[!duplicated(stats$mlb_id), ]
@@ -157,12 +158,28 @@ gTrend  <- dbGetQuery(conn, "SELECT * FROM GuardiansHotscore ORDER BY snapshot_d
 # Compute current IL board by walking the full transactions table forward.
 allTxn <- dbGetQuery(conn, "SELECT * FROM GuardiansTransactions ORDER BY txn_date")
 gIL <- if (nrow(allTxn) > 0) {
-  ils <- allTxn[grepl("IL|Injured List|Disabled", allTxn$type, ignore.case = TRUE), ]
+  ils  <- allTxn[grepl("IL|Injured List|Disabled", allTxn$type, ignore.case = TRUE), ]
   acts <- allTxn[grepl("Activated", allTxn$type, ignore.case = TRUE), ]
-  onIL <- ils[!ils$mlb_id %in% acts$mlb_id[acts$txn_date > ils$txn_date], ]
-  onIL[, c("txn_date","mlb_id","player","type","description")]
+  if (nrow(ils) == 0) {
+    data.frame(txn_date = character(0), mlb_id = integer(0),
+               player = character(0), type = character(0),
+               description = character(0), stringsAsFactors = FALSE)
+  } else {
+    # Per-player: still on IL iff most recent IL placement is AFTER most recent activation.
+    latestIL  <- tapply(ils$txn_date,  ils$mlb_id, max)
+    latestAct <- tapply(acts$txn_date, acts$mlb_id, max)
+    matched   <- latestAct[names(latestIL)]
+    stillOn   <- names(latestIL)[is.na(matched) | latestIL > matched]
+    stillIds  <- suppressWarnings(as.integer(stillOn))
+    onIL <- ils[ils$mlb_id %in% stillIds, , drop = FALSE]
+    onIL <- onIL[order(onIL$mlb_id, onIL$txn_date, decreasing = TRUE), , drop = FALSE]
+    onIL <- onIL[!duplicated(onIL$mlb_id), , drop = FALSE]
+    onIL[, c("txn_date","mlb_id","player","type","description")]
+  }
 } else {
-  data.frame()
+  data.frame(txn_date = character(0), mlb_id = integer(0),
+             player = character(0), type = character(0),
+             description = character(0), stringsAsFactors = FALSE)
 }
 
 # Prospect FV + tool grades, filtered to Guardians org.
