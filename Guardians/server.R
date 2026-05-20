@@ -89,16 +89,18 @@ shinyServer(function(input, output, session) {
     # Render the SVG diamond as a raw string. The 600x600 viewBox scales
     # responsively via max-width on the wrapper.
     esc <- function(s) htmltools::htmlEscape(s, attribute = FALSE)
-    playersAt <- function(slot, x, y) {
+    playersAt <- function(slot, x, y, upward = FALSE) {
       pl <- grouped[[slot]]
       if (is.null(pl) || length(pl) == 0) return("")
-      # Position label above the names.
+      step <- if (upward) -14 else 14
+      # Label sits opposite the stack direction (above for down, below for up)
+      # so it never collides with the names.
+      labelY <- if (upward) y + 14 else y - 14
       label <- sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">%s</text>',
-                       x, y - 14, slot)
-      # Player names stacked vertically, centered.
+                       x, labelY, slot)
       names <- paste(vapply(seq_along(pl), function(j) {
         sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="12" stroke="#0F223E" stroke-width="0.3" paint-order="stroke">%s</text>',
-                x, y + (j - 1) * 14, esc(pl[j]))
+                x, y + (j - 1) * step, esc(pl[j]))
       }, character(1)), collapse = "")
       paste0(label, names)
     }
@@ -130,7 +132,7 @@ shinyServer(function(input, output, session) {
       # Mound circle stays as a visual element; pitcher names live in the
       # SP/RP columns to the right of the diamond.
       '<text x="300" y="385" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">P</text>',
-      playersAt("C",  300, 580),
+      playersAt("C",  300, 580, upward = TRUE),
       '</svg>'
     )
 
