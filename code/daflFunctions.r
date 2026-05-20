@@ -1867,3 +1867,35 @@ resolveGuardiansAffiliates <- function(cachePath = "../data/guardiansAffiliates.
   out
 }
 
+# Pull today's roster for every Guardians affiliate. Returns a data frame
+# with one row per (player, level). team_id is the affiliate id; level is
+# MLB / AAA / AA / A+ / A / ACL / DSL.
+#
+# Uses baseballr::mlb_rosters (not mlb_team_roster — that name doesn't exist
+# in baseballr 1.6.0).
+pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
+                                season = cyear) {
+  rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
+    af <- affiliates[i, ]
+    tryCatch({
+      r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
+                                                   season = as.integer(season),
+                                                   roster_type = "fullSeason"))
+      if (is.null(r) || nrow(r) == 0) return(NULL)
+      data.frame(
+        mlb_id  = as.integer(r$person_id),
+        player  = r$person_full_name,
+        pos     = r$position_abbreviation,
+        level   = af$level,
+        team_id = af$team_id,
+        stringsAsFactors = FALSE
+      )
+    }, error = function(e) {
+      warning("pullGuardiansRoster: ", af$level, " (", af$team_id, ") failed: ",
+              e$message)
+      NULL
+    })
+  })
+  do.call(rbind, rosters)
+}
+
