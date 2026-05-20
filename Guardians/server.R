@@ -100,10 +100,11 @@ shinyServer(function(input, output, session) {
                   zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
                   d3(st$avg[1]), d3(st$obp[1]), d3(ops))
         } else if (st$role[1] == "P" && !is.na(st$era[1])) {
-          sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
-                  st$era[1],
-                  ifelse(is.na(st$k9[1]), 0, st$k9[1]),
-                  ifelse(is.na(st$whip[1]), 0, st$whip[1]))
+          sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
+                  zr(st$ip[1]),
+                  zi(st$w[1]), zi(st$l[1]),
+                  zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]),
+                  zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
         } else ""
       }
       df <- data.frame(
@@ -146,7 +147,8 @@ shinyServer(function(input, output, session) {
       mutate(role = ifelse(pos %in% pitchPos, "P", "H")) %>%
       left_join(gHot %>% select(mlb_id, hotscore), by = "mlb_id") %>%
       left_join(gStats %>% select(mlb_id, ab, r, hr, rbi, sb,
-                                  avg, obp, slg, era, k9, whip),
+                                  avg, obp, slg,
+                                  ip, w, l, sv, hld, so, era, k9, whip),
                 by = "mlb_id")
     if (input$gHotRole != "A") df <- df %>% filter(role == input$gHotRole)
     if (input$gHotLevel != "All") df <- df %>% filter(level == input$gHotLevel)
@@ -166,10 +168,16 @@ shinyServer(function(input, output, session) {
                           ifelse(is.na(rbi), 0L, as.integer(rbi)),
                           ifelse(is.na(sb), 0L, as.integer(sb)),
                           d3(avg), d3(obp), d3(ops)),
-                  sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
+                  sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
+                          ifelse(is.na(ip), 0, ip),
+                          ifelse(is.na(w), 0L, as.integer(w)),
+                          ifelse(is.na(l), 0L, as.integer(l)),
+                          ifelse(is.na(so), 0L, as.integer(so)),
+                          ifelse(is.na(sv), 0L, as.integer(sv)),
+                          ifelse(is.na(hld), 0L, as.integer(hld)),
                           ifelse(is.na(era), 0, era),
-                          ifelse(is.na(k9), 0, k9),
-                          ifelse(is.na(whip), 0, whip)))) %>%
+                          ifelse(is.na(whip), 0, whip),
+                          ifelse(is.na(k9), 0, k9)))) %>%
       arrange(desc(!is.na(hotscore)), desc(hotscore)) %>%
       select(Player = player, Lvl = level, Pos = pos, Age = age,
              Season, HotScore = hotscore)
