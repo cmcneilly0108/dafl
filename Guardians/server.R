@@ -132,30 +132,35 @@ shinyServer(function(input, output, session) {
   output$gHotTable <- DT::renderDataTable({
     rv$refreshCount
     req(input$gHotRole, input$gHotLevel)
-    df <- gHot
+    # Start from the roster so EVERY currently-active player shows up, even
+    # those under the PA/IP threshold for a hot score (recent call-ups, etc.).
+    # Left join gHot for the score (NA when not qualified) and gStats for the
+    # season line.
+    pitchPos <- c("P","SP","RP","CL","MR","TWP")
+    df <- gRoster %>%
+      mutate(role = ifelse(pos %in% pitchPos, "P", "H")) %>%
+      left_join(gHot %>% select(mlb_id, hotscore), by = "mlb_id") %>%
+      left_join(gStats %>% select(mlb_id, avg, hr, obp, era, k9, whip),
+                by = "mlb_id")
     if (input$gHotRole != "A") df <- df %>% filter(role == input$gHotRole)
     if (input$gHotLevel != "All") df <- df %>% filter(level == input$gHotLevel)
     if (nrow(df) == 0) {
-      return(datatable(data.frame(Note = "No hot/cold data for this filter"),
+      return(datatable(data.frame(Note = "No players match this filter"),
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
-    # Join in player name + a short window-line from gStats for context.
     df <- df %>%
-      left_join(gRoster %>% select(mlb_id, player, pos, age), by = "mlb_id") %>%
-      left_join(gStats  %>% select(mlb_id, avg, hr, obp, era, k9, whip),
-                by = "mlb_id") %>%
-      mutate(WindowLine = ifelse(role == "H",
-                  sprintf(".%s / %d HR / %.3f OBP",
+      mutate(Season = ifelse(role == "H",
+                  sprintf(".%s / %d HR / .%s OBP",
                           sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(avg), 0, avg))),
                           ifelse(is.na(hr), 0, as.integer(hr)),
-                          ifelse(is.na(obp), 0, obp)),
+                          sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(obp), 0, obp)))),
                   sprintf("%.2f ERA / %.1f K/9 / %.2f WHIP",
                           ifelse(is.na(era), 0, era),
                           ifelse(is.na(k9), 0, k9),
                           ifelse(is.na(whip), 0, whip)))) %>%
-      arrange(desc(hotscore)) %>%
+      arrange(desc(!is.na(hotscore)), desc(hotscore)) %>%
       select(Player = player, Lvl = level, Pos = pos, Age = age,
-             `Window line` = WindowLine, HotScore = hotscore)
+             Season, HotScore = hotscore)
 
     datatable(df,
               options = list(pageLength = 25, autoWidth = FALSE),
