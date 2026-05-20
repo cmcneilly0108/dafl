@@ -2058,10 +2058,11 @@ pullGuardiansTransactions <- function(affiliates = resolveGuardiansAffiliates(),
   )
 }
 
-# Pull last-30-day game logs for one player (used by HotScore). Tries FG MiLB
-# endpoint first (covers all MiLB levels). Returns a data frame with at least
-# `date`, `g` (games), and the role-specific counting stats. On any failure
-# returns NULL so the caller can skip the player without crashing.
+# Pull last-30-day game logs for one player (used by HotScore). Calls the FG
+# MiLB game-log endpoint, which covers all MiLB levels. Returns the raw FG
+# columns plus a normalised `gl_date` (Date) column for date filtering.
+# Returns NULL on missing id, no rows, or any failure so the caller can skip
+# the player without crashing.
 pullGuardiansGameLogs <- function(fg_id, role, season = cyear) {
   if (is.na(fg_id) || !nzchar(as.character(fg_id))) return(NULL)
   tryCatch({
