@@ -2087,3 +2087,71 @@ pullGuardiansGameLogs <- function(fg_id, role, season = cyear) {
   })
 }
 
+# Compute a daily hot score per (player, level, window). Cohort = all players
+# at the same level (so an A+ player is scored against A+ peers).
+#
+# Args:
+#   roster: data.frame with columns mlb_id, fg_id, level, role
+#   logsByPlayer: named list of game-log data frames keyed by mlb_id (as char)
+#   windows: integer vector of window sizes in days, e.g. c(7, 14, 30)
+#
+# Returns: long data.frame (mlb_id, level, role, window_days, hotscore)
+computeGuardiansHotscore <- function(roster, logsByPlayer, windows = c(7, 14, 30)) {
+  perPlayerWindow <- function(playerRow, win) {
+    pid <- as.character(playerRow$mlb_id)
+    logs <- logsByPlayer[[pid]]
+    if (is.null(logs)) return(NULL)
+    sub <- logs[logs$gl_date >= Sys.Date() - win, , drop = FALSE]
+    if (nrow(sub) == 0) return(NULL)
+    # Per-game core metric. Hitters: OPS-style ((H+BB)/PA * 1.2 + TB/AB).
+    # Pitchers: K - BB - 2*HR (per-game). Both crude but cohort-relative.
+    if (playerRow$role == "H") {
+      pa <- sum(suppressWarnings(as.numeric(sub$PA)), na.rm = TRUE)
+      ab <- sum(suppressWarnings(as.numeric(sub$AB)), na.rm = TRUE)
+      h  <- sum(suppressWarnings(as.numeric(sub$H)),  na.rm = TRUE)
+      bb <- sum(suppressWarnings(as.numeric(sub$BB)), na.rm = TRUE)
+      tb <- sum(suppressWarnings(as.numeric(sub$TB)), na.rm = TRUE)
+      if (pa < 5 || ab == 0) return(NULL)
+      metric <- ((h + bb) / pa) * 1.2 + (tb / ab)
+    } else {
+      ip <- sum(suppressWarnings(as.numeric(sub$IP)), na.rm = TRUE)
+      so <- sum(suppressWarnings(as.numeric(sub$SO)), na.rm = TRUE)
+      bb <- sum(suppressWarnings(as.numeric(sub$BB)), na.rm = TRUE)
+      hr <- sum(suppressWarnings(as.numeric(sub$HR)), na.rm = TRUE)
+      if (ip < 3) return(NULL)
+      metric <- (so - bb - 2 * hr) / ip
+    }
+    data.frame(mlb_id = playerRow$mlb_id, level = playerRow$level,
+               role = playerRow$role, window_days = win, metric = metric,
+               stringsAsFactors = FALSE)
+  }
+
+  rows <- list()
+  for (i in seq_len(nrow(roster))) {
+    for (w in windows) {
+      r <- perPlayerWindow(roster[i, ], w)
+      if (!is.null(r)) rows[[length(rows) + 1]] <- r
+    }
+  }
+  if (length(rows) == 0) {
+    return(data.frame(mlb_id = integer(0), level = character(0),
+                      role = character(0), window_days = integer(0),
+                      hotscore = numeric(0), stringsAsFactors = FALSE))
+  }
+  raw <- do.call(rbind, rows)
+  # Z-score WITHIN (level, role, window_days). At least 3 players needed for
+  # a meaningful sd; otherwise hotscore = 0.
+  raw$hotscore <- NA_real_
+  groups <- split(seq_len(nrow(raw)), list(raw$level, raw$role, raw$window_days),
+                  drop = TRUE)
+  for (idx in groups) {
+    vals <- raw$metric[idx]
+    if (length(vals) >= 3 && sd(vals, na.rm = TRUE) > 0) {
+      raw$hotscore[idx] <- (vals - mean(vals, na.rm = TRUE)) / sd(vals, na.rm = TRUE)
+    } else {
+      raw$hotscore[idx] <- 0
+    }
+  }
+  raw[, c("mlb_id", "level", "role", "window_days", "hotscore")]
+}
+
