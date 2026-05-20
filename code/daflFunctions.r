@@ -1888,13 +1888,12 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
     af <- affiliates[i, ]
     tryCatch({
-      # MLB → active 26-man only. 40-man optionees will appear at their actual
-      # MiLB level via fullSeason. IL players are surfaced separately in the
-      # Risers & Transactions tab.
-      rosterType <- if (identical(af$level, "MLB")) "active" else "fullSeason"
+      # roster_type="active" at every level → each player appears only at the
+      # level they're currently playing at. IL players are surfaced separately
+      # in the Risers & Transactions tab.
       r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
                                                    season = as.integer(season),
-                                                   roster_type = rosterType))
+                                                   roster_type = "active"))
       if (is.null(r) || nrow(r) == 0) return(NULL)
       data.frame(
         mlb_id  = as.integer(r$person_id),
