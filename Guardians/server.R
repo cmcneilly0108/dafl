@@ -250,9 +250,91 @@ shinyServer(function(input, output, session) {
                     line = list(width = 3), marker = list(size = 8))
   })
 
-  output$gRisers      <- DT::renderDataTable({ datatable(data.frame()) })
-  output$gTxnTable    <- DT::renderDataTable({ datatable(data.frame()) })
-  output$gILTable     <- DT::renderDataTable({ datatable(data.frame()) })
+  # Risers: players whose 14d HotScore has been > 0 for 3+ consecutive
+  # snapshots, OR whose level moved up in the last 7 days.
+  output$gRisers <- DT::renderDataTable({
+    rv$refreshCount
+    if (nrow(gTrend) == 0) {
+      return(datatable(data.frame(Note = "Not enough history yet for risers."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    # Streaks on 14d HotScore
+    t14 <- gTrend %>%
+      filter(window_days == 14) %>%
+      mutate(snapshot_date = as.Date(snapshot_date)) %>%
+      arrange(mlb_id, snapshot_date)
+    streaks <- t14 %>%
+      group_by(mlb_id) %>%
+      summarise(latest = tail(snapshot_date, 1),
+                streak = {
+                  s <- rev(hotscore > 0)
+                  rl <- rle(s)
+                  if (length(rl$values) == 0 || !isTRUE(rl$values[1])) 0L
+                  else as.integer(rl$lengths[1])
+                },
+                .groups = "drop") %>%
+      filter(streak >= 3, latest >= Sys.Date() - 1) %>%
+      left_join(gRoster %>% select(mlb_id, player, pos, level), by = "mlb_id") %>%
+      mutate(reason = paste0(streak, " consecutive positive HotScores")) %>%
+      select(Player = player, Pos = pos, Lvl = level, Reason = reason)
+
+    # Promotions in the last 7 days (level went up)
+    promos <- tryCatch({
+      conn3 <- dbConnect(RSQLite::SQLite(), "../code/DAFL.db")
+      on.exit(dbDisconnect(conn3))
+      hist <- dbGetQuery(conn3, "
+        SELECT mlb_id, player, level, snapshot_date FROM GuardiansRoster
+        WHERE snapshot_date >= date(?, '-7 days')
+        ORDER BY mlb_id, snapshot_date",
+        params = list(as.character(Sys.Date())))
+      levOrder <- c("DSL"=1,"ACL"=2,"A"=3,"A+"=4,"AA"=5,"AAA"=6,"MLB"=7)
+      hist %>%
+        group_by(mlb_id) %>%
+        summarise(player = tail(player, 1),
+                  from = head(level, 1), to = tail(level, 1),
+                  .groups = "drop") %>%
+        filter(!is.na(levOrder[to]), !is.na(levOrder[from]),
+               levOrder[to] > levOrder[from]) %>%
+        mutate(Player = player, Pos = NA_character_, Lvl = to,
+               Reason = paste0("Promoted ", from, " → ", to)) %>%
+        select(Player, Pos, Lvl, Reason)
+    }, error = function(e) data.frame(Player = character(), Pos = character(),
+                                       Lvl = character(), Reason = character()))
+
+    out <- bind_rows(streaks, promos) %>%
+      distinct(Player, .keep_all = TRUE)
+    if (nrow(out) == 0) {
+      return(datatable(data.frame(Note = "No risers right now."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    datatable(out, options = list(pageLength = 15, dom = 'tip', autoWidth = FALSE),
+              rownames = FALSE)
+  })
+  output$gTxnTable <- DT::renderDataTable({
+    rv$refreshCount
+    if (nrow(gTxn) == 0) {
+      return(datatable(data.frame(Note = "No transactions in the last 14 days."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    df <- gTxn %>%
+      select(Date = txn_date, Player = player, Type = type,
+             From = from_team_id, To = to_team_id, Description = description)
+    datatable(df,
+              options = list(pageLength = 25, filter = 'top', autoWidth = FALSE),
+              filter = 'top', rownames = FALSE)
+  })
+  output$gILTable <- DT::renderDataTable({
+    rv$refreshCount
+    if (nrow(gIL) == 0) {
+      return(datatable(data.frame(Note = "No active IL placements."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    df <- gIL %>%
+      select(Date = txn_date, Player = player, Type = type, Notes = description)
+    datatable(df,
+              options = list(pageLength = 15, autoWidth = FALSE),
+              rownames = FALSE)
+  })
 
   # Populate the player picker once the pulse globals are available.
   updateSelectizeInput(session, 'gPlayerPick',
