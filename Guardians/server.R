@@ -158,7 +158,98 @@ shinyServer(function(input, output, session) {
                   backgroundColor = styleInterval(c(-0.5, 0.5),
                                                   c("#f8d7da", "#ffffff", "#d4edda")))
   })
-  output$gPlayerCard  <- renderUI({ tags$div("Pick a player.") })
+  output$gPlayerCard <- renderUI({
+    rv$refreshCount
+    nm <- input$gPlayerPick
+    if (is.null(nm) || nm == "") {
+      return(tags$div(style = "color:#888; padding:12px; font-style:italic;",
+                      "Type a name in the search box to see player details."))
+    }
+    row <- gRoster %>% filter(player == nm)
+    if (nrow(row) == 0) return(tags$div("Player not found in current roster."))
+    row <- row[1, ]
+    st <- gStats %>% filter(mlb_id == row$mlb_id)
+    pros <- gProspects %>% filter(Name == nm)
+
+    # Header
+    headerUI <- tags$div(
+      style = "padding:12px 16px; background:#0F223E; color:white; border-radius:6px 6px 0 0;",
+      tags$div(style = "font-size:20px; font-weight:bold;", row$player),
+      tags$div(style = "font-size:14px; margin-top:4px; color:#bdc3c7;",
+               paste0(row$pos, "  |  ", row$level, "  |  Age ",
+                      ifelse(is.na(row$age), "?", round(row$age, 1)),
+                      if (nrow(pros) > 0 && "FV" %in% names(pros) && !is.na(pros$FV[1]))
+                        paste0("  |  FV ", pros$FV[1]) else "",
+                      if (nrow(pros) > 0 && "Top.100" %in% names(pros) && !is.na(pros$Top.100[1]))
+                        paste0("  |  #", pros$Top.100[1], " overall") else ""))
+    )
+
+    # Hero line — current season slash or pitching summary
+    heroUI <- if (nrow(st) > 0 && st$role[1] == "H") {
+      tags$div(style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none; font-size:18px;",
+        tags$strong(sprintf(".%s / .%s / .%s",
+              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$avg[1]), 0, st$avg[1]))),
+              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$obp[1]), 0, st$obp[1]))),
+              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$slg[1]), 0, st$slg[1]))))),
+        tags$span(style = "margin-left:16px; color:#666; font-size:14px;",
+                  sprintf("%d HR · %d RBI · %d R · %d SB",
+                          ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
+                          ifelse(is.na(st$rbi[1]), 0, as.integer(st$rbi[1])),
+                          ifelse(is.na(st$r[1]), 0, as.integer(st$r[1])),
+                          ifelse(is.na(st$sb[1]), 0, as.integer(st$sb[1])))))
+    } else if (nrow(st) > 0 && st$role[1] == "P") {
+      tags$div(style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none; font-size:18px;",
+        tags$strong(sprintf("%.2f ERA · %.2f WHIP · %.1f K/9",
+              ifelse(is.na(st$era[1]),  0, st$era[1]),
+              ifelse(is.na(st$whip[1]), 0, st$whip[1]),
+              ifelse(is.na(st$k9[1]),   0, st$k9[1]))),
+        tags$span(style = "margin-left:16px; color:#666; font-size:14px;",
+                  sprintf("%d W · %d SV · %d HLD · %d K",
+                          ifelse(is.na(st$w[1]), 0, as.integer(st$w[1])),
+                          ifelse(is.na(st$sv[1]), 0, as.integer(st$sv[1])),
+                          ifelse(is.na(st$hld[1]), 0, as.integer(st$hld[1])),
+                          ifelse(is.na(st$so[1]), 0, as.integer(st$so[1])))))
+    } else {
+      tags$div(style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none; color:#888;",
+              "No season stats yet for this player.")
+    }
+
+    # Trend plot — HotScore over snapshot_date (14d window) from gTrend
+    trendDf <- gTrend %>%
+      filter(mlb_id == row$mlb_id, window_days == 14) %>%
+      mutate(snapshot_date = as.Date(snapshot_date)) %>%
+      arrange(snapshot_date)
+    trendUI <- if (nrow(trendDf) >= 5) {
+      tags$div(style = "padding:12px 16px; border:1px solid #ddd; border-top:none;",
+        tags$strong("HotScore trend (14-day window)"),
+        plotly::plotlyOutput("gPlayerTrend", height = 220))
+    } else {
+      tags$div(style = "padding:12px 16px; border:1px solid #ddd; border-top:none; color:#888; font-size:13px;",
+        "Not enough history yet for a trend chart (need 5+ daily snapshots).")
+    }
+
+    tags$div(style = "border-radius:6px; overflow:hidden;",
+             headerUI, heroUI, trendUI)
+  })
+
+  # Trend plot output — paired with the renderUI above. plotly works when the
+  # output is referenced inside a UI that's already on the page; renderUI
+  # registers the placeholder div, and renderPlotly fills it.
+  output$gPlayerTrend <- plotly::renderPlotly({
+    nm <- input$gPlayerPick
+    if (is.null(nm) || nm == "") return(NULL)
+    row <- gRoster %>% filter(player == nm)
+    if (nrow(row) == 0) return(NULL)
+    trendDf <- gTrend %>%
+      filter(mlb_id == row$mlb_id[1], window_days == 14) %>%
+      mutate(snapshot_date = as.Date(snapshot_date)) %>%
+      arrange(snapshot_date)
+    if (nrow(trendDf) < 5) return(NULL)
+    plotly::plot_ly(trendDf, x = ~snapshot_date, y = ~hotscore,
+                    type = "scatter", mode = "lines+markers",
+                    line = list(width = 3), marker = list(size = 8))
+  })
+
   output$gRisers      <- DT::renderDataTable({ datatable(data.frame()) })
   output$gTxnTable    <- DT::renderDataTable({ datatable(data.frame()) })
   output$gILTable     <- DT::renderDataTable({ datatable(data.frame()) })
