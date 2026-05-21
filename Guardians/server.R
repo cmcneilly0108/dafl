@@ -187,8 +187,9 @@ shinyServer(function(input, output, session) {
                tags$span(paste(bench, collapse = "  ·  ")))
     } else NULL
 
-    # Roster stat table for the selected level (same shape as before, just
-    # filtered to one level).
+    # Roster stat table for the selected level. Each player's Season cell
+    # is HTML: counting stats on top line, rate stats / slash line below.
+    # Renders via escape=FALSE on the DT.
     lineFor <- function(pid) {
       st <- gStats[gStats$mlb_id == pid, ]
       if (nrow(st) == 0) return("")
@@ -197,22 +198,27 @@ shinyServer(function(input, output, session) {
       d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
       if (st$role[1] == "H" && !is.na(st$avg[1])) {
         ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
-        sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
-                zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]), zi(st$rbi[1]), zi(st$sb[1]),
-                d3(st$avg[1]), d3(st$obp[1]), d3(ops))
+        top <- sprintf("%d AB · %d R · %d HR · %d RBI · %d SB",
+                       zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]),
+                       zi(st$rbi[1]), zi(st$sb[1]))
+        bot <- sprintf(".%s / .%s / .%s",
+                       d3(st$avg[1]), d3(st$obp[1]), d3(ops))
+        paste0(top, '<br><span style="color:#555;">', bot, '</span>')
       } else if (st$role[1] == "P" && !is.na(st$era[1])) {
-        sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
-                zr(st$ip[1]),
-                zi(st$w[1]), zi(st$l[1]),
-                zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]),
-                zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
+        top <- sprintf("%.1f IP · %d-%d · %d K · %d SV · %d HD",
+                       zr(st$ip[1]),
+                       zi(st$w[1]), zi(st$l[1]),
+                       zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]))
+        bot <- sprintf("%.2f ERA · %.2f WHIP · %.1f K/9",
+                       zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
+        paste0(top, '<br><span style="color:#555;">', bot, '</span>')
       } else ""
     }
     df <- data.frame(
       Player = sub$player,
       Pos = sub$pos,
       Age = ifelse(is.na(sub$age), NA_real_, round(sub$age, 1)),
-      Line = sapply(sub$mlb_id, lineFor),
+      Season = sapply(sub$mlb_id, lineFor),
       stringsAsFactors = FALSE
     )
     df <- df[order(df$Pos, df$Player), ]
@@ -255,34 +261,42 @@ shinyServer(function(input, output, session) {
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
     # OPS = OBP + SLG (computed on the fly; mlb_stats exposes OPS but not OPS+).
+    # Season cell is HTML — counting stats top line, rate stats below.
     d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(x), 0, x)))
     df <- df %>%
       mutate(ops = ifelse(is.na(obp) | is.na(slg), NA_real_, obp + slg),
              Season = ifelse(role == "H",
-                  sprintf("%d AB / %d R / %d HR / %d RBI / %d SB / .%s AVG / .%s OBP / .%s OPS",
-                          ifelse(is.na(ab), 0L, as.integer(ab)),
-                          ifelse(is.na(r), 0L, as.integer(r)),
-                          ifelse(is.na(hr), 0L, as.integer(hr)),
-                          ifelse(is.na(rbi), 0L, as.integer(rbi)),
-                          ifelse(is.na(sb), 0L, as.integer(sb)),
-                          d3(avg), d3(obp), d3(ops)),
-                  sprintf("%.1f IP / %d-%d / %d K / %d SV / %d HD / %.2f ERA / %.2f WHIP / %.1f K/9",
-                          ifelse(is.na(ip), 0, ip),
-                          ifelse(is.na(w), 0L, as.integer(w)),
-                          ifelse(is.na(l), 0L, as.integer(l)),
-                          ifelse(is.na(so), 0L, as.integer(so)),
-                          ifelse(is.na(sv), 0L, as.integer(sv)),
-                          ifelse(is.na(hld), 0L, as.integer(hld)),
-                          ifelse(is.na(era), 0, era),
-                          ifelse(is.na(whip), 0, whip),
-                          ifelse(is.na(k9), 0, k9)))) %>%
+                  paste0(
+                    sprintf("%d AB · %d R · %d HR · %d RBI · %d SB",
+                            ifelse(is.na(ab), 0L, as.integer(ab)),
+                            ifelse(is.na(r), 0L, as.integer(r)),
+                            ifelse(is.na(hr), 0L, as.integer(hr)),
+                            ifelse(is.na(rbi), 0L, as.integer(rbi)),
+                            ifelse(is.na(sb), 0L, as.integer(sb))),
+                    '<br><span style="color:#555;">',
+                    sprintf(".%s / .%s / .%s", d3(avg), d3(obp), d3(ops)),
+                    '</span>'),
+                  paste0(
+                    sprintf("%.1f IP · %d-%d · %d K · %d SV · %d HD",
+                            ifelse(is.na(ip), 0, ip),
+                            ifelse(is.na(w), 0L, as.integer(w)),
+                            ifelse(is.na(l), 0L, as.integer(l)),
+                            ifelse(is.na(so), 0L, as.integer(so)),
+                            ifelse(is.na(sv), 0L, as.integer(sv)),
+                            ifelse(is.na(hld), 0L, as.integer(hld))),
+                    '<br><span style="color:#555;">',
+                    sprintf("%.2f ERA · %.2f WHIP · %.1f K/9",
+                            ifelse(is.na(era), 0, era),
+                            ifelse(is.na(whip), 0, whip),
+                            ifelse(is.na(k9), 0, k9)),
+                    '</span>'))) %>%
       arrange(desc(!is.na(hotscore)), desc(hotscore)) %>%
       select(Player = player, Lvl = level, Pos = pos, Age = age,
              Season, HotScore = hotscore)
 
     datatable(df,
               options = list(pageLength = 25, autoWidth = FALSE),
-              rownames = FALSE) %>%
+              rownames = FALSE, escape = FALSE) %>%
       formatRound("HotScore", 2) %>%
       formatRound("Age", 0) %>%
       formatStyle("HotScore",
