@@ -43,6 +43,13 @@ shinyUI(
         mainPanel(uiOutput("gPlayerCard"), width = 9)
       )
     ),
+    tabPanel("Prospects",
+      tabsetPanel(
+        type = "tabs",
+        tabPanel("Hitters",  DT::dataTableOutput("gProspectsH")),
+        tabPanel("Pitchers", DT::dataTableOutput("gProspectsP"))
+      )
+    ),
     tabPanel("Risers & Transactions",
       tabsetPanel(
         type = "tabs",

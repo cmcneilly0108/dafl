@@ -1666,14 +1666,15 @@ getFGProspects <- function(pos = "bat", draft = NULL) {
       Pitch.Sel = Pitch_Sel, Bat.Ctrl = Bat_Ctrl,
       Plyr.Type = Player_Type, Game.Pwr = Game,
       Raw.Pwr = Raw, Ath = Athleticism,
-      FV = cFV
+      FV = cFV, ETA = cETA, Risk = cRisk
     )
   } else {
     df <- df %>% rename(
       Name = playerName, Pos = Position, Org = Team,
       Top.100 = Ovr_Rank, Org.Rk = Org_Rank,
       TJ.Date = TJDate, FB.Type = FBType,
-      Sits = Range, Tops = Touch, FV = cFV
+      Sits = Range, Tops = Touch,
+      FV = cFV, ETA = cETA, Risk = cRisk
     )
   }
 

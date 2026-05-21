@@ -12,6 +12,33 @@ shinyServer(function(input, output, session) {
 
   rv <- reactiveValues(refreshCount = 0)
 
+  # Shared helper: format a player's season stats as a two-line HTML cell.
+  # Counting stats (bold labels) on top, slash / rate stats (gray) below.
+  # Returns empty string if no stats row exists.
+  seasonLineHtml <- function(pid) {
+    st <- gStats[gStats$mlb_id == pid, ]
+    if (nrow(st) == 0) return("")
+    zi <- function(x) ifelse(is.na(x), 0L, as.integer(x))
+    zr <- function(x) ifelse(is.na(x), 0, x)
+    d3 <- function(x) sub("^0\\.", ".", sprintf("%.3f", zr(x)))
+    if (st$role[1] == "H" && !is.na(st$avg[1])) {
+      ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
+      top <- sprintf("%d <b>AB</b> · %d <b>R</b> · %d <b>HR</b> · %d <b>RBI</b> · %d <b>SB</b>",
+                     zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]),
+                     zi(st$rbi[1]), zi(st$sb[1]))
+      bot <- sprintf("%s / %s / %s", d3(st$avg[1]), d3(st$obp[1]), d3(ops))
+      paste0(top, '<br><span style="color:#555;">', bot, '</span>')
+    } else if (st$role[1] == "P" && !is.na(st$era[1])) {
+      top <- sprintf("%.1f <b>IP</b> · %d-%d · %d <b>K</b> · %d <b>SV</b> · %d <b>HD</b>",
+                     zr(st$ip[1]),
+                     zi(st$w[1]), zi(st$l[1]),
+                     zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]))
+      bot <- sprintf("%.2f <b>ERA</b> · %.2f <b>WHIP</b> · %.1f <b>K/9</b>",
+                     zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
+      paste0(top, '<br><span style="color:#555;">', bot, '</span>')
+    } else ""
+  }
+
   # --- Settings modal: Refresh button ---
   observeEvent(input$gSettingsBtn, {
     showModal(modalDialog(
@@ -486,6 +513,70 @@ shinyServer(function(input, output, session) {
               options = list(pageLength = 25, autoWidth = FALSE,
                              filter = 'top'),
               filter = 'top', rownames = FALSE)
+  })
+
+  # --- Prospects tab: Hitters / Pitchers sub-tabs ---
+  # gProspects has FG identifiers; we map to mlb_id via gRoster$fg_id to
+  # pick up the player's current level + season line. Unrostered prospects
+  # (not currently on a Cleveland affiliate active roster) still appear
+  # with NA level and empty Season cell — the FV/Rank info is the point.
+  prospectsBase <- function(role) {
+    if (nrow(gProspects) == 0) return(data.frame())
+    pr <- gProspects[gProspects$role == role, , drop = FALSE]
+    if (nrow(pr) == 0) return(data.frame())
+    rosterMap <- gRoster %>%
+      filter(!is.na(fg_id) & nzchar(fg_id)) %>%
+      transmute(fg_id = as.character(fg_id),
+                mlb_id = mlb_id,
+                Level  = level,
+                AgeR   = ifelse(is.na(age), NA_real_, round(age, 1)))
+    pr$fg_id <- as.character(pr$PlayerId)
+    out <- pr %>%
+      left_join(rosterMap, by = "fg_id") %>%
+      mutate(`Org Rk`  = suppressWarnings(as.integer(Org.Rk)),
+             FV        = suppressWarnings(as.integer(FV)),
+             `Top 100` = ifelse(is.na(suppressWarnings(as.integer(Top.100))),
+                                NA_integer_,
+                                as.integer(Top.100)),
+             ETA       = suppressWarnings(as.integer(ETA)),
+             Age       = AgeR,
+             Season    = ifelse(is.na(mlb_id), "",
+                                vapply(mlb_id, seasonLineHtml, character(1))))
+    out %>% arrange(desc(FV), `Org Rk`)
+  }
+
+  output$gProspectsH <- DT::renderDataTable({
+    rv$refreshCount
+    df <- prospectsBase("H")
+    if (nrow(df) == 0) {
+      return(datatable(data.frame(Note = "No hitter prospects available."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    df <- df %>%
+      select(`Org Rk`, Player = Name, Pos, Age, Level, FV, `Top 100`,
+             ETA, Risk,
+             Game = Game.Pwr, Raw = Raw.Pwr, Spd,
+             Season)
+    datatable(df,
+              options = list(pageLength = 25, autoWidth = FALSE, filter = 'top'),
+              filter = 'top', rownames = FALSE, escape = FALSE)
+  })
+
+  output$gProspectsP <- DT::renderDataTable({
+    rv$refreshCount
+    df <- prospectsBase("P")
+    if (nrow(df) == 0) {
+      return(datatable(data.frame(Note = "No pitcher prospects available."),
+                       options = list(dom = 't'), selection = 'none', rownames = FALSE))
+    }
+    df <- df %>%
+      select(`Org Rk`, Player = Name, Pos, Age, Level, FV, `Top 100`,
+             ETA, Risk,
+             FB, SL, CB, CH, CMD, Sits, Tops,
+             Season)
+    datatable(df,
+              options = list(pageLength = 25, autoWidth = FALSE, filter = 'top'),
+              filter = 'top', rownames = FALSE, escape = FALSE)
   })
 
   # Populate the player picker; re-runs whenever rv$refreshCount changes so

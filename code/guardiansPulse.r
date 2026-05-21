@@ -235,8 +235,10 @@ gProspects <- tryCatch({
   )
 }, error = function(e) {
   warning("gProspects failed: ", e$message)
-  data.frame(Name = character(0), FV = character(0),
-             Top.100 = integer(0), role = character(0),
+  data.frame(Name = character(0), PlayerId = character(0),
+             FV = character(0), Top.100 = integer(0),
+             Org.Rk = integer(0), ETA = integer(0), Risk = character(0),
+             role = character(0),
              stringsAsFactors = FALSE)
 })
 
