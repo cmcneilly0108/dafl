@@ -2217,11 +2217,12 @@ pullGuardiansGameLogs <- function(fg_id, role, season = cyear) {
 #          who has enough activity (pa >= 20 hitters; ip >= 5 pitchers).
 computeGuardiansHotscore <- function(roster, leagueStats) {
   metricH <- function(df) {
-    # OPS-style: ((H + BB) / PA) * 1.2 + (TB / AB).
-    # mlb_stats doesn't return total bases directly; reconstruct from slg * ab.
-    tb <- ifelse(is.na(df$slg) | is.na(df$ab), NA_real_, df$slg * df$ab)
-    metric <- ((df$h + df$bb) / df$pa) * 1.2 + (tb / df$ab)
-    df$metric <- ifelse(!is.na(df$pa) & df$pa >= 20 & !is.na(df$ab) & df$ab > 0,
+    # Weighted OPS: 1.2 * OBP + SLG. (OBP weighted slightly higher because
+    # getting on base is the primary skill.) Both columns come directly
+    # from mlb_stats, so no reconstruction needed.
+    metric <- 1.2 * df$obp + df$slg
+    df$metric <- ifelse(!is.na(df$pa) & df$pa >= 20 &
+                          !is.na(df$obp) & !is.na(df$slg),
                         metric, NA_real_)
     df
   }
