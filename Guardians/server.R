@@ -199,18 +199,18 @@ shinyServer(function(input, output, session) {
       d3 <- function(x) sub("^0\\.", ".", sprintf("%.3f", zr(x)))
       if (st$role[1] == "H" && !is.na(st$avg[1])) {
         ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
-        top <- sprintf("%d AB · %d R · %d HR · %d RBI · %d SB",
+        top <- sprintf("%d <b>AB</b> · %d <b>R</b> · %d <b>HR</b> · %d <b>RBI</b> · %d <b>SB</b>",
                        zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]),
                        zi(st$rbi[1]), zi(st$sb[1]))
         bot <- sprintf("%s / %s / %s",
                        d3(st$avg[1]), d3(st$obp[1]), d3(ops))
         paste0(top, '<br><span style="color:#555;">', bot, '</span>')
       } else if (st$role[1] == "P" && !is.na(st$era[1])) {
-        top <- sprintf("%.1f IP · %d-%d · %d K · %d SV · %d HD",
+        top <- sprintf("%.1f <b>IP</b> · %d-%d · %d <b>K</b> · %d <b>SV</b> · %d <b>HD</b>",
                        zr(st$ip[1]),
                        zi(st$w[1]), zi(st$l[1]),
                        zi(st$so[1]), zi(st$sv[1]), zi(st$hld[1]))
-        bot <- sprintf("%.2f ERA · %.2f WHIP · %.1f K/9",
+        bot <- sprintf("%.2f <b>ERA</b> · %.2f <b>WHIP</b> · %.1f <b>K/9</b>",
                        zr(st$era[1]), zr(st$whip[1]), zr(st$k9[1]))
         paste0(top, '<br><span style="color:#555;">', bot, '</span>')
       } else ""
@@ -270,7 +270,7 @@ shinyServer(function(input, output, session) {
       mutate(ops = ifelse(is.na(obp) | is.na(slg), NA_real_, obp + slg),
              Season = ifelse(role == "H",
                   paste0(
-                    sprintf("%d AB · %d R · %d HR · %d RBI · %d SB",
+                    sprintf("%d <b>AB</b> · %d <b>R</b> · %d <b>HR</b> · %d <b>RBI</b> · %d <b>SB</b>",
                             ifelse(is.na(ab), 0L, as.integer(ab)),
                             ifelse(is.na(r), 0L, as.integer(r)),
                             ifelse(is.na(hr), 0L, as.integer(hr)),
@@ -280,7 +280,7 @@ shinyServer(function(input, output, session) {
                     sprintf("%s / %s / %s", d3(avg), d3(obp), d3(ops)),
                     '</span>'),
                   paste0(
-                    sprintf("%.1f IP · %d-%d · %d K · %d SV · %d HD",
+                    sprintf("%.1f <b>IP</b> · %d-%d · %d <b>K</b> · %d <b>SV</b> · %d <b>HD</b>",
                             ifelse(is.na(ip), 0, ip),
                             ifelse(is.na(w), 0L, as.integer(w)),
                             ifelse(is.na(l), 0L, as.integer(l)),
@@ -288,7 +288,7 @@ shinyServer(function(input, output, session) {
                             ifelse(is.na(sv), 0L, as.integer(sv)),
                             ifelse(is.na(hld), 0L, as.integer(hld))),
                     '<br><span style="color:#555;">',
-                    sprintf("%.2f ERA · %.2f WHIP · %.1f K/9",
+                    sprintf("%.2f <b>ERA</b> · %.2f <b>WHIP</b> · %.1f <b>K/9</b>",
                             ifelse(is.na(era), 0, era),
                             ifelse(is.na(whip), 0, whip),
                             ifelse(is.na(k9), 0, k9)),
