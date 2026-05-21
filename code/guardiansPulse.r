@@ -164,17 +164,45 @@ gTrend  <- dbGetQuery(conn, "SELECT * FROM GuardiansHotscore ORDER BY snapshot_d
 # Current IL board from roster status. `fullRoster` returns each player with
 # their current status_description; anything starting with "Injured" is on
 # some flavor of IL (7-day, 10-day, 15-day, 60-day, etc.).
+emptyIL <- function() data.frame(
+  player = character(0), pos = character(0), age = numeric(0),
+  status = character(0), injury = character(0), update = character(0),
+  stringsAsFactors = FALSE)
+
 gIL <- if (nrow(gRoster) > 0 && "status" %in% names(gRoster)) {
   ilRows <- gRoster[grepl("^Injured", gRoster$status), , drop = FALSE]
   if (nrow(ilRows) == 0) {
-    data.frame(player = character(0), pos = character(0), level = character(0),
-               status = character(0), stringsAsFactors = FALSE)
+    emptyIL()
   } else {
-    ilRows[, c("player","pos","level","status"), drop = FALSE]
+    # Join FG roster resource injury detail (covers active-MLB-level injuries;
+    # most MiLB prospects on the 60-day IL won't be in the FG dataset and will
+    # get NA injury / update).
+    injMap <- tryCatch({
+      raw <- read.csv("../latestInjuries.csv", stringsAsFactors = FALSE)
+      pidCol <- intersect(c("playerid.x","playerid"), names(raw))[1]
+      injCol <- intersect(c("Injury"), names(raw))[1]
+      updCol <- intersect(c("Latest.Update","Latest Update"), names(raw))[1]
+      if (is.na(pidCol)) stop("no playerid column in latestInjuries.csv")
+      m <- data.frame(
+        fg_id  = as.character(raw[[pidCol]]),
+        injury = if (!is.na(injCol)) as.character(raw[[injCol]]) else NA_character_,
+        update = if (!is.na(updCol)) as.character(raw[[updCol]]) else NA_character_,
+        stringsAsFactors = FALSE
+      )
+      m <- m[!is.na(m$fg_id) & nzchar(m$fg_id), , drop = FALSE]
+      m[!duplicated(m$fg_id), , drop = FALSE]
+    }, error = function(e) {
+      warning("Could not load FG injury detail: ", e$message)
+      data.frame(fg_id = character(0), injury = character(0),
+                 update = character(0), stringsAsFactors = FALSE)
+    })
+    ilRows$fg_id <- as.character(ilRows$fg_id)
+    out <- merge(ilRows, injMap, by = "fg_id", all.x = TRUE, sort = FALSE)
+    out <- out[order(out$status, out$player), , drop = FALSE]
+    out[, c("player","pos","age","status","injury","update"), drop = FALSE]
   }
 } else {
-  data.frame(player = character(0), pos = character(0), level = character(0),
-             status = character(0), stringsAsFactors = FALSE)
+  emptyIL()
 }
 
 # Prospect FV + tool grades, filtered to Guardians org.

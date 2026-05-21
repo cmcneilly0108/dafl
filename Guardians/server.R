@@ -461,8 +461,10 @@ shinyServer(function(input, output, session) {
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
     df <- gIL %>%
-      select(Player = player, Pos = pos, Level = level, Status = status) %>%
-      arrange(Level, Player)
+      mutate(Age = ifelse(is.na(age), NA_real_, round(age, 0))) %>%
+      select(Player = player, Pos = pos, Age, Status = status,
+             Injury = injury, `Latest Update` = update) %>%
+      arrange(Player)
     datatable(df,
               options = list(pageLength = 25, autoWidth = FALSE,
                              filter = 'top'),
