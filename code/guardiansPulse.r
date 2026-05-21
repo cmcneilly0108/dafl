@@ -80,14 +80,22 @@ if (forceRefresh || !haveToday) {
 
   roster$snapshot_date <- today
 
-  # Players on multiple affiliate rosters appear more than once.
-  # Keep the highest-level assignment per player so the PK (snapshot_date, mlb_id)
-  # stays unique. Level order: MLB > AAA > AA > A+ > A > ACL > DSL.
+  # Players appear on multiple affiliate rosters once we pull fullRoster
+  # (e.g., a 40-man optionee shows up as "Reassigned to Minors" on MLB's
+  # roster AND "Active" on AAA's roster). Dedup priorities:
+  #   1. Active wins over any other status — that's where the player is
+  #      currently playing.
+  #   2. If no Active row, Injured* wins over admin statuses (so a 60-day
+  #      IL player on the 40-man stays at MLB).
+  #   3. Within the same status rank, take the highest level.
+  roster$statusRank <- ifelse(roster$status == "Active", 0L,
+                       ifelse(grepl("^Injured", roster$status), 1L, 2L))
+  roster$statusRank[is.na(roster$statusRank)] <- 3L
   roster$levelRank <- levelOrder[roster$level]
   roster$levelRank[is.na(roster$levelRank)] <- 99L
-  roster <- roster[order(roster$mlb_id, roster$levelRank), ]
+  roster <- roster[order(roster$mlb_id, roster$statusRank, roster$levelRank), ]
   roster <- roster[!duplicated(roster$mlb_id), ]
-  roster$levelRank <- NULL
+  roster$statusRank <- NULL; roster$levelRank <- NULL
 
   roster <- roster[, c("snapshot_date","mlb_id","fg_id","player","pos","level","team_id","age","status")]
   stats$snapshot_date  <- today

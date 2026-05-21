@@ -1907,14 +1907,17 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
     af <- affiliates[i, ]
     tryCatch({
-      # roster_type="fullRoster" returns every rostered player at this level
-      # with their current `status_description`: "Active", "Injured 7-Day",
-      # "Injured 60-Day", "Development List", "Not Yet Reported". The depth
-      # chart and Hot/Cold filter to status=="Active"; the IL board filters
-      # status starting with "Injured".
+      # MLB → 40Man (the actual 40-man roster: Active 26 + IL + optionees +
+      # Paternity + Restricted). At MLB, roster_type="fullRoster" wrongly
+      # returns the entire ~265-player org.
+      # MiLB → fullRoster (level-specific: Active + IL + Development List).
+      # Plain "active" would miss IL guys at that level.
+      # In both cases we get status_description per player; the depth chart
+      # filters status=="Active" and the IL board filters status LIKE Injured%.
+      rosterType <- if (identical(af$level, "MLB")) "40Man" else "fullRoster"
       r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
                                                    season = as.integer(season),
-                                                   roster_type = "fullRoster"))
+                                                   roster_type = rosterType))
       if (is.null(r) || nrow(r) == 0) return(NULL)
       data.frame(
         mlb_id  = as.integer(r$person_id),
