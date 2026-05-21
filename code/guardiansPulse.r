@@ -105,18 +105,28 @@ if (forceRefresh || !haveToday) {
   dbWriteTable(conn, "GuardiansRoster", roster, append = TRUE)
   # Stats may have duplicate mlb_id rows (player on multiple levels, or
   # position players who pitched mop-up innings). PK is (snapshot_date, mlb_id),
-  # so dedup. Prefer H (hitter) by default — position players whose only "P"
-  # row is a token mop-up inning would otherwise overwrite their real batting
-  # line. For pure pitchers, the "H" row's pa/ab will be NA/0, so fall back
-  # to the P row in that case.
+  # so dedup. Priorities:
+  #   1. The row whose level matches the player's current roster level — so
+  #      e.g. Franco Aleman currently at AAA shows his AAA stats, not the
+  #      MLB stats from his brief call-up.
+  #   2. Within ties, prefer H (hitter) — position players who threw mop-up
+  #      shouldn't override their batting line.
+  #   3. For pure pitchers the H row's pa/ab will be NA/0; fall back to P.
+  #   4. Final tiebreaker is highest level (rare case where the player isn't
+  #      currently rostered).
+  rosterLevel <- setNames(roster$level, as.character(roster$mlb_id))
+  stats$preferredLevel <- rosterLevel[as.character(stats$mlb_id)]
+  stats$matchRank <- ifelse(!is.na(stats$preferredLevel) &
+                              stats$level == stats$preferredLevel, 0L, 1L)
   stats$rolePref <- ifelse(stats$role == "H" &
                              (is.na(stats$pa) | stats$pa == 0L), 3L,
                            ifelse(stats$role == "H", 1L, 2L))
   stats$levelRank <- levelOrder[stats$level]
   stats$levelRank[is.na(stats$levelRank)] <- 99L
-  stats <- stats[order(stats$mlb_id, stats$levelRank, stats$rolePref), ]
+  stats <- stats[order(stats$mlb_id, stats$matchRank, stats$rolePref, stats$levelRank), ]
   stats <- stats[!duplicated(stats$mlb_id), ]
-  stats$levelRank <- NULL; stats$rolePref <- NULL
+  stats$preferredLevel <- NULL; stats$matchRank <- NULL
+  stats$rolePref <- NULL; stats$levelRank <- NULL
 
   dbExecute(conn, "DELETE FROM GuardiansStats  WHERE snapshot_date = ?", params = list(today))
   dbWriteTable(conn, "GuardiansStats", stats, append = TRUE)
