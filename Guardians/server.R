@@ -64,26 +64,48 @@ shinyServer(function(input, output, session) {
 
     # Categorize each player into a field slot, pitcher (split SP/RP via gs),
     # or bench. Generic "OF" players fold into the RF slot per user request.
+    # Each player also carries a sort key so within-bucket ordering reflects
+    # role / playing time, not alphabet:
+    #   - Field positions (hitters):  PA desc — regular starter first
+    #   - SP:                         IP desc — workhorse first
+    #   - RP:                         SV+HD desc — closer first, then setup
     pitchPos  <- c("P","SP","RP","CL","MR")
     fieldPos  <- c("C","1B","2B","3B","SS","LF","CF","RF")
-    grouped <- list()
-    pitchers <- list(SP = character(0), RP = character(0))
+    grouped     <- list()   # field slot -> char vec of player names
+    groupedKey  <- list()   # parallel, numeric sort key
+    pitchers    <- list(SP = character(0), RP = character(0))
+    pitchersKey <- list(SP = numeric(0),   RP = numeric(0))
     bench <- character(0)
     for (i in seq_len(nrow(sub))) {
       p <- sub$pos[i]; nm <- sub$player[i]; pid <- sub$mlb_id[i]
+      st <- gStats[gStats$mlb_id == pid, ]
       if (p %in% pitchPos) {
-        st <- gStats[gStats$mlb_id == pid, ]
         gs <- if (nrow(st) > 0 && !is.na(st$gs[1])) as.integer(st$gs[1]) else 0L
+        ip <- if (nrow(st) > 0 && !is.na(st$ip[1])) as.numeric(st$ip[1]) else 0
+        sv <- if (nrow(st) > 0 && !is.na(st$sv[1])) as.integer(st$sv[1]) else 0L
+        hd <- if (nrow(st) > 0 && !is.na(st$hld[1])) as.integer(st$hld[1]) else 0L
         era <- if (nrow(st) > 0 && !is.na(st$era[1])) sprintf(" (%.2f)", st$era[1]) else ""
         bucket <- if (gs >= 3) "SP" else "RP"
-        pitchers[[bucket]] <- c(pitchers[[bucket]], paste0(nm, era))
-      } else if (p %in% fieldPos) {
-        grouped[[p]] <- c(grouped[[p]], nm)
-      } else if (identical(p, "OF")) {
-        grouped[["RF"]] <- c(grouped[["RF"]], nm)
+        key <- if (bucket == "SP") ip else (sv + hd)
+        pitchers[[bucket]]    <- c(pitchers[[bucket]],    paste0(nm, era))
+        pitchersKey[[bucket]] <- c(pitchersKey[[bucket]], key)
+      } else if (p %in% fieldPos || identical(p, "OF")) {
+        slot <- if (identical(p, "OF")) "RF" else p
+        pa <- if (nrow(st) > 0 && !is.na(st$pa[1])) as.integer(st$pa[1]) else 0L
+        grouped[[slot]]    <- c(grouped[[slot]], nm)
+        groupedKey[[slot]] <- c(groupedKey[[slot]], pa)
       } else {
         bench <- c(bench, paste0(nm, " (", p, ")"))
       }
+    }
+    # Sort each bucket by its sort key, descending. NAs already → 0 above.
+    for (slot in names(grouped)) {
+      ord <- order(groupedKey[[slot]], decreasing = TRUE)
+      grouped[[slot]] <- grouped[[slot]][ord]
+    }
+    for (bucket in names(pitchers)) {
+      ord <- order(pitchersKey[[bucket]], decreasing = TRUE)
+      pitchers[[bucket]] <- pitchers[[bucket]][ord]
     }
 
     # Render the SVG diamond as a raw string. The 600x600 viewBox scales
