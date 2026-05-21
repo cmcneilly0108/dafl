@@ -195,13 +195,14 @@ shinyServer(function(input, output, session) {
       if (nrow(st) == 0) return("")
       zi <- function(x) ifelse(is.na(x), 0L, as.integer(x))
       zr <- function(x) ifelse(is.na(x), 0, x)
-      d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", zr(x)))
+      # Baseball slash-line format: ".299" for x<1, "1.250" for x>=1.
+      d3 <- function(x) sub("^0\\.", ".", sprintf("%.3f", zr(x)))
       if (st$role[1] == "H" && !is.na(st$avg[1])) {
         ops <- ifelse(is.na(st$obp[1]) | is.na(st$slg[1]), NA, st$obp[1] + st$slg[1])
         top <- sprintf("%d AB · %d R · %d HR · %d RBI · %d SB",
                        zi(st$ab[1]), zi(st$r[1]), zi(st$hr[1]),
                        zi(st$rbi[1]), zi(st$sb[1]))
-        bot <- sprintf(".%s / .%s / .%s",
+        bot <- sprintf("%s / %s / %s",
                        d3(st$avg[1]), d3(st$obp[1]), d3(ops))
         paste0(top, '<br><span style="color:#555;">', bot, '</span>')
       } else if (st$role[1] == "P" && !is.na(st$era[1])) {
@@ -262,7 +263,9 @@ shinyServer(function(input, output, session) {
     }
     # OPS = OBP + SLG (computed on the fly; mlb_stats exposes OPS but not OPS+).
     # Season cell is HTML — counting stats top line, rate stats below.
-    d3 <- function(x) sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(x), 0, x)))
+    # Baseball slash-line format: ".299" for x<1, "1.250" for x>=1 (OPS often
+    # crosses 1.000 for top hitters).
+    d3 <- function(x) sub("^0\\.", ".", sprintf("%.3f", ifelse(is.na(x), 0, x)))
     df <- df %>%
       mutate(ops = ifelse(is.na(obp) | is.na(slg), NA_real_, obp + slg),
              Season = ifelse(role == "H",
@@ -274,7 +277,7 @@ shinyServer(function(input, output, session) {
                             ifelse(is.na(rbi), 0L, as.integer(rbi)),
                             ifelse(is.na(sb), 0L, as.integer(sb))),
                     '<br><span style="color:#555;">',
-                    sprintf(".%s / .%s / .%s", d3(avg), d3(obp), d3(ops)),
+                    sprintf("%s / %s / %s", d3(avg), d3(obp), d3(ops)),
                     '</span>'),
                   paste0(
                     sprintf("%.1f IP · %d-%d · %d K · %d SV · %d HD",
@@ -332,10 +335,10 @@ shinyServer(function(input, output, session) {
     # Hero line — current season slash or pitching summary
     heroUI <- if (nrow(st) > 0 && st$role[1] == "H") {
       tags$div(style = "padding:12px 16px; background:#f8f9fa; border:1px solid #ddd; border-top:none; font-size:18px;",
-        tags$strong(sprintf(".%s / .%s / .%s",
-              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$avg[1]), 0, st$avg[1]))),
-              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$obp[1]), 0, st$obp[1]))),
-              sub("^0\\.", "", sprintf("%.3f", ifelse(is.na(st$slg[1]), 0, st$slg[1]))))),
+        tags$strong(sprintf("%s / %s / %s",
+              sub("^0\\.", ".", sprintf("%.3f", ifelse(is.na(st$avg[1]), 0, st$avg[1]))),
+              sub("^0\\.", ".", sprintf("%.3f", ifelse(is.na(st$obp[1]), 0, st$obp[1]))),
+              sub("^0\\.", ".", sprintf("%.3f", ifelse(is.na(st$slg[1]), 0, st$slg[1]))))),
         tags$span(style = "margin-left:16px; color:#666; font-size:14px;",
                   sprintf("%d HR · %d RBI · %d R · %d SB",
                           ifelse(is.na(st$hr[1]), 0, as.integer(st$hr[1])),
