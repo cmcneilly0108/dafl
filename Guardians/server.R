@@ -54,7 +54,8 @@ shinyServer(function(input, output, session) {
                       "No roster snapshot available."))
     }
     lvl <- input$gDepthLevel
-    sub <- gRoster[gRoster$level == lvl, ]
+    sub <- gRoster[gRoster$level == lvl &
+                   (is.na(gRoster$status) | gRoster$status == "Active"), ]
     header <- tags$h3(paste0(lvl, " (", nrow(sub), " active)"),
                       style = "margin-bottom:10px;")
     if (nrow(sub) == 0) {
@@ -240,6 +241,7 @@ shinyServer(function(input, output, session) {
     # season line.
     pitchPos <- c("P","SP","RP","CL","MR","TWP")
     df <- gRoster %>%
+      filter(is.na(status) | status == "Active") %>%
       mutate(role = ifelse(pos %in% pitchPos, "P", "H")) %>%
       left_join(gHot %>% select(mlb_id, hotscore), by = "mlb_id") %>%
       left_join(gStats %>% select(mlb_id, ab, r, hr, rbi, sb,
@@ -413,6 +415,7 @@ shinyServer(function(input, output, session) {
       hist <- dbGetQuery(conn3, "
         SELECT mlb_id, player, level, snapshot_date FROM GuardiansRoster
         WHERE snapshot_date >= date(?, '-7 days')
+          AND (status IS NULL OR status = 'Active')
         ORDER BY mlb_id, snapshot_date",
         params = list(as.character(Sys.Date())))
       levOrder <- c("DSL"=1,"ACL"=2,"A"=3,"A+"=4,"AA"=5,"AAA"=6,"MLB"=7)
@@ -458,10 +461,12 @@ shinyServer(function(input, output, session) {
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
     df <- gIL %>%
-      select(Date = txn_date, Player = player, Type = type, Notes = description)
+      select(Player = player, Pos = pos, Level = level, Status = status) %>%
+      arrange(Level, Player)
     datatable(df,
-              options = list(pageLength = 15, autoWidth = FALSE),
-              rownames = FALSE)
+              options = list(pageLength = 25, autoWidth = FALSE,
+                             filter = 'top'),
+              filter = 'top', rownames = FALSE)
   })
 
   # Populate the player picker; re-runs whenever rv$refreshCount changes so

@@ -1761,8 +1761,18 @@ initGuardiansDB <- function(dbPath = "DAFL.db") {
       level         TEXT,
       team_id       INTEGER,
       age           REAL,
+      status        TEXT,
       PRIMARY KEY (snapshot_date, mlb_id)
     )")
+
+  # Add status column to existing GuardiansRoster if schema predates it.
+  rosterCols <- tryCatch(
+    dbGetQuery(conn, "PRAGMA table_info(GuardiansRoster)"),
+    error = function(e) NULL
+  )
+  if (!is.null(rosterCols) && !"status" %in% rosterCols$name) {
+    dbExecute(conn, "ALTER TABLE GuardiansRoster ADD COLUMN status TEXT")
+  }
 
   dbExecute(conn, "
     CREATE TABLE IF NOT EXISTS GuardiansStats (
@@ -1897,12 +1907,14 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   rosters <- lapply(seq_len(nrow(affiliates)), function(i) {
     af <- affiliates[i, ]
     tryCatch({
-      # roster_type="active" at every level → each player appears only at the
-      # level they're currently playing at. IL players are surfaced separately
-      # in the Risers & Transactions tab.
+      # roster_type="fullRoster" returns every rostered player at this level
+      # with their current `status_description`: "Active", "Injured 7-Day",
+      # "Injured 60-Day", "Development List", "Not Yet Reported". The depth
+      # chart and Hot/Cold filter to status=="Active"; the IL board filters
+      # status starting with "Injured".
       r <- suppressMessages(baseballr::mlb_rosters(team_id = af$team_id,
                                                    season = as.integer(season),
-                                                   roster_type = "active"))
+                                                   roster_type = "fullRoster"))
       if (is.null(r) || nrow(r) == 0) return(NULL)
       data.frame(
         mlb_id  = as.integer(r$person_id),
@@ -1910,6 +1922,7 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
         pos     = r$position_abbreviation,
         level   = af$level,
         team_id = af$team_id,
+        status  = if ("status_description" %in% names(r)) as.character(r$status_description) else NA_character_,
         stringsAsFactors = FALSE
       )
     }, error = function(e) {
@@ -1922,7 +1935,8 @@ pullGuardiansRoster <- function(affiliates = resolveGuardiansAffiliates(),
   if (length(rosters) == 0) {
     return(data.frame(mlb_id = integer(0), player = character(0),
                       pos = character(0), level = character(0),
-                      team_id = integer(0), stringsAsFactors = FALSE))
+                      team_id = integer(0), status = character(0),
+                      stringsAsFactors = FALSE))
   }
   do.call(rbind, rosters)
 }

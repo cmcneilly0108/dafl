@@ -89,7 +89,7 @@ if (forceRefresh || !haveToday) {
   roster <- roster[!duplicated(roster$mlb_id), ]
   roster$levelRank <- NULL
 
-  roster <- roster[, c("snapshot_date","mlb_id","fg_id","player","pos","level","team_id","age")]
+  roster <- roster[, c("snapshot_date","mlb_id","fg_id","player","pos","level","team_id","age","status")]
   stats$snapshot_date  <- today
 
   # Idempotent upserts. SQLite REPLACE works because PK is (snapshot_date, mlb_id).
@@ -161,36 +161,20 @@ gTxn    <- dbGetQuery(conn,
   params = list(today))
 gTrend  <- dbGetQuery(conn, "SELECT * FROM GuardiansHotscore ORDER BY snapshot_date")
 
-# Compute current IL board by walking the full transactions table forward.
-allTxn <- dbGetQuery(conn, "SELECT * FROM GuardiansTransactions ORDER BY txn_date")
-gIL <- if (nrow(allTxn) > 0) {
-  # IL placements come through as type="Status Change" — search descriptions.
-  # Match "injured list" / "IL" / "Disabled List" with a phrase that implies
-  # *placement* (not transfer or activation).
-  ils  <- allTxn[grepl("placed.*(injured list|disabled list|IL\\b)|transferred.*injured list",
-                        allTxn$description, ignore.case = TRUE), ]
-  acts <- allTxn[grepl("activated.*(injured list|disabled list|IL\\b)|reinstated",
-                        allTxn$description, ignore.case = TRUE), ]
-  if (nrow(ils) == 0) {
-    data.frame(txn_date = character(0), mlb_id = integer(0),
-               player = character(0), type = character(0),
-               description = character(0), stringsAsFactors = FALSE)
+# Current IL board from roster status. `fullRoster` returns each player with
+# their current status_description; anything starting with "Injured" is on
+# some flavor of IL (7-day, 10-day, 15-day, 60-day, etc.).
+gIL <- if (nrow(gRoster) > 0 && "status" %in% names(gRoster)) {
+  ilRows <- gRoster[grepl("^Injured", gRoster$status), , drop = FALSE]
+  if (nrow(ilRows) == 0) {
+    data.frame(player = character(0), pos = character(0), level = character(0),
+               status = character(0), stringsAsFactors = FALSE)
   } else {
-    # Per-player: still on IL iff most recent IL placement is AFTER most recent activation.
-    latestIL  <- tapply(ils$txn_date,  ils$mlb_id, max)
-    latestAct <- tapply(acts$txn_date, acts$mlb_id, max)
-    matched   <- latestAct[names(latestIL)]
-    stillOn   <- names(latestIL)[is.na(matched) | latestIL > matched]
-    stillIds  <- suppressWarnings(as.integer(stillOn))
-    onIL <- ils[ils$mlb_id %in% stillIds, , drop = FALSE]
-    onIL <- onIL[order(onIL$mlb_id, onIL$txn_date, decreasing = TRUE), , drop = FALSE]
-    onIL <- onIL[!duplicated(onIL$mlb_id), , drop = FALSE]
-    onIL[, c("txn_date","mlb_id","player","type","description")]
+    ilRows[, c("player","pos","level","status"), drop = FALSE]
   }
 } else {
-  data.frame(txn_date = character(0), mlb_id = integer(0),
-             player = character(0), type = character(0),
-             description = character(0), stringsAsFactors = FALSE)
+  data.frame(player = character(0), pos = character(0), level = character(0),
+             status = character(0), stringsAsFactors = FALSE)
 }
 
 # Prospect FV + tool grades, filtered to Guardians org.

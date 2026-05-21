@@ -44,11 +44,12 @@ shinyUI(
       )
     ),
     tabPanel("Risers & Transactions",
-      h3("Risers"), DT::dataTableOutput("gRisers"),
-      tags$hr(),
-      h3("Recent Transactions (last 14 days)"), DT::dataTableOutput("gTxnTable"),
-      tags$hr(),
-      h3("Current IL"), DT::dataTableOutput("gILTable")
+      tabsetPanel(
+        type = "tabs",
+        tabPanel("Risers", DT::dataTableOutput("gRisers")),
+        tabPanel("Transactions", DT::dataTableOutput("gTxnTable")),
+        tabPanel("IL", DT::dataTableOutput("gILTable"))
+      )
     )
   )
 )
