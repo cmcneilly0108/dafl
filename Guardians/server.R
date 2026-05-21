@@ -85,7 +85,7 @@ shinyServer(function(input, output, session) {
         ip <- if (nrow(st) > 0 && !is.na(st$ip[1])) as.numeric(st$ip[1]) else 0
         sv <- if (nrow(st) > 0 && !is.na(st$sv[1])) as.integer(st$sv[1]) else 0L
         hd <- if (nrow(st) > 0 && !is.na(st$hld[1])) as.integer(st$hld[1]) else 0L
-        era <- if (nrow(st) > 0 && !is.na(st$era[1])) sprintf(" (%.2f)", st$era[1]) else ""
+        era <- if (nrow(st) > 0 && !is.na(st$era[1])) sprintf(" (%.2f ERA)", st$era[1]) else ""
         bucket <- if (gs >= 3) "SP" else "RP"
         key <- if (bucket == "SP") ip else (sv + hd)
         pitchers[[bucket]]    <- c(pitchers[[bucket]],    paste0(nm, era))
