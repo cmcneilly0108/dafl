@@ -2227,9 +2227,14 @@ computeGuardiansHotscore <- function(roster, leagueStats) {
     df
   }
   metricP <- function(df) {
-    # (SO - BB - 2*HR) / IP, per inning.
-    metric <- (df$so - df$bb_p - 2 * df$hr) / df$ip
-    df$metric <- ifelse(!is.na(df$ip) & df$ip >= 5, metric, NA_real_)
+    # FIP-style (no HBP): (13*HR + 3*BB - 2*K) / IP. The league constant
+    # that turns raw FIP into ERA-scale cancels in the z-score so we drop it.
+    # Lower is better in real FIP, so negate for "higher = hotter" orientation
+    # consistent with hitters.
+    metric <- -1 * (13 * df$hr + 3 * df$bb_p - 2 * df$so) / df$ip
+    df$metric <- ifelse(!is.na(df$ip) & df$ip >= 5 &
+                          !is.na(df$hr) & !is.na(df$bb_p) & !is.na(df$so),
+                        metric, NA_real_)
     df
   }
   zscoreByLevel <- function(df) {
