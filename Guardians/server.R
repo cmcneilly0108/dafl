@@ -425,31 +425,33 @@ shinyServer(function(input, output, session) {
                     line = list(width = 3), marker = list(size = 8))
   })
 
-  # Risers: players whose 14d HotScore has been > 0 for 3+ consecutive
-  # snapshots, OR whose level moved up in the last 7 days.
+  # Risers: players whose HotScore is trending up over the last 7 days
+  # (latest − earliest ≥ 0.3 AND currently > 0), OR whose level moved up
+  # in the last 7 days.
   output$gRisers <- DT::renderDataTable({
     rv$refreshCount
     if (nrow(gTrend) == 0) {
       return(datatable(data.frame(Note = "Not enough history yet for risers."),
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
-    # Streaks on HotScore
-    t14 <- gTrend %>%
+    # Trend on HotScore over the last 7 days. For each player: take the
+    # earliest and latest snapshot in window, require an improvement of
+    # at least 0.3 std-devs AND that the current score is still positive.
+    trend <- gTrend %>%
       mutate(snapshot_date = as.Date(snapshot_date)) %>%
+      filter(snapshot_date >= Sys.Date() - 7) %>%
       arrange(mlb_id, snapshot_date)
-    streaks <- t14 %>%
+    streaks <- trend %>%
       group_by(mlb_id) %>%
-      summarise(latest = tail(snapshot_date, 1),
-                streak = {
-                  s <- rev(hotscore > 0)
-                  rl <- rle(s)
-                  if (length(rl$values) == 0 || !isTRUE(rl$values[1])) 0L
-                  else as.integer(rl$lengths[1])
-                },
+      summarise(latest      = tail(snapshot_date, 1),
+                first_score = head(hotscore, 1),
+                last_score  = tail(hotscore, 1),
+                delta       = tail(hotscore, 1) - head(hotscore, 1),
                 .groups = "drop") %>%
-      filter(streak >= 3, latest >= Sys.Date() - 1) %>%
+      filter(delta >= 0.3, last_score > 0, latest >= Sys.Date() - 1) %>%
       left_join(gRoster %>% select(mlb_id, player, pos, level), by = "mlb_id") %>%
-      mutate(reason = paste0(streak, " consecutive positive HotScores")) %>%
+      mutate(reason = sprintf("HotScore %+.2f → %+.2f (Δ %+.2f)",
+                              first_score, last_score, delta)) %>%
       select(Player = player, Pos = pos, Lvl = level, Reason = reason)
 
     # Promotions in the last 7 days (level went up)
