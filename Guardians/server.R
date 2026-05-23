@@ -449,6 +449,7 @@ shinyServer(function(input, output, session) {
                 delta       = tail(hotscore, 1) - head(hotscore, 1),
                 .groups = "drop") %>%
       filter(delta >= 0.3, last_score > 0, latest >= Sys.Date() - 1) %>%
+      arrange(desc(delta)) %>%
       left_join(gRoster %>% select(mlb_id, player, pos, level), by = "mlb_id") %>%
       mutate(reason = sprintf("HotScore %+.2f → %+.2f (Δ %+.2f)",
                               first_score, last_score, delta)) %>%
