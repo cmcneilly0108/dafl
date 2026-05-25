@@ -167,6 +167,8 @@ shinyServer(function(input, output,session) {
     showNotification("Reloading from disk...", type = "message", duration = NULL, id = "reloadMsg")
     tryCatch({
       source("../code/inSeasonPulse.r", local = globalenv())
+      message("[reload] dstandfull leader: ",
+              paste(dstandfull[1, ], collapse = " / "))
       teams <<- sort(unique(RTot$Team))
       updateSelectizeInput(session, 'e1', choices = teams, selected = 'Liquor Crickets')
       updateSelectizeInput(session, 'teamSelect', choices = teams, selected = 'Liquor Crickets')
