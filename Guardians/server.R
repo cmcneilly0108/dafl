@@ -519,23 +519,36 @@ shinyServer(function(input, output, session) {
   })
 
   # --- Prospects tab: Hitters / Pitchers sub-tabs ---
-  # gProspects has FG identifiers; we map to mlb_id via gRoster$fg_id to
-  # pick up the player's current level + season line. Unrostered prospects
-  # (not currently on a Cleveland affiliate active roster) still appear
-  # with NA level and empty Season cell — the FV/Rank info is the point.
+  # gProspects has FG identifiers; we map to mlb_id via gRoster to pick up the
+  # player's current level + season line. Top prospects (Bazzana, Genao, etc.)
+  # often have FG "sa..." PlayerIds that aren't in the Chadwick fg_id crosswalk,
+  # so most gRoster rows have NA fg_id. We join on fg_id when both sides have
+  # one, then fall back to a normalized player name for everyone else.
   prospectsBase <- function(role) {
     if (nrow(gProspects) == 0) return(data.frame())
     pr <- gProspects[gProspects$role == role, , drop = FALSE]
     if (nrow(pr) == 0) return(data.frame())
-    rosterMap <- gRoster %>%
+    normName <- function(x) tolower(trimws(gsub("\\s+", " ", x)))
+    rosterById <- gRoster %>%
       filter(!is.na(fg_id) & nzchar(fg_id)) %>%
-      transmute(fg_id = as.character(fg_id),
-                mlb_id = mlb_id,
-                Level  = level,
-                AgeR   = ifelse(is.na(age), NA_real_, round(age, 1)))
-    pr$fg_id <- as.character(pr$PlayerId)
+      transmute(fg_id    = as.character(fg_id),
+                mlb_id_i = mlb_id,
+                Level_i  = level,
+                AgeR_i   = ifelse(is.na(age), NA_real_, round(age, 1)))
+    rosterByName <- gRoster %>%
+      transmute(name_key = normName(player),
+                mlb_id_n = mlb_id,
+                Level_n  = level,
+                AgeR_n   = ifelse(is.na(age), NA_real_, round(age, 1))) %>%
+      distinct(name_key, .keep_all = TRUE)
+    pr$fg_id    <- as.character(pr$PlayerId)
+    pr$name_key <- normName(pr$Name)
     out <- pr %>%
-      left_join(rosterMap, by = "fg_id") %>%
+      left_join(rosterById,   by = "fg_id") %>%
+      left_join(rosterByName, by = "name_key") %>%
+      mutate(mlb_id = ifelse(is.na(mlb_id_i), mlb_id_n, mlb_id_i),
+             Level  = ifelse(is.na(Level_i),  Level_n,  Level_i),
+             AgeR   = ifelse(is.na(AgeR_i),   AgeR_n,   AgeR_i)) %>%
       mutate(`Org Rk`  = suppressWarnings(as.integer(Org.Rk)),
              FV        = suppressWarnings(as.integer(FV)),
              `Top 100` = ifelse(is.na(suppressWarnings(as.integer(Top.100))),
@@ -560,8 +573,13 @@ shinyServer(function(input, output, session) {
              ETA, Risk,
              Game = Game.Pwr, Raw = Raw.Pwr, Spd,
              Season)
+    # Player (col 1) and Season (col 12) each get 2x the share of the other
+    # 11 columns: 13.3% vs 6.7%, totalling 100%.
     datatable(df,
-              options = list(pageLength = 25, autoWidth = FALSE, filter = 'top'),
+              options = list(pageLength = 25, autoWidth = TRUE, filter = 'top',
+                             columnDefs = list(
+                               list(width = '13.3%', targets = c(1, 12)),
+                               list(width = '6.7%',  targets = c(0,2,3,4,5,6,7,8,9,10,11)))),
               filter = 'top', rownames = FALSE, escape = FALSE)
   })
 
@@ -577,8 +595,13 @@ shinyServer(function(input, output, session) {
              ETA, Risk,
              FB, SL, CB, CH, CMD, Sits, Tops,
              Season)
+    # Player (col 1) and Season (col 16) each get 2x the share of the other
+    # 15 columns: 10.5% vs 5.3%, totalling ~100%.
     datatable(df,
-              options = list(pageLength = 25, autoWidth = FALSE, filter = 'top'),
+              options = list(pageLength = 25, autoWidth = TRUE, filter = 'top',
+                             columnDefs = list(
+                               list(width = '10.5%', targets = c(1, 16)),
+                               list(width = '5.3%',  targets = c(0,2,3,4,5,6,7,8,9,10,11,12,13,14,15)))),
               filter = 'top', rownames = FALSE, escape = FALSE)
   })
 
