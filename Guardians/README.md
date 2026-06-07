@@ -36,9 +36,22 @@ button in the Settings modal forces a re-pull.
 
 ## Scheduled refresh
 
-`code/run_guardians_pulse.sh` is the launchd wrapper. Add an entry to
-`~/Library/LaunchAgents` to run it daily (e.g., 6am) alongside the existing
-`run_inseason_pulse.sh` schedule.
+`code/run_guardians_pulse.sh` is the launchd wrapper. It runs daily at **3am**
+via the user LaunchAgent `~/Library/LaunchAgents/com.dafl.guardianspulse.plist`,
+alongside the other `com.dafl.*` jobs. `guardiansPulse.r` pulls upstream only
+when the day's snapshot doesn't yet exist, so the 3am run fetches fresh data;
+re-running it later the same day just re-hydrates from `DAFL.db`.
+
+Logs: per-run files in `logs/guardians_pulse_*.log`; launchd stdout/stderr in
+`logs/launchd_guardians_{stdout,stderr}.log`.
+
+To (re)install the job after editing the plist:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.dafl.guardianspulse.plist 2>/dev/null
+launchctl load -w ~/Library/LaunchAgents/com.dafl.guardianspulse.plist
+launchctl list | grep guardians   # confirm it's registered
+```
 
 ## Design / plan
 
