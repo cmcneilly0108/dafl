@@ -36,6 +36,17 @@ shinyServer(function(input, output, session) {
     }, character(1))
   }
 
+  # Build a URL slug from a player name (transliterate accents, lowercase,
+  # hyphenate). FanGraphs / Savant treat the numeric id as the key and the slug
+  # as cosmetic, so exactness here is for readability, not correctness.
+  slugify <- function(s) {
+    s <- iconv(s, to = "ASCII//TRANSLIT")
+    s <- tolower(ifelse(is.na(s), "", s))
+    s <- gsub("[^a-z0-9 ]+", "", s)     # drop punctuation / transliteration marks
+    s <- gsub("\\s+", "-", trimws(s))   # spaces -> hyphens
+    s
+  }
+
   # Any clicked player name lands here: set the Player Detail picker and switch
   # to that tab. gPlayerPick is a server-side selectize; selected = sets it.
   observeEvent(input$gPlayerClick, {
@@ -449,8 +460,41 @@ shinyServer(function(input, output, session) {
         "Not enough history yet for a trend chart (need 5+ daily snapshots).")
     }
 
+    # External links — open the player's FanGraphs / Baseball Savant pages in a
+    # new tab. Savant is keyed on mlb_id (always available); FanGraphs needs a
+    # FanGraphs id (gRoster fg_id, else the prospects feed by name) — when none
+    # resolves, the FanGraphs button is omitted.
+    slug <- slugify(row$player)
+    isPitcher <- if (nrow(st) > 0 && !is.na(st$role[1])) {
+      st$role[1] == "P"
+    } else {
+      row$pos %in% c("P","SP","RP","CL","MR","TWP")
+    }
+    fgid <- if (!is.na(row$fg_id) && nzchar(row$fg_id)) {
+      as.character(row$fg_id)
+    } else if (nrow(pros) > 0 && "PlayerId" %in% names(pros) &&
+               !is.na(pros$PlayerId[1]) && nzchar(as.character(pros$PlayerId[1]))) {
+      as.character(pros$PlayerId[1])
+    } else {
+      NA_character_
+    }
+    savantUrl <- sprintf("https://baseballsavant.mlb.com/savant-player/%s-%s",
+                         slug, row$mlb_id)
+    fgBtn <- if (!is.na(fgid)) {
+      fgUrl <- sprintf("https://www.fangraphs.com/players/%s/%s/stats/%s",
+                       slug, fgid, if (isPitcher) "pitching" else "batting")
+      tags$a("FanGraphs ↗", href = fgUrl, target = "_blank", rel = "noopener",
+             class = "btn btn-default btn-sm", style = "margin-right:8px;")
+    } else NULL
+    savantBtn <- tags$a("Baseball Savant ↗", href = savantUrl,
+                        target = "_blank", rel = "noopener",
+                        class = "btn btn-default btn-sm")
+    linksUI <- tags$div(
+      style = "padding:12px 16px; border:1px solid #ddd; border-top:none;",
+      fgBtn, savantBtn)
+
     tags$div(style = "border-radius:6px; overflow:hidden;",
-             headerUI, heroUI, trendUI)
+             headerUI, heroUI, trendUI, linksUI)
   })
 
   # Trend plot output — paired with the renderUI above. plotly works when the
