@@ -518,8 +518,10 @@ shinyServer(function(input, output, session) {
       return(datatable(data.frame(Note = "No risers right now."),
                        options = list(dom = 't'), selection = 'none', rownames = FALSE))
     }
+    out$Reason <- htmltools::htmlEscape(out$Reason)
+    out$Player <- playerLink(out$Player)
     datatable(out, options = list(pageLength = 15, dom = 'tip', autoWidth = FALSE),
-              rownames = FALSE)
+              rownames = FALSE, escape = FALSE)
   })
   output$gTxnTable <- DT::renderDataTable({
     rv$refreshCount
@@ -530,9 +532,11 @@ shinyServer(function(input, output, session) {
     df <- gTxn %>%
       select(Date = txn_date, Player = player, Type = type,
              From = from_team_id, To = to_team_id, Description = description)
+    df$Description <- htmltools::htmlEscape(df$Description)
+    df$Player <- playerLink(df$Player)
     datatable(df,
               options = list(pageLength = 25, filter = 'top', autoWidth = FALSE),
-              filter = 'top', rownames = FALSE)
+              filter = 'top', rownames = FALSE, escape = FALSE)
   })
   output$gILTable <- DT::renderDataTable({
     rv$refreshCount
@@ -545,10 +549,13 @@ shinyServer(function(input, output, session) {
       select(Player = player, Pos = pos, Age, Status = status,
              Injury = injury, `Latest Update` = update) %>%
       arrange(Player)
+    df$Injury <- htmltools::htmlEscape(df$Injury)
+    df$`Latest Update` <- htmltools::htmlEscape(df$`Latest Update`)
+    df$Player <- playerLink(df$Player)
     datatable(df,
               options = list(pageLength = 25, autoWidth = FALSE,
                              filter = 'top'),
-              filter = 'top', rownames = FALSE)
+              filter = 'top', rownames = FALSE, escape = FALSE)
   })
 
   # --- Prospects tab: Hitters / Pitchers sub-tabs ---
