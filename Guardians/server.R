@@ -12,6 +12,36 @@ shinyServer(function(input, output, session) {
 
   rv <- reactiveValues(refreshCount = 0)
 
+  # Escape a string for safe embedding inside a single-quoted JS string in an
+  # inline onclick attribute (e.g. names like O'Brien). Backslash first.
+  jsStr <- function(s) {
+    s <- gsub("\\\\", "\\\\\\\\", s)
+    s <- gsub("'", "\\\\'", s)
+    gsub("[\r\n]+", " ", s)
+  }
+
+  # Render a player name as a link that opens the Player Detail tab with that
+  # player loaded. Returns an <a> only when the name exists in the current
+  # roster; otherwise the HTML-escaped `display` text (no dead links). Vectorized
+  # so it can map a whole DT column. `display` lets callers show a suffix while
+  # linking on the bare name.
+  playerLink <- function(name, display = name) {
+    vapply(seq_along(name), function(i) {
+      nm <- name[i]; dp <- display[i]
+      esc <- htmltools::htmlEscape(dp, attribute = FALSE)
+      if (is.na(nm) || !(nm %in% gRoster$player)) return(esc)
+      sprintf('<a href="#" style="cursor:pointer;" onclick="Shiny.setInputValue(\'gPlayerClick\', \'%s\', {priority:\'event\'}); return false;">%s</a>',
+              jsStr(nm), esc)
+    }, character(1))
+  }
+
+  # Any clicked player name lands here: set the Player Detail picker and switch
+  # to that tab. gPlayerPick is a server-side selectize; selected = sets it.
+  observeEvent(input$gPlayerClick, {
+    updateSelectizeInput(session, 'gPlayerPick', selected = input$gPlayerClick)
+    updateNavbarPage(session, 'gNav', selected = "Player Detail")
+  })
+
   # Shared helper: format a player's season stats as a two-line HTML cell.
   # Counting stats (bold labels) on top, slash / rate stats (gray) below.
   # Returns empty string if no stats row exists.

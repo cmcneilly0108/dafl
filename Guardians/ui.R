@@ -5,6 +5,7 @@ library("DT")
 
 shinyUI(
   navbarPage(
+    id = "gNav",
     theme = bs_theme(bootswatch = "flatly"),
     "Cleveland Guardians Tracker",
     header = tagList(
