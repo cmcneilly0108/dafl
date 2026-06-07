@@ -281,6 +281,7 @@ shinyServer(function(input, output, session) {
       stringsAsFactors = FALSE
     )
     df <- df[order(df$Pos, df$Player), ]
+    df$Player <- playerLink(df$Player)
     statTable <- DT::datatable(df,
                                options = list(paging = FALSE, dom = "t",
                                               autoWidth = FALSE),
@@ -355,6 +356,7 @@ shinyServer(function(input, output, session) {
       select(Player = player, Lvl = level, Pos = pos, Age = age,
              Season, HotScore = hotscore)
 
+    df$Player <- playerLink(df$Player)
     datatable(df,
               options = list(pageLength = 25, autoWidth = FALSE),
               rownames = FALSE, escape = FALSE) %>%
@@ -604,6 +606,7 @@ shinyServer(function(input, output, session) {
              ETA, Risk,
              Game = Game.Pwr, Raw = Raw.Pwr, Spd,
              Season)
+    df$Player <- playerLink(df$Player)
     # Player (col 1) and Season (col 12) each get 2x the share of the other
     # 11 columns: 13.3% vs 6.7%, totalling 100%.
     datatable(df,
@@ -626,6 +629,7 @@ shinyServer(function(input, output, session) {
              ETA, Risk,
              FB, SL, CB, CH, CMD, Sits, Tops,
              Season)
+    df$Player <- playerLink(df$Player)
     # Player (col 1) and Season (col 16) each get 2x the share of the other
     # 15 columns: 10.5% vs 5.3%, totalling ~100%.
     datatable(df,
