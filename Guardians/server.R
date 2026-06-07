@@ -17,6 +17,7 @@ shinyServer(function(input, output, session) {
   jsStr <- function(s) {
     s <- gsub("\\\\", "\\\\\\\\", s)
     s <- gsub("'", "\\\\'", s)
+    s <- gsub('"', "&quot;", s)
     gsub("[\r\n]+", " ", s)
   }
 
