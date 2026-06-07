@@ -180,8 +180,11 @@ shinyServer(function(input, output, session) {
       label <- sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" opacity="0.6">%s</text>',
                        x, labelY, slot)
       names <- paste(vapply(seq_along(pl), function(j) {
-        sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="12" stroke="#0F223E" stroke-width="0.3" paint-order="stroke">%s</text>',
-                x, y + (j - 1) * step, esc(pl[j]))
+        nm <- pl[j]
+        clickable <- nm %in% gRoster$player
+        onclick <- if (clickable) sprintf(' style="cursor:pointer;" onclick="Shiny.setInputValue(\'gPlayerClick\', \'%s\', {priority:\'event\'}); return false;"', jsStr(nm)) else ""
+        sprintf('<text x="%d" y="%d" text-anchor="middle" fill="#ffffff" font-size="12" stroke="#0F223E" stroke-width="0.3" paint-order="stroke"%s>%s</text>',
+                x, y + (j - 1) * step, onclick, esc(nm))
       }, character(1)), collapse = "")
       paste0(label, names)
     }
