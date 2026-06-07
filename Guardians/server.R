@@ -132,9 +132,11 @@ shinyServer(function(input, output, session) {
     fieldPos  <- c("C","1B","2B","3B","SS","LF","CF","RF")
     grouped     <- list()   # field slot -> char vec of player names
     groupedKey  <- list()   # parallel, numeric sort key
-    pitchers    <- list(SP = character(0), RP = character(0))
+    pitchersNm  <- list(SP = character(0), RP = character(0))
+    pitchersSuf <- list(SP = character(0), RP = character(0))
     pitchersKey <- list(SP = numeric(0),   RP = numeric(0))
-    bench <- character(0)
+    benchNm  <- character(0)
+    benchSuf <- character(0)
     for (i in seq_len(nrow(sub))) {
       p <- sub$pos[i]; nm <- sub$player[i]; pid <- sub$mlb_id[i]
       st <- gStats[gStats$mlb_id == pid, ]
@@ -146,7 +148,8 @@ shinyServer(function(input, output, session) {
         era <- if (nrow(st) > 0 && !is.na(st$era[1])) sprintf(" (%.2f ERA)", st$era[1]) else ""
         bucket <- if (gs >= 3) "SP" else "RP"
         key <- if (bucket == "SP") ip else (sv + hd)
-        pitchers[[bucket]]    <- c(pitchers[[bucket]],    paste0(nm, era))
+        pitchersNm[[bucket]]  <- c(pitchersNm[[bucket]],  nm)
+        pitchersSuf[[bucket]] <- c(pitchersSuf[[bucket]], era)
         pitchersKey[[bucket]] <- c(pitchersKey[[bucket]], key)
       } else if (p %in% fieldPos || identical(p, "OF")) {
         slot <- if (identical(p, "OF")) "RF" else p
@@ -154,7 +157,8 @@ shinyServer(function(input, output, session) {
         grouped[[slot]]    <- c(grouped[[slot]], nm)
         groupedKey[[slot]] <- c(groupedKey[[slot]], pa)
       } else {
-        bench <- c(bench, paste0(nm, " (", p, ")"))
+        benchNm  <- c(benchNm,  nm)
+        benchSuf <- c(benchSuf, paste0(" (", p, ")"))
       }
     }
     # Sort each bucket by its sort key, descending. NAs already → 0 above.
@@ -162,9 +166,10 @@ shinyServer(function(input, output, session) {
       ord <- order(groupedKey[[slot]], decreasing = TRUE)
       grouped[[slot]] <- grouped[[slot]][ord]
     }
-    for (bucket in names(pitchers)) {
+    for (bucket in names(pitchersNm)) {
       ord <- order(pitchersKey[[bucket]], decreasing = TRUE)
-      pitchers[[bucket]] <- pitchers[[bucket]][ord]
+      pitchersNm[[bucket]]  <- pitchersNm[[bucket]][ord]
+      pitchersSuf[[bucket]] <- pitchersSuf[[bucket]][ord]
     }
 
     # Render the SVG diamond as a raw string. The 600x600 viewBox scales
@@ -221,8 +226,8 @@ shinyServer(function(input, output, session) {
     )
 
     # SP / RP side columns. ERA in parens for quick scanning.
-    pitcherCol <- function(label, names) {
-      if (length(names) == 0) {
+    pitcherCol <- function(label, nms, sufs) {
+      if (length(nms) == 0) {
         return(tagList(
           tags$h5(label, style = "margin-bottom:4px;"),
           tags$div(style = "color:#888; font-style:italic; font-size:13px;",
@@ -230,22 +235,27 @@ shinyServer(function(input, output, session) {
         ))
       }
       tagList(
-        tags$h5(paste0(label, " (", length(names), ")"),
+        tags$h5(paste0(label, " (", length(nms), ")"),
                 style = "margin-bottom:4px;"),
         tags$div(style = "font-size:13px;",
                  do.call(tagList,
-                         lapply(names, function(x) tags$div(style="padding:2px 0;", x))))
+                         lapply(seq_along(nms), function(i)
+                           tags$div(style = "padding:2px 0;",
+                                    HTML(paste0(playerLink(nms[i]), sufs[i]))))))
       )
     }
     sideUI <- fluidRow(
-      column(width = 6, pitcherCol("SP", pitchers$SP)),
-      column(width = 6, pitcherCol("RP", pitchers$RP))
+      column(width = 6, pitcherCol("SP", pitchersNm$SP, pitchersSuf$SP)),
+      column(width = 6, pitcherCol("RP", pitchersNm$RP, pitchersSuf$RP))
     )
 
-    benchUI <- if (length(bench) > 0) {
+    benchUI <- if (length(benchNm) > 0) {
+      items <- vapply(seq_along(benchNm),
+                      function(i) paste0(playerLink(benchNm[i]), benchSuf[i]),
+                      character(1))
       tags$div(style = "margin-top:14px;",
                tags$strong("Bench: "),
-               tags$span(paste(bench, collapse = "  ·  ")))
+               HTML(paste(items, collapse = "  ·  ")))
     } else NULL
 
     # Roster stat table for the selected level. Each player's Season cell
