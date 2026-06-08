@@ -777,9 +777,74 @@ missing.cbs <- function(fn) {
   dfleft
 }
 
+# Curated overrides for (cbs_name, mlb_team, cbs_pos) triples where the
+# Player+MLB join is ambiguous (two real humans share a name on the same
+# MLB team). See data/playerOverrides.csv and
+# docs/superpowers/specs/2026-05-29-duplicate-player-name-mlb-design.md.
+loadPlayerOverrides <- local({
+  cached <- NULL
+  function() {
+    if (!is.null(cached)) return(cached)
+    fn <- "../data/playerOverrides.csv"
+    if (!file.exists(fn)) {
+      cached <<- tibble::tibble(
+        cbs_name = character(), mlb_team = character(),
+        cbs_pos = character(), playerid = character(), note = character()
+      )
+      return(cached)
+    }
+    ov <- read.csv(fn, stringsAsFactors = FALSE)
+    required <- c("cbs_name", "mlb_team", "cbs_pos", "playerid")
+    missing <- setdiff(required, colnames(ov))
+    if (length(missing) > 0) {
+      stop("data/playerOverrides.csv missing column(s): ",
+           paste(missing, collapse = ", "))
+    }
+    cached <<- ov
+    cached
+  }
+})
+
 addPlayerid <- function(df) {
+  # 0. Apply curated overrides first. Rows that match an override skip
+  #    the ambiguous Player+MLB master join entirely.
+  # Normalize Pos to the same shape pullPos() produces ("P"->"RP",
+  # "CF"/"LF"/"RF"->"OF") so callers that pass raw CBS Pos (e.g.
+  # getSalary) match the override key the same way read.cbs does.
+  ov <- loadPlayerOverrides()
+  if (nrow(ov) > 0 && all(c('Player','MLB','Pos') %in% colnames(df))) {
+    posKey <- df$Pos
+    posKey <- ifelse(posKey == 'P', 'RP', posKey)
+    posKey <- ifelse(posKey %in% c('CF','RF','LF'), 'OF', posKey)
+    keyed <- df %>% mutate(.posKey = posKey) %>%
+      left_join(ov, by = c('Player' = 'cbs_name',
+                           'MLB'    = 'mlb_team',
+                           '.posKey' = 'cbs_pos')) %>%
+      select(-.posKey)
+    overridden <- keyed %>% filter(!is.na(playerid)) %>% select(-note)
+    df         <- keyed %>% filter(is.na(playerid)) %>% select(-playerid, -note)
+
+    if (nrow(overridden) > 0) {
+      mById <- select(master, playerid, birth_year)
+      overridden <- left_join(overridden, mById, by = 'playerid')
+    }
+  } else {
+    # NB: must NOT carry df's columns here. If df already has a `playerid`
+    # column (e.g. getInjuriesAPI passes one in), df[0, ] would reintroduce
+    # it into the final bind_rows alongside the join's playerid.x/playerid.y,
+    # producing three playerid columns and breaking the cached-CSV read guard
+    # in inSeasonPulse.r:332. Empty tibble contributes no columns (matches the
+    # old rbind(gfull, gname) behavior). See design spec 2026-05-29.
+    overridden <- tibble::tibble()
+  }
+
+  # 1. Existing Player+MLB master join for the rest. Exclude any
+  #    playerid that appears in the override file — those rows are
+  #    only reachable via the override key, not via the ambiguous
+  #    name+MLB join (otherwise they re-introduce the collision they
+  #    were added to fix).
   m2 <- select(master,-Pos,-Player) %>% dplyr::rename(Player=cbs_name)
-  # Merge with team
+  if (nrow(ov) > 0) m2 <- filter(m2, !(playerid %in% ov$playerid))
   gfull <- inner_join(df, m2,by=c('Player','MLB'),relationship = "many-to-many")
   dfleft <- anti_join(df, m2,by=c('Player','MLB'))
   m2 <- anti_join(m2,df,by=c('Player','MLB'))
@@ -788,10 +853,8 @@ addPlayerid <- function(df) {
   gname <- left_join(dfleft, m2,by=c('Player'),relationship = "many-to-many")
   gname <- select(gname,-MLB.x) %>% dplyr::rename(MLB=MLB.y)
 
-  final <- rbind(gfull,gname)
+  final <- bind_rows(overridden, gfull, gname)
   final
-  # see if we can only join on team
-  #gfull
 }
 
 addPlayeridOnly <- function(df) {
@@ -895,6 +958,50 @@ r3 <- l1[[3]]
 # # Try using mlb_id when fg_id is empty, which it sometimes is
 # master$playerid <- ifelse(str_length(master$playerid)==0,master$mlb_id,master$playerid)
 master <- read.csv("../mymaster.csv",stringsAsFactors=FALSE, encoding="UTF-8")
+
+# FanGraphs id -> MLBAM id crosswalk from the Chadwick register. Returns a
+# data.frame(fg_id [chr], mlb_id [int]), one row per fg_id. Network + slow, so
+# call it at build/backfill time (buildMaster, backfillMlbId), never per-request.
+# Mirrors the crosswalk in guardiansPulse.r.
+fgToMlbCrosswalk <- function() {
+  lu <- baseballr::get_chadwick_lu()
+  lu <- lu[!is.na(lu$key_mlbam) & !is.na(lu$key_fangraphs) &
+             nzchar(as.character(lu$key_fangraphs)), ]
+  df <- data.frame(fg_id  = as.character(lu$key_fangraphs),
+                   mlb_id = as.integer(lu$key_mlbam),
+                   stringsAsFactors = FALSE)
+  df[!duplicated(df$fg_id), ]
+}
+
+# Build a URL slug from a player name (transliterate accents, lowercase,
+# hyphenate). Savant / FanGraphs treat the numeric id as the key and the slug as
+# cosmetic, so exactness here is for readability, not correctness.
+slugify <- function(s) {
+  s <- iconv(s, to = "ASCII//TRANSLIT")
+  s <- tolower(ifelse(is.na(s), "", s))
+  s <- gsub("[^a-z0-9 ]+", "", s)     # drop punctuation / transliteration marks
+  s <- gsub("\\s+", "-", trimws(s))   # spaces -> hyphens
+  s
+}
+
+# Render a player name as an HTML link that opens in a new tab. Uses the Baseball
+# Savant page when the player's mlb_id is known (looked up from `master` by
+# FanGraphs playerid; mlb_id is added to mymaster by buildMaster); otherwise
+# falls back to the FanGraphs page. Vectorized over name/playerid.
+savantAnchor <- function(name, playerid) {
+  pid <- as.character(playerid)
+  mlbLook <- if ("mlb_id" %in% names(master)) {
+    setNames(as.integer(master$mlb_id), as.character(master$playerid))
+  } else {
+    setNames(rep(NA_integer_, nrow(master)), as.character(master$playerid))
+  }
+  mlb <- unname(mlbLook[pid])
+  ifelse(!is.na(mlb),
+    paste0("<a target='_blank' href='//baseballsavant.mlb.com/savant-player/",
+           slugify(name), "-", mlb, "'>", name, "</a>"),
+    paste0("<a target='_blank' href='//www.fangraphs.com/players/abcd/",
+           pid, "/stats'>", name, "</a>"))
+}
 
 
 calcGoals <- function(p,h,targets,t) {

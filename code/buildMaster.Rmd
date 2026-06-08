@@ -278,6 +278,12 @@ Write out master file (playerid,Player,birth_year,cbs_name)
 # master <- mutate(master, birth_year = year(as.Date(birth_date, format="%m/%d/%Y")))
 # master$playerid <- ifelse(str_length(master$playerid)==0,master$mlb_id,master$playerid)
 # mymaster <- select(master,playerid,Player,birth_year,cbs_name,Pos,MLB)
+
+# Attach MLBAM id for Baseball Savant links downstream. Numeric FanGraphs
+# playerids map via the Chadwick register; "sa"/"cbs" synthetic ids stay NA.
+mlbxw <- fgToMlbCrosswalk()
+mymaster$mlb_id <- mlbxw$mlb_id[match(as.character(mymaster$playerid), mlbxw$fg_id)]
+
 write.csv(mymaster,"../mymaster.csv")
 ```
 

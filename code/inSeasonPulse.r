@@ -876,28 +876,20 @@ trending$hotscore <- as.numeric(trending$hotscore)
 
 
 
-# playing with links
-# https://www.fangraphs.com/players/trea-turner/16252/stats?position=SS
-AllH <- AllH %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-AllH$Player <- AllH$fg
-AllP <- AllP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-AllP$Player <- AllP$fg
+# Player names link to Baseball Savant (via mlb_id from master) when available,
+# else FanGraphs. savantAnchor() is defined in daflFunctions.r.
+AllH$Player <- savantAnchor(AllH$Player, AllH$playerid)
+AllP$Player <- savantAnchor(AllP$Player, AllP$playerid)
 
-injOrig <- injOrig %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-injOrig$Player <- injOrig$fg
-injOrig <- injOrig %>% select(-fg)
+injOrig$Player <- savantAnchor(injOrig$Player, injOrig$playerid)
 
-rrcResults <- rrcResults %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-rrcResults$Player <- rrcResults$fg
-rrcResults <- rrcResults %>% select(-fg)
+rrcResults$Player <- savantAnchor(rrcResults$Player, rrcResults$playerid)
 
-prospectH <- prospectH %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-prospectH$Player <- prospectH$fg
-prospectH <- prospectH %>% select(-fg,-playerid)
+prospectH$Player <- savantAnchor(prospectH$Player, prospectH$playerid)
+prospectH <- prospectH %>% select(-playerid)
 
-prospectP <- prospectP %>% mutate(fg=paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/",playerid,"/stats'>",Player,"</a>"))
-prospectP$Player <- prospectP$fg
-prospectP <- prospectP %>% select(-fg,-playerid)
+prospectP$Player <- savantAnchor(prospectP$Player, prospectP$playerid)
+prospectP <- prospectP %>% select(-playerid)
 
 # ============================================================
 # Alternate projection pools (for Shiny live-switching in LeagueEval)
@@ -1019,10 +1011,10 @@ buildAltLeaguePool <- function(hFile, pFile) {
   injOrigOut$Team[is.na(injOrigOut$Team)] <- 'Free Agent'
   injOrigOut <- injOrigOut %>% filter(Team == 'Free Agent') %>% select(-X, -birth_year, -Team)
 
-  # 15. HTML hyperlinks (matches inline pipeline final state)
+  # 15. HTML hyperlinks (matches inline pipeline final state). Savant via
+  # mlb_id when available, else FanGraphs (savantAnchor is in daflFunctions.r).
   fgLink <- function(df) {
-    df %>% mutate(fg = paste0("<a target = '_blank' href= '//www.fangraphs.com/players/abcd/", playerid, "/stats'>", Player, "</a>")) %>%
-      mutate(Player = fg) %>% select(-fg)
+    df %>% mutate(Player = savantAnchor(Player, playerid))
   }
   AllH       <- fgLink(AllH)
   AllP       <- fgLink(AllP)
