@@ -5,6 +5,7 @@
 *.xlsx
 *.csv
 *.json
+!researchSources.json
 *.jpg
 *.pdf
 *.xls
