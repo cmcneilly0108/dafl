@@ -984,10 +984,14 @@ slugify <- function(s) {
   s
 }
 
-# Render a player name as an HTML link that opens in a new tab. Uses the Baseball
-# Savant page when the player's mlb_id is known (looked up from `master` by
-# FanGraphs playerid; mlb_id is added to mymaster by buildMaster); otherwise
-# falls back to the FanGraphs page. Vectorized over name/playerid.
+# Render a player name as a clickable element that opens a small popup menu
+# (Baseball Savant / FanGraphs / internal Player Snapshot) — see daflPlayerMenu()
+# in LeagueEval/ui.R. The destinations ride along as data attributes:
+#   data-savant : Savant URL when mlb_id is known (looked up from `master`), else ""
+#   data-fg     : FanGraphs URL for numeric FG ids, else "" (sa-prefixed minor-league
+#                 ids don't resolve on FanGraphs)
+#   data-pid    : FanGraphs playerid, always present (drives the internal Snapshot)
+# Building URLs in R keeps slugify out of the JS. Vectorized over name/playerid.
 savantAnchor <- function(name, playerid) {
   pid <- as.character(playerid)
   mlbLook <- if ("mlb_id" %in% names(master)) {
@@ -996,11 +1000,14 @@ savantAnchor <- function(name, playerid) {
     setNames(rep(NA_integer_, nrow(master)), as.character(master$playerid))
   }
   mlb <- unname(mlbLook[pid])
-  ifelse(!is.na(mlb),
-    paste0("<a target='_blank' href='//baseballsavant.mlb.com/savant-player/",
-           slugify(name), "-", mlb, "'>", name, "</a>"),
-    paste0("<a target='_blank' href='//www.fangraphs.com/players/abcd/",
-           pid, "/stats'>", name, "</a>"))
+  savantUrl <- ifelse(!is.na(mlb),
+    paste0("//baseballsavant.mlb.com/savant-player/", slugify(name), "-", mlb), "")
+  fgUrl <- ifelse(grepl("^[0-9]+$", pid),
+    paste0("//www.fangraphs.com/players/abcd/", pid, "/stats"), "")
+  paste0("<span class='dafl-player' data-savant='", savantUrl,
+         "' data-fg='", fgUrl, "' data-pid='", pid,
+         "' onclick='daflPlayerMenu(this); event.stopPropagation(); return false;'>",
+         name, "</span>")
 }
 
 
@@ -1789,7 +1796,7 @@ getFGProspects <- function(pos = "bat", draft = NULL) {
 }
 
 # Claude API wrapper for AI-powered team summaries
-callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max_tokens = 2048) {
+callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max_tokens = 2048, temperature = 0) {
   if (api_key == "" || is.na(api_key)) {
     return("Error: ANTHROPIC_API_KEY environment variable not set. Please set it with Sys.setenv(ANTHROPIC_API_KEY='your-key')")
   }
@@ -1798,8 +1805,9 @@ callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max
     response <- POST(
       url = "https://api.anthropic.com/v1/messages",
       body = toJSON(list(
-        model = "claude-sonnet-4-5-20250929",
+        model = "claude-sonnet-4-6",
         max_tokens = max_tokens,
+        temperature = temperature,
         messages = list(list(role = "user", content = prompt))
       ), auto_unbox = TRUE),
       add_headers(
@@ -1836,6 +1844,128 @@ callClaudeAPI <- function(prompt, api_key = Sys.getenv("ANTHROPIC_API_KEY"), max
   }, error = function(e) {
     paste("API Error:", e$message)
   })
+}
+
+# --- Research-tab player matching helpers ---------------------------------
+# Match players extracted from an article against the free-agent pool by
+# normalized name + MLB team (the same "name + team" approach used to match
+# CBS to FanGraphs). This avoids fuzzy false positives like "Luis Lara"
+# (MIL, not in pool) being mis-matched to "Luis Garcia" (WSN) by agrep.
+
+# Normalize a player name for comparison: lowercase, strip accents,
+# punctuation, and generational suffixes (Jr/Sr/II/III/IV).
+normPlayerName <- function(x) {
+  x <- gsub("<[^>]+>", "", as.character(x))   # strip HTML (pool names are Savant links)
+  x0 <- tolower(trimws(x))
+  x <- iconv(x0, to = "ASCII//TRANSLIT")
+  x[is.na(x)] <- x0[is.na(x)]
+  x <- gsub("[^a-z ]", "", x)   # delete accents-as-punctuation, periods, etc. (keep real spaces)
+  x <- gsub("\\b(jr|sr|ii|iii|iv)\\b", " ", x)
+  trimws(gsub("\\s+", " ", x))
+}
+
+# Normalize an MLB team abbreviation to the convention used in the CBS pool
+# (e.g. WSN/KCR/SDP/SFG/TBR/CHW). Unknown/blank values pass through uppercased.
+normMlbTeam <- function(x) {
+  x <- toupper(trimws(as.character(x)))
+  x[is.na(x)] <- ""
+  aliases <- c(WAS = "WSN", WSH = "WSN", KC = "KCR", KCA = "KCR",
+               SD = "SDP", SF = "SFG", TB = "TBR", TBD = "TBR",
+               CWS = "CHW", AZ = "ARI", ARZ = "ARI")
+  mapped <- unname(aliases[x])
+  ifelse(is.na(mapped), x, mapped)
+}
+
+# Return the pool row index for one extracted player, or NA if no safe match.
+# Priority: exact name + team; then unique name (team absent or only one
+# candidate); ambiguous same-name without a disambiguating team -> NA.
+matchExtractedPlayer <- function(qName, qTeam, poolNorm, poolTeam) {
+  nm <- which(poolNorm == qName)
+  if (length(nm) == 0) return(NA_integer_)
+  hasTeam <- !is.na(qTeam) && nzchar(qTeam)
+  if (hasTeam) {
+    tm <- nm[poolTeam[nm] == qTeam]
+    if (length(tm) >= 1) return(tm[1])   # exact name + team
+    if (length(nm) == 1) return(nm)      # one candidate; team may be stale
+    return(NA_integer_)                  # multiple, none match team -> unsafe
+  }
+  if (length(nm) == 1) return(nm)        # unique name, no team needed
+  NA_integer_                            # ambiguous without team -> unsafe
+}
+
+# --- Research-tab "Get Latest" source discovery ---------------------------
+# Find the newest article for a recurring column. Sources are configured in
+# researchSources.json; see docs/superpowers/specs for the design.
+
+# Decode the handful of HTML entities that show up in WordPress/RSS titles.
+decodeHtmlEntities <- function(x) {
+  x <- gsub("&amp;", "&", x, fixed = TRUE)
+  x <- gsub("&#0*38;", "&", x)
+  x <- gsub("&#8217;|&#0*39;|&rsquo;|&apos;", "'", x)
+  x <- gsub("&#8216;|&lsquo;", "'", x)
+  x <- gsub("&#8211;|&ndash;", "-", x)
+  x <- gsub("&#8212;|&mdash;", "--", x)
+  x <- gsub("&quot;|&#0*34;", '"', x)
+  x <- gsub("&#8230;|&hellip;", "...", x)
+  trimws(x)
+}
+
+# Parse a WordPress REST API /wp/v2/posts JSON array (newest-first). Return the
+# newest post whose decoded title matches `pattern` (regex; "" = any), as
+# list(url, title, date), or NULL if none.
+parseWpPosts <- function(jsonText, pattern = "") {
+  posts <- tryCatch(jsonlite::fromJSON(jsonText, simplifyDataFrame = FALSE),
+                    error = function(e) NULL)
+  if (is.null(posts) || length(posts) == 0) return(NULL)
+  best <- NULL
+  for (p in posts) {
+    title <- decodeHtmlEntities(p$title$rendered)
+    if (pattern == "" || grepl(pattern, title, ignore.case = TRUE)) {
+      cand <- list(url = p$link, title = title, date = p$date)
+      if (is.null(best) || isTRUE(cand$date > best$date)) best <- cand
+    }
+  }
+  best
+}
+
+# Parse an RSS feed (items newest-first). Return the first item whose decoded
+# title matches `pattern`, as list(url, title, date), or NULL if none.
+parseRssItems <- function(xmlText, pattern = "") {
+  doc <- tryCatch(xml2::read_xml(xmlText), error = function(e) NULL)
+  if (is.null(doc)) return(NULL)
+  items <- xml2::xml_find_all(doc, "//item")
+  for (it in items) {
+    title <- decodeHtmlEntities(xml2::xml_text(xml2::xml_find_first(it, "./title")))
+    if (pattern == "" || grepl(pattern, title, ignore.case = TRUE)) {
+      return(list(url   = xml2::xml_text(xml2::xml_find_first(it, "./link")),
+                  title = title,
+                  date  = xml2::xml_text(xml2::xml_find_first(it, "./pubDate"))))
+    }
+  }
+  NULL
+}
+
+# Resolve the latest article URL for a configured source (list with $method,
+# and method-specific fields). Returns list(url, title, date) or NULL on any
+# error (network, no match, bad config).
+researchLatestUrl <- function(source) {
+  orBlank <- function(x) if (is.null(x) || is.na(x)) "" else x
+  tryCatch({
+    if (identical(source$method, "wp")) {
+      site <- sub("/+$", "", orBlank(source$site))
+      url <- paste0(site, "/wp-json/wp/v2/posts?search=",
+                    utils::URLencode(orBlank(source$query)), "&per_page=15")
+      resp <- httr::GET(url, httr::user_agent("DAFL-LeagueEval"), httr::timeout(20))
+      if (httr::http_error(resp)) return(NULL)
+      parseWpPosts(httr::content(resp, as = "text", encoding = "UTF-8"), orBlank(source$pattern))
+    } else if (identical(source$method, "rss")) {
+      resp <- httr::GET(orBlank(source$feed), httr::user_agent("DAFL-LeagueEval"), httr::timeout(20))
+      if (httr::http_error(resp)) return(NULL)
+      parseRssItems(httr::content(resp, as = "text", encoding = "UTF-8"), orBlank(source$pattern))
+    } else {
+      NULL
+    }
+  }, error = function(e) NULL)
 }
 
 # Clear Trending rows from DAFL.db for all seasons prior to `year`.

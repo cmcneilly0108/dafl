@@ -20,6 +20,16 @@ initialProjSource <- if (!is.null(leSettings$projSource) &&
   leSettings$projSource
 } else 'atc'
 
+# --- Research-tab recurring-column sources (Get Latest) ---
+# Hand-edited list of recurring article columns; see researchSources.json.
+researchSourcesFile <- "../researchSources.json"
+researchSources <- tryCatch({
+  if (file.exists(researchSourcesFile)) {
+    jsonlite::fromJSON(researchSourcesFile, simplifyDataFrame = FALSE)
+  } else list()
+}, error = function(e) list())
+researchSourceNames <- vapply(researchSources, function(s) s$name, character(1))
+
 
 shinyServer(function(input, output,session) {
 
@@ -36,7 +46,9 @@ shinyServer(function(input, output,session) {
     researchH = data.frame(),
     researchP = data.frame(),
     researchUnmatched = character(0),
-    researchTitle = ""
+    researchTitle = "",
+    researchExtracted = 0,
+    researchFound = ""
   )
 
   projSource <- reactiveVal(initialProjSource)
@@ -834,15 +846,30 @@ shinyServer(function(input, output,session) {
       formatCurrency('Salary', digits = 0)
   })
 
-  output$playerSnapshot <- renderUI({
+  # playerid driving the snapshot detail + trend chart. Set by selecting a row in
+  # the search table OR by the "Player Snapshot" item in the player-name popup menu
+  # (input$gotoSnapshot, fired from daflPlayerMenu in ui.R).
+  snapshotPid <- reactiveVal(NULL)
+  # Only react to an actual row selection (ignoreNULL default TRUE) — otherwise a
+  # NULL selection emitted when the table redraws on tab-switch would clobber a
+  # pid that the player-name menu just set.
+  observeEvent(input$searchTable_rows_selected, {
     sel <- input$searchTable_rows_selected
-    if (is.null(sel) || length(sel) == 0) {
+    data <- searchData_r()
+    if (sel <= nrow(data)) snapshotPid(as.character(data$playerid[sel]))
+  })
+  observeEvent(input$gotoSnapshot, {
+    snapshotPid(as.character(input$gotoSnapshot))
+    updateNavbarPage(session, "mainNav", selected = "Player Snapshot")
+    session$sendCustomMessage("removePlayerMenu", list())
+  })
+
+  output$playerSnapshot <- renderUI({
+    pid <- snapshotPid()
+    if (is.null(pid)) {
       return(tags$div(style = "color:#888; padding:12px; font-style:italic;",
                       "Select a player from the table to see details."))
     }
-    data <- searchData_r()
-    if (sel > nrow(data)) return(NULL)
-    pid <- as.character(data$playerid[sel])
 
     playerH <- AllH %>% filter(playerid == pid)
     playerP <- AllP %>% filter(playerid == pid)
@@ -965,26 +992,62 @@ shinyServer(function(input, output,session) {
     } else NULL
 
     sectionStyle <- "border:1px solid #ddd; border-top:none; padding:12px 16px;"
+    trendUI <- tags$div(style = sectionStyle,
+      tags$strong(style = "font-size:16px;", "Hotscore Trend"),
+      plotlyOutput("snapshotTrend", height = "230px")
+    )
     tags$div(style = "border-radius:6px; overflow:hidden;",
       headerUI,
       statsUI,
+      trendUI,
       tags$div(style = sectionStyle, comparablesUI),
       injUI
     )
   })
 
-# --- Research tab: article scraping + LLM extraction ---
-  observeEvent(input$analyzeBtn, {
-    mode <- input$researchMode
+  # Hotscore-over-time chart for the selected snapshot player (compact, single line).
+  output$snapshotTrend <- renderPlotly({
+    rv$refreshCount
+    pid <- snapshotPid()
+    # Collapse to one point per date — two-way players (e.g. Ohtani) carry
+    # separate hitter and pitcher hotscore rows that would otherwise zigzag.
+    df <- if (is.null(pid)) NULL else
+      trending %>% filter(as.character(playerid) == pid) %>%
+        group_by(Date) %>%
+        summarise(hotscore = mean(hotscore, na.rm = TRUE), .groups = "drop") %>%
+        arrange(Date)
+    if (is.null(df) || nrow(df) == 0) {
+      return(
+        plot_ly() %>%
+          plotly::layout(xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+                 annotations = list(text = "No trend history", showarrow = FALSE,
+                                    xref = "paper", yref = "paper", x = 0.5, y = 0.5,
+                                    font = list(color = "#888", size = 14))) %>%
+          plotly::config(displayModeBar = FALSE)
+      )
+    }
+    plot_ly(df, x = ~Date, y = ~hotscore, type = "scatter", mode = "lines+markers",
+            line = list(width = 3, color = "#2c3e50"),
+            marker = list(size = 7, color = "#2c3e50"),
+            hovertemplate = "%{x|%b %d}: %{y:.2f}<extra></extra>") %>%
+      plotly::layout(margin = list(l = 40, r = 10, t = 10, b = 30),
+             xaxis = list(title = ""),
+             yaxis = list(title = "Hotscore", zeroline = TRUE, zerolinecolor = "#ccc"),
+             showlegend = FALSE) %>%
+      plotly::config(displayModeBar = FALSE)
+  })
 
+# --- Research tab: article scraping + LLM extraction ---
+  # Core analysis used by both "Analyze Article" and "Get Latest".
+  doAnalyze <- function(mode, url, pastedText) {
     if (mode == "url") {
-      url <- trimws(input$researchUrl)
+      url <- trimws(url)
       if (url == "" || !grepl("^https?://", url)) {
         showNotification("Please enter a valid URL", type = "warning")
         return()
       }
     } else {
-      pastedText <- trimws(input$researchText)
+      pastedText <- trimws(pastedText)
       if (pastedText == "" || nchar(pastedText) < 50) {
         showNotification("Please paste article text (at least 50 characters)", type = "warning")
         return()
@@ -992,6 +1055,7 @@ shinyServer(function(input, output,session) {
     }
 
     shinyjs::disable("analyzeBtn")
+    shinyjs::disable("getLatestBtn")
     showNotification("Fetching article...", type = "message", duration = NULL, id = "researchMsg")
 
     tryCatch({
@@ -1020,37 +1084,45 @@ shinyServer(function(input, output,session) {
         sourceDomain <- "manual"
       }
 
-      if (nchar(articleText) > 12000) {
-        articleText <- substr(articleText, 1, 12000)
+      articleCharLimit <- 100000
+      if (nchar(articleText) > articleCharLimit) {
+        articleText <- substr(articleText, 1, articleCharLimit)
+        showNotification(
+          paste0("Article is long; analyzed the first ", format(articleCharLimit, big.mark = ","),
+                 " characters. Some players near the end may be missed."),
+          type = "warning", duration = 10)
       }
 
       removeNotification("researchMsg")
       showNotification("Analyzing with Claude...", type = "message", duration = NULL, id = "researchMsg")
 
       prompt <- paste0(
-        'You are a baseball fantasy analyst assistant. Extract all baseball players ',
-        'mentioned in the following article. For each player the author is highlighting ',
-        'as a target, sleeper, breakout, value pick, or otherwise recommending, return ',
-        'a JSON array with these fields:\n\n',
+        'You are a baseball fantasy analyst assistant. Extract EVERY player the ',
+        'article presents as a potential pickup, add, waiver target, or recommendation. ',
+        'Be exhaustive: include all players discussed as add candidates, even briefly. ',
+        'List players in the order they appear in the article.\n\n',
+        'For each player, return a JSON array with these fields:\n\n',
         '- full_name: the player\'s full name (first and last)\n',
+        '- mlb_team: the player\'s current MLB team as a standard abbreviation ',
+        '(e.g. NYY, LAD, WSN, CHW). Use the parent club for minor leaguers. ',
+        'Use an empty string "" only if the team is genuinely unclear.\n',
         '- summary: one sentence describing why the author thinks this player is interesting\n',
         '- tags: comma-separated list from these options: Sleeper, Breakout, Bounce-back, ',
         'Value, Upside, Buy-low, Sell-high, Injury-risk, Closer, Holds, Steals, Power, ',
         'AVG, Pitching, Strikeouts, Saves, Speed, Ratios\n\n',
-        'Only include players the author is specifically recommending or discussing ',
-        'positively. Skip players mentioned only in passing or as comparisons.\n\n',
+        'Exclude players mentioned only as comparisons, or only as drop/avoid candidates.\n\n',
         'Return ONLY the raw JSON array. No markdown, no code fences, no explanation. Example:\n',
-        '[{"full_name": "Luis Arraez", "summary": "Hitting .340 in spring with strong ',
-        'lineup protection boosting BA and R upside", "tags": "Sleeper, AVG, Value"}]\n\n',
+        '[{"full_name": "Luis Arraez", "mlb_team": "SDP", "summary": "Hitting .340 with strong ',
+        'lineup protection boosting BA and R upside", "tags": "AVG, Value"}]\n\n',
         'Article text:\n', articleText
       )
 
-      response <- callClaudeAPI(prompt, max_tokens = 4096)
+      response <- callClaudeAPI(prompt, max_tokens = 8192, temperature = 0)
 
       if (is.null(response) || length(response) == 0 || is.na(response) || response == "") {
         removeNotification("researchMsg")
         showNotification("Empty response from Claude API", type = "error", duration = 15)
-        shinyjs::enable("analyzeBtn")
+        shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
         return()
       }
 
@@ -1068,12 +1140,13 @@ shinyServer(function(input, output,session) {
 
       if (!grepl("^\\s*\\[", response)) {
         retryPrompt <- paste0(
-          'Return ONLY a raw JSON array (no markdown, no code fences) of objects with fields: full_name, summary, tags. ',
-          'Example: [{"full_name":"Mike Trout","summary":"Still elite","tags":"Power"}]. ',
+          'Return ONLY a raw JSON array (no markdown, no code fences) of objects with fields: full_name, mlb_team, summary, tags. ',
+          'mlb_team is the standard MLB abbreviation (e.g. NYY, LAD), or "" if unclear. ',
+          'Example: [{"full_name":"Mike Trout","mlb_team":"LAA","summary":"Still elite","tags":"Power"}]. ',
           'Extract players recommended in this article:\n\n',
-          substr(articleText, 1, 4000)
+          articleText
         )
-        response <- callClaudeAPI(retryPrompt, max_tokens = 4096)
+        response <- callClaudeAPI(retryPrompt, max_tokens = 8192, temperature = 0)
         response <- gsub("^\\s*```json\\s*", "", response)
         response <- gsub("^\\s*```\\s*", "", response)
         response <- gsub("\\s*```\\s*$", "", response)
@@ -1082,7 +1155,7 @@ shinyServer(function(input, output,session) {
           removeNotification("researchMsg")
           cat("Research tab Claude API error:", substr(response, 1, 500), "\n")
           showNotification(paste0("Claude API error: ", substr(response, 1, 200)), type = "error", duration = 30)
-          shinyjs::enable("analyzeBtn")
+          shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
           return()
         }
       }
@@ -1093,7 +1166,7 @@ shinyServer(function(input, output,session) {
           removeNotification("researchMsg")
           cat("Research tab JSON parse error:", e$message, "\n")
           showNotification(paste0("Failed to parse Claude response: ", e$message), type = "error", duration = 30)
-          shinyjs::enable("analyzeBtn")
+          shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
           return(NULL)
         }
       )
@@ -1105,9 +1178,12 @@ shinyServer(function(input, output,session) {
         rv$researchP <- data.frame()
         rv$researchUnmatched <- character(0)
         rv$researchTitle <- pageTitle
-        shinyjs::enable("analyzeBtn")
+        rv$researchExtracted <- 0
+        shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
         return()
       }
+
+      rv$researchExtracted <- nrow(extracted)
 
       removeNotification("researchMsg")
       showNotification("Matching players...", type = "message", duration = NULL, id = "researchMsg")
@@ -1118,31 +1194,27 @@ shinyServer(function(input, output,session) {
         availH %>% mutate(poolType = "H"),
         availP %>% mutate(poolType = "P")
       )
-      cleanNames <- tolower(allAvail$Player)
+      # Match on normalized name + MLB team (avoids fuzzy false positives like
+      # "Luis Lara" -> "Luis Garcia"). See helpers in daflFunctions.r.
+      poolNorm <- normPlayerName(allAvail$Player)
+      poolTeam <- normMlbTeam(allAvail$MLB)
+      hasTeamCol <- "mlb_team" %in% names(extracted)
 
       matchedRows <- list()
       unmatched <- character(0)
 
       for (i in seq_len(nrow(extracted))) {
         fname <- extracted$full_name[i]
-        fnameL <- tolower(fname)
+        qName <- normPlayerName(fname)
+        qTeam <- if (hasTeamCol) normMlbTeam(extracted$mlb_team[i]) else ""
 
-        exactIdx <- which(cleanNames == fnameL)
-        if (length(exactIdx) > 0) {
-          row <- allAvail[exactIdx[1], ]
+        idx <- matchExtractedPlayer(qName, qTeam, poolNorm, poolTeam)
+        if (!is.na(idx)) {
+          row <- allAvail[idx, ]
           row$Tags <- extracted$tags[i]
           row$Summary <- extracted$summary[i]
-          row$fuzzy <- FALSE
-          matchedRows <- c(matchedRows, list(row))
-          next
-        }
-
-        fuzzyIdx <- agrep(fnameL, cleanNames, max.distance = 0.15, ignore.case = TRUE)
-        if (length(fuzzyIdx) > 0) {
-          row <- allAvail[fuzzyIdx[1], ]
-          row$Tags <- extracted$tags[i]
-          row$Summary <- extracted$summary[i]
-          row$fuzzy <- TRUE
+          # Flag as approximate when matched by name only (no confirming team).
+          row$fuzzy <- !(nzchar(qTeam) && poolTeam[idx] == qTeam)
           matchedRows <- c(matchedRows, list(row))
         } else {
           unmatched <- c(unmatched, fname)
@@ -1156,7 +1228,7 @@ shinyServer(function(input, output,session) {
         rv$researchP <- data.frame()
         rv$researchUnmatched <- unmatched
         rv$researchTitle <- pageTitle
-        shinyjs::enable("analyzeBtn")
+        shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
         return()
       }
 
@@ -1168,13 +1240,13 @@ shinyServer(function(input, output,session) {
 
       mH <- matched %>% filter(poolType == "H") %>%
         arrange(-pDFL) %>%
-        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP,
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, Hot = hotscore, SGP = pSGP,
                HR = pHR, RBI = pRBI, R = pR, SB = pSB, AVG = pAVG,
                Injury, Expected.Return, playerid)
 
       mP <- matched %>% filter(poolType == "P") %>%
         arrange(-pDFL) %>%
-        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, SGP = pSGP,
+        select(Player, Pos, Tags, Summary, Age, DFL = pDFL, Hot = hotscore, SGP = pSGP,
                W = pW, SO = pSO, ERA = pERA, SV = pSV, HLD = pHLD, `K/9` = `pK/9`,
                Injury, Expected.Return, playerid)
 
@@ -1185,14 +1257,55 @@ shinyServer(function(input, output,session) {
 
       removeNotification("researchMsg")
       showNotification(paste0("Found ", nrow(matched), " free agent(s) from article"), type = "message")
-      shinyjs::enable("analyzeBtn")
+      shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
 
     }, error = function(e) {
       removeNotification("researchMsg")
       cat("Research tab error:", e$message, "\n")
       showNotification(paste0("Error: ", e$message), type = "error", duration = 30)
-      shinyjs::enable("analyzeBtn")
+      shinyjs::enable("analyzeBtn"); shinyjs::enable("getLatestBtn")
     })
+  }
+
+  # Analyze button: use whatever is currently in the input controls.
+  observeEvent(input$analyzeBtn, {
+    rv$researchFound <- ""
+    doAnalyze(input$researchMode, input$researchUrl, input$researchText)
+  })
+
+  # Populate the recurring-column dropdown from researchSources.json.
+  if (length(researchSourceNames) > 0) {
+    updateSelectInput(session, "researchSource", choices = researchSourceNames)
+  }
+
+  # Get Latest: resolve the newest URL for the selected source, then analyze it.
+  observeEvent(input$getLatestBtn, {
+    if (length(researchSources) == 0) {
+      showNotification("No sources configured (researchSources.json)", type = "warning")
+      return()
+    }
+    idx <- match(input$researchSource, researchSourceNames)
+    if (is.na(idx)) {
+      showNotification("Please pick a source", type = "warning")
+      return()
+    }
+    src <- researchSources[[idx]]
+    shinyjs::disable("getLatestBtn"); shinyjs::disable("analyzeBtn")
+    showNotification(paste0("Finding latest: ", src$name, "..."),
+                     type = "message", duration = NULL, id = "researchMsg")
+    latest <- researchLatestUrl(src)
+    removeNotification("researchMsg")
+    if (is.null(latest) || is.null(latest$url) || latest$url == "") {
+      showNotification(paste0("Couldn't find the latest article for ", src$name),
+                       type = "error", duration = 15)
+      shinyjs::enable("getLatestBtn"); shinyjs::enable("analyzeBtn")
+      return()
+    }
+    updateRadioButtons(session, "researchMode", selected = "url")
+    updateTextInput(session, "researchUrl", value = latest$url)
+    rv$researchFound <- paste0("Found: ", latest$title,
+                               " (", substr(latest$date, 1, 10), ")")
+    doAnalyze("url", latest$url, "")
   })
 
   output$researchH <- DT::renderDataTable({
@@ -1206,6 +1319,7 @@ shinyServer(function(input, output,session) {
     datatable(df, escape = FALSE,
               options = list(pageLength = 20)) %>%
       formatCurrency('DFL') %>%
+      formatRound('Hot', 2) %>%
       formatRound(c('SGP', 'AVG'), 3) %>%
       formatRound(c('Age', 'HR', 'RBI', 'R', 'SB'), 0)
   })
@@ -1221,6 +1335,7 @@ shinyServer(function(input, output,session) {
     datatable(df, escape = FALSE,
               options = list(pageLength = 20)) %>%
       formatCurrency('DFL') %>%
+      formatRound('Hot', 2) %>%
       formatRound(c('SGP', 'ERA', 'K/9'), 3) %>%
       formatRound(c('Age', 'W', 'SO', 'SV', 'HLD'), 0)
   })
@@ -1229,11 +1344,16 @@ shinyServer(function(input, output,session) {
     title <- rv$researchTitle
     nH <- nrow(rv$researchH)
     nP <- nrow(rv$researchP)
-    if (title == "" && nH == 0 && nP == 0) return(NULL)
+    nExtracted <- rv$researchExtracted
+    found <- rv$researchFound
+    if (title == "" && nH == 0 && nP == 0 && found == "") return(NULL)
     tags$div(style = "margin-top:10px; font-size:13px; line-height:1.6;",
+      if (found != "") tagList(tags$span(style = "color:#3c763d;", found), tags$br()),
       tags$strong(title),
       tags$br(),
-      paste0(nH, " hitter(s), ", nP, " pitcher(s) found")
+      paste0("Extracted: ", nExtracted, " player(s) from article"),
+      tags$br(),
+      paste0("Free agents: ", nH, " hitter(s), ", nP, " pitcher(s)")
     )
   })
 

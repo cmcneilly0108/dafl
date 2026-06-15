@@ -8,6 +8,7 @@ library("shinyjs")
 
 shinyUI(
   navbarPage(
+    id = "mainNav",
 #    theme = bs_theme(version = 4, bootswatch = "slate"),
     # "cerulean", "cosmo", "cyborg", "darkly", "flatly", "journal", "litera", "lumen", "lux", "materia", "minty",
     # "pulse", "sandstone", "simplex", "sketchy", "slate", "solar", "spacelab", "superhero", "united", "yeti"
@@ -20,7 +21,8 @@ shinyUI(
                      class = 'btn-default btn-sm')
       )
     ),
-    tags$head(tags$script(HTML("
+    tags$head(
+      tags$script(HTML("
       Shiny.addCustomMessageHandler('toggleStar', function(msg) {
         var els = document.querySelectorAll('[id=\"tgt-' + msg.pid + '\"]');
         els.forEach(function(el) {
@@ -33,7 +35,83 @@ shinyUI(
           }
         });
       });
-    "))),
+
+      // Server can force the player-name menu closed (e.g. after navigating to Snapshot).
+      Shiny.addCustomMessageHandler('removePlayerMenu', function(msg) {
+        var m = document.getElementById('dafl-player-menu');
+        if (m) m.remove();
+        // Selecting a navbarMenu child via updateNavbarPage leaves the parent
+        // ('Players') dropdown open — close any open navbar dropdown.
+        document.querySelectorAll('.navbar li.dropdown.open, .navbar li.dropdown.show')
+          .forEach(function(li) { li.classList.remove('open'); li.classList.remove('show'); });
+      });
+
+      // Popup menu for a clicked player name: Savant / FanGraphs / internal Snapshot.
+      // Destinations arrive as data attributes from savantAnchor() (daflFunctions.r).
+      function daflPlayerMenu(el) {
+        var old = document.getElementById('dafl-player-menu');
+        if (old) old.remove();
+        var savant = el.getAttribute('data-savant');
+        var fg = el.getAttribute('data-fg');
+        var pid = el.getAttribute('data-pid');
+        var menu = document.createElement('div');
+        menu.id = 'dafl-player-menu';
+        menu.className = 'dafl-menu';
+
+        var title = document.createElement('div');
+        title.className = 'dafl-menu-title';
+        title.textContent = el.textContent;
+        menu.appendChild(title);
+
+        function addLink(text, href) {
+          var a = document.createElement('a');
+          a.className = 'dafl-menu-item';
+          a.textContent = text;
+          a.href = href;
+          a.target = '_blank';
+          menu.appendChild(a);
+        }
+        if (savant) addLink('Baseball Savant \\u2197', savant);
+        if (fg) addLink('FanGraphs \\u2197', fg);
+
+        var snap = document.createElement('a');
+        snap.className = 'dafl-menu-item';
+        snap.textContent = 'Player Snapshot';
+        snap.href = '#';
+        snap.onclick = function(e) {
+          e.preventDefault();
+          Shiny.setInputValue('gotoSnapshot', pid, {priority: 'event'});
+          menu.remove();
+          return false;
+        };
+        menu.appendChild(snap);
+
+        document.body.appendChild(menu);
+        var r = el.getBoundingClientRect();
+        menu.style.top = (window.scrollY + r.bottom + 2) + 'px';
+        menu.style.left = (window.scrollX + r.left) + 'px';
+
+        // close after picking an external link (new tab opens first)
+        menu.addEventListener('click', function() { setTimeout(function(){ menu.remove(); }, 0); });
+        // close on outside click (deferred so this opening click doesn't close it)
+        setTimeout(function() {
+          document.addEventListener('click', function handler(ev) {
+            if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', handler); }
+          });
+        }, 0);
+      }
+    ")),
+      tags$style(HTML("
+      .dafl-player { color:inherit; cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
+      .dafl-player:hover { color:#2980b9; }
+      .dafl-menu { position:absolute; z-index:3000; background:#fff; border:1px solid #bbb;
+                   border-radius:6px; box-shadow:0 2px 10px rgba(0,0,0,0.2); min-width:160px;
+                   font-size:14px; overflow:hidden; }
+      .dafl-menu-title { padding:6px 12px; font-weight:bold; background:#2c3e50; color:#fff; white-space:nowrap; }
+      .dafl-menu-item { display:block; padding:8px 12px; color:#2c3e50; text-decoration:none; cursor:pointer; }
+      .dafl-menu-item:hover { background:#ecf0f1; }
+      "))
+    ),
     tabPanel("Standings",
              tabsetPanel(
                type = 'tabs',
@@ -237,6 +315,11 @@ shinyUI(
       tabPanel("Research",
                sidebarLayout(fluid = FALSE,
                  sidebarPanel(
+                   selectInput('researchSource', 'Recurring Column', choices = NULL),
+                   actionButton('getLatestBtn', 'Get Latest',
+                                class = 'btn-success',
+                                style = 'width:100%; margin-bottom:12px;'),
+                   tags$hr(style = 'margin:8px 0;'),
                    radioButtons('researchMode', 'Input Mode',
                                 choices = c('Paste Article Text' = 'paste', 'Scrape URL' = 'url'),
                                 selected = 'paste', inline = TRUE),

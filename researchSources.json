@@ -1,0 +1,30 @@
+[
+  {
+    "name": "FG: FAAB & Waiver Wire Report",
+    "method": "wp",
+    "site": "https://fantasy.fangraphs.com",
+    "query": "FAAB Waiver Wire",
+    "pattern": "^FAAB & Waiver Wire Report"
+  },
+  {
+    "name": "PL: Stash List (Pitching Prospects)",
+    "method": "wp",
+    "site": "https://pitcherlist.com",
+    "query": "Stash List Prospects",
+    "pattern": "^The Stash List.*Pitching Prospects"
+  },
+  {
+    "name": "PL: Stash List (Hitting Prospects)",
+    "method": "wp",
+    "site": "https://pitcherlist.com",
+    "query": "Stash List Prospects",
+    "pattern": "^The Stash List.*(Hitting|Hitter) Prospects"
+  },
+  {
+    "name": "Razzball: Waiver Wire",
+    "method": "wp",
+    "site": "https://razzball.com",
+    "query": "Waiver Wire Week",
+    "pattern": "^Waiver Wire Week"
+  }
+]
