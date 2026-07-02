@@ -1382,7 +1382,7 @@ getStuffAPI <- function() {
     cat("JSON file not found, trying API directly...\n")
     url <- paste0("https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=",
                   currentYear, "&season1=", currentYear,
-                  "&ind=0&qual=10&type=36&month=0&pageitems=2000")
+                  "&ind=0&qual=0&type=36&month=0&pageitems=2000")
     stuff <- tryCatch(fromJSON(url)$data, error = function(e) {
       cat("Error fetching Pitching+ data:", e$message, "\n")
       return(NULL)

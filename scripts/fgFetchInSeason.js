@@ -52,6 +52,15 @@ const ENDPOINTS = [
     url: 'https://www.fangraphs.com/api/roster-resource/closer-depth-charts/data',
     file: 'Closers.json',
   },
+  {
+    // Season-to-date pitcher leaderboard — source of sp_pitching (Pitching+).
+    // qual=0 so EVERY pitcher is included (no innings minimum). getStuffAPI()
+    // reads this file and selects sp_pitching -> `Pitching+`.
+    name: 'Pitching+ (Stuff+) Leaders',
+    url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=0&type=8&month=0&pageitems=2000&rost=0`,
+    file: 'latestStuff.json',
+    extract: 'data',
+  },
 ];
 
 async function fetchAll() {
@@ -81,8 +90,18 @@ async function fetchAll() {
       console.log(`Fetching ${ep.name}...`);
       const response = await page.goto(ep.url, { waitUntil: 'load', timeout: 30000 });
       const body = await response.text();
-      fs.writeFileSync(outPath, body);
-      console.log(`  -> ${ep.file} (${(body.length / 1024).toFixed(0)} KB)\n`);
+      // Leaderboard endpoints wrap rows in {data: [...]}; extract the bare
+      // array so downstream readers get a plain list of records.
+      let out = body;
+      let count = null;
+      if (ep.extract) {
+        const parsed = JSON.parse(body);
+        const arr = parsed[ep.extract] ?? parsed;
+        out = JSON.stringify(arr);
+        count = Array.isArray(arr) ? arr.length : null;
+      }
+      fs.writeFileSync(outPath, out);
+      console.log(`  -> ${ep.file} (${(out.length / 1024).toFixed(0)} KB${count != null ? `, ${count} records` : ''})\n`);
     } catch (err) {
       console.error(`  !! Failed: ${err.message}\n`);
     }
