@@ -1,6 +1,8 @@
 # Guardians Tracker — Shiny server. Sources the pulse script which hydrates
 # globals (gRoster, gStats, gHot, gTxn, gIL, gProspects, gDepth, gTrend).
 
+# runApp("~/Dropbox/Personal/DAFL/Guardians", host = "0.0.0.0", port = 3837)
+
 setwd("../code/")
 source("./guardiansPulse.r")
 
