@@ -21,3 +21,23 @@ code/.Rhistory
 code/.Rhistory
 code/.Rhistory
 scripts/.cbs-browser-profile/
+
+# --- Cleanup 2026-07: repo hygiene ---
+# OS / editor cruft
+.DS_Store
+# R session history (any directory)
+.Rhistory
+# Local SQLite databases (regenerated; not versioned)
+*.db
+# Timestamped backups & Dropbox conflicted copies
+*.bak-*
+*conflicted copy*
+# Carriage-return-suffixed junk filenames (atcH2020.csv\r etc.)
+atc?2020.csv*
+# Logs & debug output
+logs/
+firebase-debug.log
+# Node / browser-automation tooling
+node_modules/
+scripts/.fg-browser-profile/
+.superpowers/
