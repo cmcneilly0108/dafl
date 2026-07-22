@@ -941,7 +941,7 @@ shinyServer(function(input, output,session) {
 
     info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
     if (isTRUE(input$faTargets)) info <- filter(info, Team == 'Free Agent')
-    ff <- markTargets(info, rv$targets) %>% select(Target, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, -playerid, -isTarget)
+    ff <- markTargets(info, rv$targets) %>% select(Target, Player, Team, Pos, Age, pDFL, hotscore, Injury, Expected.Return, -playerid, -isTarget)
     datatable(ff,
               options = list(paging = FALSE, info = FALSE, autoWidth = FALSE),
               escape = FALSE) %>%
