@@ -227,11 +227,11 @@ shinyUI(
                    width = 2
                  ),
                  mainPanel(
-                   h2("Team Category Detail"),
-                   DT::dataTableOutput("teamCatDetail"),
-                   br(),
                    h2("Points by Category"),
-                   DT::dataTableOutput("catSummary")
+                   DT::dataTableOutput("catSummary"),
+                   br(),
+                   h2("Team Category Detail"),
+                   DT::dataTableOutput("teamCatDetail")
                  )
                )
       ),

@@ -1,5 +1,7 @@
 # LeagueEval server.R — reactive in-season evaluation tool
 
+# runApp("~/Dropbox/Personal/DAFL/LeagueEval", host = "0.0.0.0", port = 3838)
+
 setwd("../code/")
 source("./inSeasonPulse.r")
 library(shinyjs)
@@ -629,16 +631,6 @@ shinyServer(function(input, output,session) {
     } else team
     if (!shortTeam %in% cstand$Team) return(NULL)
 
-    # Counting categories only — pvCat doesn't apply to BA/ERA.
-    pvCats <- c('HR','RBI','SB','R','W','HD','S','K')
-    pvRows <- lapply(pvCats, function(cat) {
-      myVal <- as.numeric(cstand[cstand$Team == shortTeam, cat])
-      r <- pvCat(cstand[[cat]], 0.3, myVal)
-      data.frame(category = cat, pvp = r[[1]], pvm = r[[2]], opportunity = r[[3]],
-                 stringsAsFactors = FALSE)
-    })
-    pvDf <- do.call(rbind, pvRows) %>% arrange(-opportunity)
-
     # Per-category rank for the selected team. ERA ranked low-to-high, the rest
     # high-to-low (lower score = the team is worse in that category).
     rankCats <- list(
@@ -648,21 +640,126 @@ shinyServer(function(input, output,session) {
       list(cat='RBI',rev=FALSE), list(cat='R',  rev=FALSE),
       list(cat='SB', rev=FALSE), list(cat='BA', rev=FALSE)
     )
+    # Counting cats accumulate linearly, so the yardstick is weekly production.
+    # BA/ERA are rate stats — handled below via their typical weekly swing.
+    countingCats <- c('HR','RBI','SB','R','W','HD','S','K')
+
+    # Rate-stat yardstick: the league's typical week-over-week movement in BA/ERA,
+    # measured from the weekly standings snapshots (the analog of a week's worth
+    # of production). Ratios get stickier as AB/IP pile up, so we use only the
+    # most recent ~4 week transitions — the window self-adjusts as the season
+    # wears on. NA if snapshot history is missing — those cats fall back to "—".
+    catSwing <- function(col, nWeeks = 4) {
+      if (!exists("standings") ||
+          !all(c(col, "Team", "Week") %in% names(standings))) return(NA_real_)
+      s   <- standings
+      wks <- sort(unique(s$Week))
+      keep <- if (length(wks) > nWeeks + 1) tail(wks, nWeeks + 1) else wks
+      s    <- s[s$Week %in% keep, ]
+      s    <- s[order(s$Team, s$Week), ]
+      vals <- suppressWarnings(as.numeric(s[[col]]))
+      byTeam <- tapply(vals, s$Team, function(x) mean(abs(diff(x)), na.rm = TRUE))
+      mean(byTeam, na.rm = TRUE)
+    }
+    baSwing  <- catSwing("BA")
+    eraSwing <- catSwing("ERA")
+
+    # Map a short nickname back to the full team name for display.
+    fullName <- function(short) {
+      if (exists("nicks") && short %in% nicks$Short)
+        nicks$Team[match(short, nicks$Short)]
+      else short
+    }
+    # Teams in the overall top 5 (by standings Rank) — bolded in the name cells.
+    top5 <- if ("Rank" %in% names(cstand))
+              cstand$Team[which(suppressWarnings(as.numeric(cstand$Rank)) <= 5)]
+            else character(0)
+    nameCell <- function(short) {
+      if (is.na(short)) return("—")
+      nm <- fullName(short)
+      if (short %in% top5) paste0("<b>", nm, "</b>") else nm
+    }
+    # toNext / awayFrom: how much of the stat separates this team from the team
+    # one rank better / worse. Magnitude only — the neighbour is always strictly
+    # better/worse, so direction is implicit and BA/ERA fall out the same way.
+    fmtGap <- function(cat, x) {
+      if (is.na(x))          "—"
+      else if (x == 0)       "tie"   # dead even with the neighbour
+      else if (cat == "BA")  sprintf("%.3f", x)
+      else if (cat == "ERA") sprintf("%.2f", x)
+      else                   as.character(round(x))
+    }
+    # gainIn / loseIn: that gap expressed in weeks of typical category movement.
+    fmtWeeks <- function(x) if (is.na(x)) "—" else sprintf("%.1f", x)
+
+    haveWeek <- exists("aWeek") && is.finite(aWeek) && aWeek > 0
     msRows <- lapply(rankCats, function(rc) {
       v <- suppressWarnings(as.numeric(cstand[[rc$cat]]))
       ord <- if (rc$rev) order(-v, na.last = TRUE) else order(v, na.last = TRUE)
-      data.frame(category = rc$cat,
-                 score = which(cstand$Team[ord] == shortTeam),
+      teamsRanked <- cstand$Team[ord]   # position 1 = worst, last = best
+      valsRanked  <- v[ord]
+      pos <- which(teamsRanked == shortTeam)
+      nT  <- length(ord)
+      myVal <- valsRanked[pos]
+
+      aheadShort  <- if (pos < nT) teamsRanked[pos + 1] else NA_character_
+      behindShort <- if (pos > 1)  teamsRanked[pos - 1] else NA_character_
+      toNextVal   <- if (pos < nT) abs(valsRanked[pos + 1] - myVal) else NA_real_
+      awayFromVal <- if (pos > 1)  abs(myVal - valsRanked[pos - 1]) else NA_real_
+
+      # Yardstick: weekly production for counting stats, typical weekly swing for BA/ERA.
+      leagueWeekly <- if (rc$cat %in% countingCats && haveWeek)
+                        mean(v, na.rm = TRUE) / aWeek
+                      else if (rc$cat == "BA")  baSwing
+                      else if (rc$cat == "ERA") eraSwing
+                      else                       NA_real_
+      okRate <- !is.na(leagueWeekly) && leagueWeekly > 0
+      weeksGain <- if (okRate && !is.na(toNextVal))   toNextVal   / leagueWeekly else NA_real_
+      weeksLose <- if (okRate && !is.na(awayFromVal)) awayFromVal / leagueWeekly else NA_real_
+
+      data.frame(category   = rc$cat,
+                 score      = pos,
+                 teamAhead  = nameCell(aheadShort),
+                 toNext     = fmtGap(rc$cat, toNextVal),
+                 gainIn     = fmtWeeks(weeksGain),
+                 teamBehind = nameCell(behindShort),
+                 awayFrom   = fmtGap(rc$cat, awayFromVal),
+                 loseIn     = fmtWeeks(weeksLose),
+                 .wG = weeksGain, .wL = weeksLose,   # numeric helpers, dropped below
                  stringsAsFactors = FALSE)
     })
-    msDf <- do.call(rbind, msRows) %>% arrange(score)
+    msDf <- do.call(rbind, msRows)
 
-    teamCatSummary <- left_join(msDf, pvDf, by = 'category',
-                                relationship = "many-to-many") %>%
-      arrange(-opportunity)
+    # Priority flag: a point within ~1 week of production is in play this week.
+    msDf$priority <- mapply(function(g, l) {
+      gain   <- !is.na(g) && g <= 1
+      defend <- !is.na(l) && l <= 1
+      if (gain && defend) "⚔ Both"
+      else if (gain)      "🎯 Gain"
+      else if (defend)    "🛡 Defend"
+      else                ""
+    }, msDf$.wG, msDf$.wL)
 
-    datatable(teamCatSummary, options = list(pageLength = 20)) %>%
-      formatRound(c('pvp','pvm','opportunity'), 2)
+    # Most in-play categories first (smallest weeks-to-act); N/A categories last.
+    actionKey <- mapply(function(g, l) {
+      vals <- c(g, l); vals <- vals[!is.na(vals)]
+      if (length(vals) == 0) NA_real_ else min(vals)
+    }, msDf$.wG, msDf$.wL)
+    msDf <- msDf[order(actionKey, na.last = TRUE), ]
+
+    teamCatSummary <- msDf[, c('category','score','teamAhead','toNext','gainIn',
+                               'teamBehind','awayFrom','loseIn','priority')]
+
+    datatable(teamCatSummary,
+              rownames = FALSE,
+              escape = FALSE,   # render <b> bolding on top-5 team names
+              caption = htmltools::tags$caption(
+                style = 'caption-side: bottom; font-size: 12px; color: #666;',
+                'gainIn / loseIn = weeks of typical category movement to close the gap. ',
+                '🎯 Gain = a point within ~1 week above you · 🛡 Defend = within ~1 week below · ⚔ Both.'),
+              options = list(pageLength = 20,
+                             columnDefs = list(list(className = 'dt-center',
+                                                    targets = '_all'))))
   })
 
 # Positional Surplus
@@ -807,6 +904,41 @@ shinyServer(function(input, output,session) {
       AllH %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, Team),
       AllP %>% select(playerid, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, Team)
     ) %>% distinct(playerid, .keep_all = TRUE)
+
+    # Players can be starred from lists sourced independently of the active
+    # projection pool (e.g. the Injured list uses the FanGraphs injury feed).
+    # AllH/AllP are built with an inner_join against the active projection source
+    # (inSeasonPulse.r), so a starred player the active source doesn't project
+    # (season-ending injuries under ATC, etc.) is absent here and would silently
+    # vanish from My Targets. Backfill those from the injury feed so anything you
+    # can star, you can see. Ownership comes from the CBS frames (Allhitters/
+    # Allpitchers), which carry live Team/Free-Agent status for every CBS player
+    # including the ones the projection join drops; not in CBS => not owned => FA.
+    missing <- setdiff(as.character(rv$targets), allPlayers$playerid)
+    if (length(missing) > 0 && exists("injOrigBase")) {
+      cbsOwn <- bind_rows(
+        if (exists("Allhitters"))  Allhitters  %>% select(playerid, Team) else NULL,
+        if (exists("Allpitchers")) Allpitchers %>% select(playerid, Team) else NULL
+      ) %>% mutate(playerid = as.character(playerid)) %>%
+        distinct(playerid, .keep_all = TRUE)
+      fb <- injOrigBase %>%
+        filter(as.character(playerid) %in% missing) %>%
+        transmute(
+          playerid        = as.character(playerid),
+          Player          = Player,
+          Pos             = position,
+          Age             = suppressWarnings(as.integer(cyear) - as.integer(birth_year)),
+          pDFL            = NA_real_,
+          hotscore        = NA_real_,
+          Injury          = Injury,
+          Expected.Return = `Latest Update`
+        ) %>%
+        distinct(playerid, .keep_all = TRUE) %>%
+        left_join(cbsOwn, by = "playerid") %>%
+        mutate(Team = ifelse(is.na(Team), "Free Agent", Team))
+      if (nrow(fb) > 0) allPlayers <- bind_rows(allPlayers, fb)
+    }
+
     info <- allPlayers %>% filter(playerid %in% rv$targets) %>% arrange(-pDFL)
     if (isTRUE(input$faTargets)) info <- filter(info, Team == 'Free Agent')
     ff <- markTargets(info, rv$targets) %>% select(Target, Player, Pos, Age, pDFL, hotscore, Injury, Expected.Return, -playerid, -isTarget)
