@@ -500,3 +500,86 @@ table.dataTable thead .selectize-input { font-size: 12px; padding: 3px 7px; min-
   color: var(--dafl-clay);
   text-decoration: none;
 }
+
+/* ============================================================
+   Section 5: cascade overrides
+   `css/dataTables.bootstrap5.min.css` is injected by the DT widget AFTER the
+   theme stylesheet, and shiny ships a `.datatables .dataTables_wrapper ...`
+   rule that outranks Section 3's selectors. Every rule here exists to win one
+   of those two specific fights — each was verified in a live browser, not
+   guessed. Do not "simplify" these selectors; the specificity is the point.
+   ============================================================ */
+
+/* --- 1. season badge -------------------------------------------------------
+   .dafl-brand sets line-height:46px to centre the brand in the navbar. The
+   badge inherited it and rendered as a 50px-tall oval. */
+.dafl-brand__season {
+  line-height: 1;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* --- 2. zebra striping -----------------------------------------------------
+   DT applies Bootstrap's .table-striped, which paints CELLS through
+   --bs-table-bg-type. Section 3 only set backgrounds on rows, so the stripes
+   survived. Neutralise the Bootstrap variables, then paint the cells directly.
+   No blanket `box-shadow: none` here — it would erase the selected-row inset
+   clay edge from Section 3. */
+table.dataTable.table-striped > tbody > tr > *,
+table.dataTable > tbody > tr > * {
+  --bs-table-accent-bg: transparent;
+  --bs-table-bg-type: transparent;
+  --bs-table-bg-state: transparent;
+}
+table.dataTable tbody tr td { background-color: var(--dafl-card); }
+table.dataTable tbody tr:hover td,
+table.dataTable.table-hover tbody tr:hover td { background-color: var(--dafl-hover); }
+table.dataTable tbody tr.selected td { background-color: var(--dafl-sel); }
+
+/* --- 3. pagination ---------------------------------------------------------
+   With Bootstrap 5, DT renders pagination as
+   <li class="paginate_button page-item"><a class="page-link">.
+   Section 3 styled the <li>; the visible control is the <a>. */
+.dataTables_wrapper .dataTables_paginate .pagination { margin: 0; }
+.dataTables_wrapper .dataTables_paginate .page-item .page-link {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin: 0 1px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dafl-ink);
+  box-shadow: none;
+}
+.dataTables_wrapper .dataTables_paginate .page-item .page-link:hover {
+  background: var(--dafl-hover);
+  color: var(--dafl-ink);
+}
+.dataTables_wrapper .dataTables_paginate .page-item.active .page-link {
+  background: var(--dafl-clay);
+  color: #FFFFFF;
+}
+.dataTables_wrapper .dataTables_paginate .page-item.disabled .page-link {
+  background: transparent;
+  color: var(--dafl-rule);
+}
+
+/* --- 4. filter and length controls -----------------------------------------
+   Shiny ships `.datatables .dataTables_wrapper .dataTables_filter input {
+   border-style: none }` at specificity (0,3,1), outranking Section 3's
+   (0,2,1). Match its specificity so source order decides, and ours is later. */
+.datatables .dataTables_wrapper .dataTables_filter input,
+.datatables .dataTables_wrapper .dataTables_length select {
+  border: 1px solid var(--dafl-rule);
+  border-radius: 6px;
+  background: var(--dafl-card);
+  color: var(--dafl-ink);
+  padding: 4px 9px;
+  font-size: 13px;
+}
+.datatables .dataTables_wrapper .dataTables_filter input:focus {
+  outline: none;
+  border-color: var(--dafl-clay);
+  box-shadow: 0 0 0 3px rgba(200, 102, 58, .15);
+}
