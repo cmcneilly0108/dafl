@@ -467,6 +467,12 @@ table.dataTable thead .selectize-input { font-size: 12px; padding: 3px 7px; min-
   color: var(--dafl-clay);
   text-decoration-color: var(--dafl-clay);
 }
+/* Player names are the one column where wrapping is never wanted: a wrapped
+   name doubles row height and cancels out Section 3's tightened padding.
+   These tables already scroll horizontally, so widening a column is free.
+   Scoped to .dafl-player so long free-text columns (e.g. catSummary's
+   "Top 4 Contributors") keep wrapping normally. */
+.dafl-player { white-space: nowrap; }
 
 .dafl-menu {
   position: absolute;
