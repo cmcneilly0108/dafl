@@ -101,17 +101,7 @@ shinyUI(
           });
         }, 0);
       }
-    ")),
-      tags$style(HTML("
-      .dafl-player { color:inherit; cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
-      .dafl-player:hover { color:#2980b9; }
-      .dafl-menu { position:absolute; z-index:3000; background:#fff; border:1px solid #bbb;
-                   border-radius:6px; box-shadow:0 2px 10px rgba(0,0,0,0.2); min-width:160px;
-                   font-size:14px; overflow:hidden; }
-      .dafl-menu-title { padding:6px 12px; font-weight:bold; background:#2c3e50; color:#fff; white-space:nowrap; }
-      .dafl-menu-item { display:block; padding:8px 12px; color:#2c3e50; text-decoration:none; cursor:pointer; }
-      .dafl-menu-item:hover { background:#ecf0f1; }
-      "))
+    "))
     ),
     tabPanel("Standings",
              tabsetPanel(

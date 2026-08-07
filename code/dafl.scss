@@ -448,3 +448,55 @@ table.dataTable thead .selectize-input { font-size: 12px; padding: 3px 7px; min-
   border-top: 1px solid var(--dafl-rule);
   padding: 6px 10px;
 }
+
+/* ============================================================
+   Section 4: player-name links and the click-through popup menu
+   Class names come from daflPlayerMenu() in LeagueEval/ui.R and
+   savantAnchor() in code/daflFunctions.r — do not rename.
+   ============================================================ */
+
+.dafl-player {
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--dafl-rule);
+  text-underline-offset: 2px;
+}
+.dafl-player:hover {
+  color: var(--dafl-clay);
+  text-decoration-color: var(--dafl-clay);
+}
+
+.dafl-menu {
+  position: absolute;
+  z-index: 3000;
+  background: var(--dafl-card);
+  border: 1px solid var(--dafl-rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(27, 42, 65, .16);
+  min-width: 176px;
+  font-size: 13.5px;
+  overflow: hidden;
+}
+.dafl-menu-title {
+  padding: 7px 12px;
+  font-family: var(--dafl-serif);
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--dafl-ink);
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+.dafl-menu-item {
+  display: block;
+  padding: 8px 12px;
+  color: var(--dafl-ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.dafl-menu-item:hover {
+  background: var(--dafl-hover);
+  color: var(--dafl-clay);
+  text-decoration: none;
+}
