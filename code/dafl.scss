@@ -535,6 +535,11 @@ table.dataTable tbody tr td { background-color: var(--dafl-card); }
 table.dataTable tbody tr:hover td,
 table.dataTable.table-hover tbody tr:hover td { background-color: var(--dafl-hover); }
 table.dataTable tbody tr.selected td { background-color: var(--dafl-sel); }
+/* Bootstrap 5.3 stripes with a 9999px inset box-shadow, not a background.
+   Kill it on every row EXCEPT .selected, whose inset clay edge (Section 3)
+   must survive. Specificity (0,2,3) ties Bootstrap's striped selector, so
+   source order decides — and this rule is later. */
+table.dataTable > tbody > tr:not(.selected) > * { box-shadow: none; }
 
 /* --- 3. pagination ---------------------------------------------------------
    With Bootstrap 5, DT renders pagination as
