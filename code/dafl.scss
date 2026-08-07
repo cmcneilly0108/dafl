@@ -541,11 +541,20 @@ table.dataTable tbody tr td { background-color: var(--dafl-card); }
 table.dataTable tbody tr:hover td,
 table.dataTable.table-hover tbody tr:hover td { background-color: var(--dafl-hover); }
 table.dataTable tbody tr.selected td { background-color: var(--dafl-sel); }
-/* Bootstrap 5.3 stripes with a 9999px inset box-shadow, not a background.
-   Kill it on every row EXCEPT .selected, whose inset clay edge (Section 3)
-   must survive. Specificity (0,2,3) ties Bootstrap's striped selector, so
-   source order decides — and this rule is later. */
-table.dataTable > tbody > tr:not(.selected) > * { box-shadow: none; }
+/* Both Bootstrap 5.3 and DT's bootstrap5 integration paint rows with a 9999px
+   inset box-shadow rather than a background. DT's selectors are deliberate
+   specificity hacks — note the doubled class:
+     .table.dataTable.dataTable.table-striped > tbody > tr.even:not(.selected) > *   (0,6,2)
+     table.dataTable > tbody > tr.selected > *                                        9999px fill
+   Out-specifying those means ever-longer brittle selectors, so !important is
+   the honest tool for what is a purely presentational override. Verified by
+   enumerating the matched rules in a live browser, not guessed. */
+table.dataTable > tbody > tr:not(.selected) > * {
+  box-shadow: none !important;
+}
+table.dataTable > tbody > tr.selected > * {
+  box-shadow: inset 3px 0 0 var(--dafl-clay) !important;
+}
 
 /* --- 3. pagination ---------------------------------------------------------
    With Bootstrap 5, DT renders pagination as
