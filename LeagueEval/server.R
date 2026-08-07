@@ -614,7 +614,7 @@ shinyServer(function(input, output,session) {
                   valueColumns = 'TierBg',
                   backgroundColor = styleEqual(
                     c('High', 'Medium', 'Low'),
-                    c('#d4edda', '#fff3cd', '#f8d7da')
+                    c('#E2EFE4', '#FAF0D7', '#F7DFD9')
                   ))
   })
 
@@ -815,9 +815,9 @@ shinyServer(function(input, output,session) {
                                list(targets = 1:3, width = "32%")
                              )),
               rownames = FALSE, escape = FALSE) %>%
-      formatStyle('High',   backgroundColor = '#d4edda') %>%
-      formatStyle('Medium', backgroundColor = '#fff3cd') %>%
-      formatStyle('Low',    backgroundColor = '#f8d7da')
+      formatStyle('High',   backgroundColor = '#E2EFE4') %>%
+      formatStyle('Medium', backgroundColor = '#FAF0D7') %>%
+      formatStyle('Low',    backgroundColor = '#F7DFD9')
   })
 # Prospects
   output$ProPit <- DT::renderDataTable({
@@ -1118,7 +1118,7 @@ shinyServer(function(input, output,session) {
         tags$span(style = "margin-left:12px; color:#888;",
                   paste0("(return: ", player$Expected.Return, ")"))
       } else NULL
-      tags$div(style = "padding:10px 16px; background:#fff3cd; border:1px solid #ddd; border-top:none; font-size:14px;",
+      tags$div(style = "padding:10px 16px; background:#FAF0D7; border:1px solid #ddd; border-top:none; font-size:14px;",
         tags$div(tags$strong("Injury: "), player$Injury, retStr)
       )
     } else NULL
