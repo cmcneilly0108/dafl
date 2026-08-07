@@ -4,8 +4,9 @@ library("DT")
 library("shinyjs")
 
 
-shinyUI(navbarPage("Offseason Trade Evaluator, v2.0",
-        theme = bs_theme(bootswatch = "flatly"),
+shinyUI(navbarPage(title = dafl_brand("Offseason Trades"),
+        windowTitle = "DAFL Offseason Trades",
+        theme = dafl_theme(),
         shinyjs::useShinyjs(),
         tabPanel("Overview",
                  verticalLayout(

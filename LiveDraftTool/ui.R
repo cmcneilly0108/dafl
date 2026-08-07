@@ -3,9 +3,10 @@ library("DT")
 library("shinyjs")
 library("ShinyQuill")
 
-shinyUI(navbarPage("DAFL Live Draft Tool v 2.0",
+shinyUI(navbarPage(title = dafl_brand("Live Draft"),
+                   windowTitle = "DAFL Live Draft",
                    id = "mainNav",
-                   theme = bs_theme(bootswatch = "flatly"),
+                   theme = dafl_theme(),
     useShinyjs(),
     tags$head(tags$script(HTML("
       Shiny.addCustomMessageHandler('toggleStar', function(msg) {

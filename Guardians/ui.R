@@ -6,8 +6,9 @@ library("DT")
 shinyUI(
   navbarPage(
     id = "gNav",
-    theme = bs_theme(bootswatch = "flatly"),
-    "Cleveland Guardians Tracker",
+    theme = dafl_theme(),
+    title = dafl_brand("Guardians Tracker"),
+    windowTitle = "Guardians Tracker",
     header = tagList(
       tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",
         actionButton('gSettingsBtn', 'Settings', class = 'btn-default btn-sm')

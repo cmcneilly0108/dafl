@@ -5,8 +5,9 @@ library("bslib")
 library("DT")
 
 
-shinyUI(navbarPage("Live Auction Tool, v0.5",
-                   theme = bs_theme(bootswatch = "flatly"),
+shinyUI(navbarPage(title = dafl_brand("Live Auction"),
+                   windowTitle = "DAFL Live Auction",
+                   theme = dafl_theme(),
                    tabPanel("Overview",
                             verticalLayout(
                               DT::dataTableOutput("pstandings")
