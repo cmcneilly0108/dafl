@@ -12,8 +12,9 @@ shinyUI(
 #    theme = bs_theme(version = 4, bootswatch = "slate"),
     # "cerulean", "cosmo", "cyborg", "darkly", "flatly", "journal", "litera", "lumen", "lux", "materia", "minty",
     # "pulse", "sandstone", "simplex", "sketchy", "slate", "solar", "spacelab", "superhero", "united", "yeti"
-    theme = bs_theme(bootswatch = "flatly"),
-    "DAFL Evaluator, v3.0",
+    theme = dafl_theme(),
+    title = dafl_brand("Evaluator"),
+    windowTitle = "DAFL Evaluator",
     header = tagList(
       shinyjs::useShinyjs(),
       tags$div(style = "position:absolute; right:15px; top:8px; z-index:1000;",

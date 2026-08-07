@@ -1,0 +1,35 @@
+/* ============================================================
+   DAFL shared theme — "ballpark editorial"
+   Loaded by code/daflTheme.R via bslib::bs_add_rules().
+   Section 1: tokens + base typography
+   ============================================================ */
+
+:root {
+  --dafl-paper: #FBF8F3;
+  --dafl-card:  #FFFFFF;
+  --dafl-ink:   #1B2A41;
+  --dafl-muted: #6B7789;
+  --dafl-clay:  #C8663A;
+  --dafl-rule:  #E4DDD2;
+  --dafl-good:  #1E7A4B;
+  --dafl-bad:   #B3402F;
+  --dafl-hover: #F3EDE4;
+  --dafl-sel:   #FBEDE4;
+
+  --dafl-serif: "Zilla Slab", Georgia, "Times New Roman", serif;
+  --dafl-sans:  "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: var(--dafl-paper);
+  color: var(--dafl-ink);
+  font-family: var(--dafl-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container-fluid > .row,
+.tab-content { padding-top: 4px; }
+
+a { color: var(--dafl-clay); text-decoration: none; }
+a:hover { color: #A9502C; text-decoration: underline; }
