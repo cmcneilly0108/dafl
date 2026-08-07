@@ -290,3 +290,161 @@ h2::after {
 }
 h3 { font-size: 17px; margin: 16px 0 10px; }
 h4 { font-size: 15px; margin: 12px 0 8px; }
+
+/* ============================================================
+   Section 3: DT tables (DataTables 1.13.6 — legacy class names)
+   ============================================================ */
+
+.dataTables_wrapper {
+  font-size: 13.5px;
+  color: var(--dafl-ink);
+  margin-bottom: 22px;
+}
+
+table.dataTable {
+  width: 100% !important;
+  background: var(--dafl-card);
+  border: 1px solid var(--dafl-rule);
+  border-radius: 8px;
+  /* No overflow:hidden here — it would disable sticky headers. */
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 8px 0 !important;
+}
+
+/* --- header --------------------------------------------------------------- */
+table.dataTable thead th {
+  background: var(--dafl-card);
+  font-family: var(--dafl-serif);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--dafl-ink);
+  border-bottom: 2px solid var(--dafl-clay) !important;
+  border-top: 0 !important;
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+/* Sticky only on the label row; filter='top' adds a second row below it. */
+table.dataTable thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* --- body ----------------------------------------------------------------- */
+table.dataTable tbody tr { background: var(--dafl-card); }
+table.dataTable tbody tr.odd,
+table.dataTable.stripe tbody tr.odd,
+table.dataTable.display tbody tr.odd { background: var(--dafl-card); }
+table.dataTable tbody td {
+  padding: 5px 10px;
+  border-top: 1px solid var(--dafl-rule);
+  vertical-align: middle;
+}
+table.dataTable tbody tr:hover,
+table.dataTable.hover tbody tr:hover,
+table.dataTable.display tbody tr:hover { background: var(--dafl-hover) !important; }
+
+table.dataTable tbody tr.selected,
+table.dataTable tbody tr.selected td {
+  background: var(--dafl-sel) !important;
+  color: var(--dafl-ink) !important;
+  box-shadow: inset 3px 0 0 var(--dafl-clay);
+}
+
+/* Tabular figures on numeric columns. DT tags these `dt-right` automatically,
+   so this reaches every numeric column in every table with no server changes. */
+td.dt-right, th.dt-right,
+table.dataTable td.dt-body-right {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* --- sort indicators ------------------------------------------------------ */
+table.dataTable thead th.sorting_asc,
+table.dataTable thead th.sorting_desc { background: var(--dafl-hover); }
+table.dataTable thead .sorting::before,
+table.dataTable thead .sorting::after,
+table.dataTable thead .sorting_asc::before,
+table.dataTable thead .sorting_asc::after,
+table.dataTable thead .sorting_desc::before,
+table.dataTable thead .sorting_desc::after { opacity: .28; }
+table.dataTable thead .sorting_asc::before,
+table.dataTable thead .sorting_desc::after { opacity: 1; color: var(--dafl-clay); }
+
+/* --- controls ------------------------------------------------------------- */
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  border: 1px solid var(--dafl-rule);
+  border-radius: 6px;
+  background: var(--dafl-card);
+  color: var(--dafl-ink);
+  padding: 4px 9px;
+  font-size: 13px;
+}
+.dataTables_wrapper .dataTables_filter input:focus {
+  outline: none;
+  border-color: var(--dafl-clay);
+  box-shadow: 0 0 0 3px rgba(200, 102, 58, .15);
+}
+.dataTables_wrapper .dataTables_filter label,
+.dataTables_wrapper .dataTables_length label,
+.dataTables_wrapper .dataTables_info {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--dafl-muted);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border: 0 !important;
+  background: transparent !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  margin: 0 1px !important;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dafl-ink) !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: var(--dafl-hover) !important;
+  color: var(--dafl-ink) !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: var(--dafl-clay) !important;
+  color: #FFFFFF !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+  background: transparent !important;
+  color: var(--dafl-rule) !important;
+}
+
+/* --- filter='top' column filters ------------------------------------------ */
+table.dataTable thead tr:nth-child(2) td { padding: 4px 6px; border-bottom: 1px solid var(--dafl-rule); }
+table.dataTable thead input[type="text"],
+table.dataTable thead input[type="search"],
+table.dataTable thead .form-control {
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid var(--dafl-rule);
+  padding: 3px 7px;
+  width: 100%;
+}
+table.dataTable thead .selectize-input { font-size: 12px; padding: 3px 7px; min-height: 0; }
+
+/* --- summary tables (dom = 't': no pagination block) -----------------------
+   Trade Summary, Team Category Detail, Statistical Surplus. Uses :has(), so
+   browsers without it simply keep the standard table look.                   */
+.dataTables_wrapper:not(:has(.dataTables_paginate)) table.dataTable {
+  border: 0;
+  border-radius: 0;
+}
+.dataTables_wrapper:not(:has(.dataTables_paginate)) table.dataTable tbody td {
+  border-top: 1px solid var(--dafl-rule);
+  padding: 6px 10px;
+}
