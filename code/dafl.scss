@@ -33,3 +33,260 @@ body {
 
 a { color: var(--dafl-clay); text-decoration: none; }
 a:hover { color: #A9502C; text-decoration: underline; }
+
+/* ============================================================
+   Section 2: chrome — navbar, tabs, sidebar, controls, buttons
+   ============================================================ */
+
+/* --- navbar ---------------------------------------------------------------
+   46px, not 52px: several apps absolutely-position a 30px btn-sm at top:8px
+   in an inline style CSS cannot override. 46px centres it exactly.          */
+.navbar {
+  background-color: var(--dafl-ink) !important;
+  background-image: none;
+  border: 0;
+  border-radius: 0;
+  min-height: 46px;
+  padding: 0 16px;
+  margin-bottom: 0;
+  position: relative;
+  box-shadow: none;
+}
+
+/* seam stitching under the navbar — the one overt baseball motif */
+.navbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -3px;
+  height: 3px;
+  background: repeating-linear-gradient(
+    115deg,
+    var(--dafl-clay) 0 2px,
+    transparent 2px 9px
+  );
+}
+
+.navbar .navbar-brand { padding: 0 14px 0 0; height: auto; display: flex; align-items: center; }
+
+.dafl-brand { display: flex; align-items: baseline; gap: 9px; line-height: 46px; }
+.dafl-brand__mark {
+  font-family: var(--dafl-serif);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #FFFFFF;
+}
+.dafl-brand__sub {
+  font-family: var(--dafl-sans);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: .02em;
+  color: rgba(255, 255, 255, .62);
+}
+.dafl-brand__season {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: #FFFFFF;
+  background: rgba(200, 102, 58, .92);
+  border-radius: 999px;
+  padding: 2px 9px;
+  position: relative;
+  top: -1px;
+}
+
+.navbar .navbar-nav > li > a,
+.navbar .nav-link {
+  color: rgba(255, 255, 255, .72) !important;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  padding: 13px 13px;
+  border-bottom: 2px solid transparent;
+  background: transparent !important;
+}
+.navbar .navbar-nav > li > a:hover,
+.navbar .nav-link:hover { color: #FFFFFF !important; }
+.navbar .navbar-nav > .active > a,
+.navbar .nav-link.active,
+.navbar .nav-item.show > .nav-link,
+.navbar .navbar-nav > .open > a {
+  color: #FFFFFF !important;
+  border-bottom-color: var(--dafl-clay);
+}
+
+.navbar .dropdown-menu {
+  background: var(--dafl-paper);
+  border: 1px solid var(--dafl-rule);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(27, 42, 65, .14);
+  padding: 6px;
+  margin-top: 2px;
+}
+.navbar .dropdown-menu > li > a,
+.navbar .dropdown-item {
+  color: var(--dafl-ink);
+  border-radius: 5px;
+  padding: 7px 12px;
+  font-size: 13.5px;
+}
+.navbar .dropdown-menu > li > a:hover,
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item.active {
+  background: var(--dafl-hover);
+  color: var(--dafl-ink);
+}
+
+/* Settings buttons overlaid on the navy navbar (#settingsBtn in LeagueEval and
+   LiveDraftTool, #gSettingsBtn in Guardians) need light-on-dark treatment. */
+#settingsBtn, #gSettingsBtn {
+  background: rgba(255, 255, 255, .10) !important;
+  border: 1px solid rgba(255, 255, 255, .28) !important;
+  color: rgba(255, 255, 255, .90) !important;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+}
+#settingsBtn:hover, #gSettingsBtn:hover {
+  background: rgba(255, 255, 255, .20) !important;
+  border-color: rgba(255, 255, 255, .50) !important;
+  color: #FFFFFF !important;
+}
+
+/* --- tabsetPanel tabs ----------------------------------------------------- */
+.nav-tabs {
+  border-bottom: 1px solid var(--dafl-rule);
+  margin-bottom: 14px;
+}
+.nav-tabs > li > a,
+.nav-tabs .nav-link {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dafl-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  margin-right: 2px;
+}
+.nav-tabs > li > a:hover,
+.nav-tabs .nav-link:hover {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--dafl-rule);
+  color: var(--dafl-ink);
+}
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:hover,
+.nav-tabs .nav-link.active {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--dafl-clay) !important;
+  color: var(--dafl-clay) !important;
+}
+
+/* --- sidebarPanel --------------------------------------------------------- */
+.well {
+  background: var(--dafl-card);
+  border: 1px solid var(--dafl-rule);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(27, 42, 65, .06);
+  padding: 14px;
+}
+
+/* --- form controls -------------------------------------------------------- */
+.form-control,
+.form-select,
+.selectize-input,
+textarea.form-control {
+  border: 1px solid var(--dafl-rule);
+  border-radius: 6px;
+  background: var(--dafl-card);
+  color: var(--dafl-ink);
+  font-size: 13.5px;
+  box-shadow: none;
+}
+.form-control:focus,
+.form-select:focus,
+.selectize-input.focus,
+.selectize-input.input-active {
+  border-color: var(--dafl-clay);
+  box-shadow: 0 0 0 3px rgba(200, 102, 58, .15);
+  outline: none;
+}
+.selectize-dropdown .active { background: var(--dafl-hover); color: var(--dafl-ink); }
+
+/* Field labels read as small caps; checkbox and radio labels must not. */
+.control-label,
+.shiny-input-container > label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--dafl-muted);
+  margin-bottom: 5px;
+}
+.checkbox label,
+.radio label,
+.form-check-label,
+.shiny-input-container .checkbox > label,
+.shiny-input-container .radio > label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--dafl-ink);
+}
+
+/* --- buttons -------------------------------------------------------------- */
+.btn {
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  background-image: none;
+  box-shadow: none;
+}
+.btn-primary { background: var(--dafl-ink); border-color: var(--dafl-ink); color: #FFFFFF; }
+.btn-primary:hover, .btn-primary:focus { background: #243651; border-color: #243651; color: #FFFFFF; }
+.btn-success { background: var(--dafl-good); border-color: var(--dafl-good); color: #FFFFFF; }
+.btn-success:hover, .btn-success:focus { background: #186139; border-color: #186139; color: #FFFFFF; }
+.btn-default, .btn-secondary {
+  background: transparent;
+  color: var(--dafl-ink);
+  border-color: var(--dafl-rule);
+}
+.btn-default:hover, .btn-secondary:hover {
+  background: var(--dafl-hover);
+  border-color: var(--dafl-clay);
+  color: var(--dafl-ink);
+}
+
+/* --- headings ------------------------------------------------------------- */
+h1, h2, h3, h4, h5 {
+  font-family: var(--dafl-serif);
+  font-weight: 600;
+  color: var(--dafl-ink);
+  letter-spacing: -.005em;
+}
+h2 {
+  font-size: 21px;
+  margin: 18px 0 13px;
+  padding-bottom: 7px;
+  position: relative;
+}
+h2::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 38px; height: 2px;
+  background: var(--dafl-clay);
+}
+h3 { font-size: 17px; margin: 16px 0 10px; }
+h4 { font-size: 15px; margin: 12px 0 8px; }
