@@ -257,16 +257,30 @@ textarea.form-control {
 .btn-primary:hover, .btn-primary:focus { background: #243651; border-color: #243651; color: #FFFFFF; }
 .btn-success { background: var(--dafl-good); border-color: var(--dafl-good); color: #FFFFFF; }
 .btn-success:hover, .btn-success:focus { background: #186139; border-color: #186139; color: #FFFFFF; }
-.btn-default, .btn-secondary {
+/* Shiny's actionButton() ALWAYS emits class="btn btn-default" and then appends
+   the caller's class, so a btn-primary button carries BOTH. At equal
+   specificity the later rule wins, so an unqualified .btn-default rule
+   silently ghosts every variant button in all five apps — including the
+   destructive btn-danger confirmations in LiveDraftTool. Exclude the variants
+   so .btn-default only styles genuinely-default buttons. Measured, not guessed. */
+.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info),
+.btn-secondary {
   background: transparent;
   color: var(--dafl-ink);
   border-color: var(--dafl-rule);
 }
-.btn-default:hover, .btn-secondary:hover {
+.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):hover,
+.btn-secondary:hover {
   background: var(--dafl-hover);
   border-color: var(--dafl-clay);
   color: var(--dafl-ink);
 }
+.btn-warning { background: #D9A441; border-color: #D9A441; color: var(--dafl-ink); }
+.btn-warning:hover, .btn-warning:focus { background: #C48F32; border-color: #C48F32; color: var(--dafl-ink); }
+.btn-danger { background: var(--dafl-bad); border-color: var(--dafl-bad); color: #FFFFFF; }
+.btn-danger:hover, .btn-danger:focus { background: #963527; border-color: #963527; color: #FFFFFF; }
+.btn-info { background: #4E6E8E; border-color: #4E6E8E; color: #FFFFFF; }
+.btn-info:hover, .btn-info:focus { background: #3F5B76; border-color: #3F5B76; color: #FFFFFF; }
 
 /* --- headings ------------------------------------------------------------- */
 h1, h2, h3, h4, h5 {
