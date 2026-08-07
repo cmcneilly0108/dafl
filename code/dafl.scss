@@ -1,6 +1,32 @@
 /* ============================================================
    DAFL shared theme — "ballpark editorial"
    Loaded by code/daflTheme.R via bslib::bs_add_rules().
+
+   CASCADE LOAD ORDER (everything below depends on this):
+     bslib theme CSS (incl. bslib/builtin/bs5/shiny/tables/_rules.scss)
+       -> bs_add_rules(DAFL_SCSS)   <- this file
+       -> DT's css/dataTables.bootstrap5.min.css
+   Two different opponents, two different weapons: bslib is beaten by
+   SPECIFICITY (it uses doubled-class hacks, see Section 5), while DT is
+   beaten by SOURCE ORDER only when specificity ties. That is why some rules
+   below carry the "important" flag and others rely on matching specificity instead.
+
+   CELLS, NOT ROWS: styling here is deliberately applied at the CELL level.
+   Bootstrap paints `background-color` on table CELLS (`tbody > tr > *`), not
+   on the `<tr>` itself, so a new rule written against `tbody tr { ... }`
+   alone will appear to do nothing — it has to target the `td`/`th`.
+
+   PINNED VERSIONS this file was verified against: DT 0.34.0 (bundles
+   DataTables 1.13.6), bslib 0.11.0.
+
+   BIGGEST UPGRADE RISK: if DT ever moves to DataTables 2.x, every legacy
+   wrapper class it emits is renamed (dataTables_filter -> dt-search,
+   dataTables_paginate -> dt-paging, dataTables_wrapper -> dt-container,
+   etc.), and Sections 3 and 5 — which target those legacy names — would
+   silently stop applying. There would be NO error: scripts/check-dafl-theme.R
+   would still pass, because it only greps our own compiled Sass output and
+   never inspects the runtime DOM/cascade against a live DataTables render.
+
    Section 1: tokens + base typography
    ============================================================ */
 
@@ -262,14 +288,19 @@ textarea.form-control {
    specificity the later rule wins, so an unqualified .btn-default rule
    silently ghosts every variant button in all five apps — including the
    destructive btn-danger confirmations in LiveDraftTool. Exclude the variants
-   so .btn-default only styles genuinely-default buttons. Measured, not guessed. */
-.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info),
+   so .btn-default only styles genuinely-default buttons. Measured, not guessed.
+   Reordering will NOT fix this: Bootstrap's own .btn-light/.btn-dark/.btn-link
+   sit earlier in the compiled sheet at equal specificity, so an appended
+   .btn-default still wins regardless of source order. Keep this list in sync
+   if a new Bootstrap variant (btn-light, btn-dark, btn-link, ...) is adopted —
+   btn-outline-* needs different treatment and is intentionally not covered. */
+.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-light):not(.btn-dark):not(.btn-link),
 .btn-secondary {
   background: transparent;
   color: var(--dafl-ink);
   border-color: var(--dafl-rule);
 }
-.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):hover,
+.btn-default:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):not(.btn-info):not(.btn-light):not(.btn-dark):not(.btn-link):hover,
 .btn-secondary:hover {
   background: var(--dafl-hover);
   border-color: var(--dafl-clay);
@@ -368,9 +399,15 @@ table.dataTable tbody tr.selected td {
   box-shadow: inset 3px 0 0 var(--dafl-clay);
 }
 
-/* Tabular figures on numeric columns. DT tags these `dt-right` automatically,
-   so this reaches every numeric column in every table with no server changes. */
+/* Tabular figures on numeric columns. DT tags right-aligned columns
+   `dt-right` automatically, but LeagueEval's "Category Status by Team" table
+   (LeagueEval/server.R) centers every column instead via
+   columnDefs = list(className = 'dt-center', targets = '_all'), so its
+   numeric columns never get a dt-right class. Include dt-center too —
+   tabular figures are harmless on text — so this now actually reaches every
+   numeric column in every table with no server changes. */
 td.dt-right, th.dt-right,
+td.dt-center, th.dt-center,
 table.dataTable td.dt-body-right {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
@@ -542,22 +579,19 @@ table.dataTable thead .selectize-input { font-size: 12px; padding: 3px 7px; min-
 /* --- 2. zebra striping -----------------------------------------------------
    DT applies Bootstrap's .table-striped, which paints CELLS through
    --bs-table-bg-type. Section 3 only set backgrounds on rows, so the stripes
-   survived. Neutralise the Bootstrap variables, then paint the cells directly.
-   No blanket `box-shadow: none` here — it would erase the selected-row inset
-   clay edge from Section 3. */
-table.dataTable.table-striped > tbody > tr > *,
-table.dataTable > tbody > tr > * {
-  --bs-table-accent-bg: transparent;
-  --bs-table-bg-type: transparent;
-  --bs-table-bg-state: transparent;
-}
+   survived. Paint the cells directly below. box-shadow is handled separately
+   further down, split into a `:not(.selected)` rule (forced to none) and a
+   `.selected` rule (its own inset clay-edge value), so the selected-row
+   inset clay edge is preserved rather than erased by a blanket
+   `box-shadow: none`. */
 table.dataTable tbody tr td { background-color: var(--dafl-card); }
 table.dataTable tbody tr:hover td,
 table.dataTable.table-hover tbody tr:hover td { background-color: var(--dafl-hover); }
 table.dataTable tbody tr.selected td { background-color: var(--dafl-sel); }
-/* Both Bootstrap 5.3 and DT's bootstrap5 integration paint rows with a 9999px
-   inset box-shadow rather than a background. DT's selectors are deliberate
-   specificity hacks — note the doubled class:
+/* Both Bootstrap 5.3 and bslib's bs5/shiny/tables rules
+   (bslib/builtin/bs5/shiny/tables/_rules.scss lines 10-33) paint rows with a
+   9999px inset box-shadow rather than a background. bslib's selectors are
+   deliberate specificity hacks — note the doubled class:
      .table.dataTable.dataTable.table-striped > tbody > tr.even:not(.selected) > *   (0,6,2)
      table.dataTable > tbody > tr.selected > *                                        9999px fill
    Out-specifying those means ever-longer brittle selectors, so !important is
@@ -600,9 +634,10 @@ table.dataTable > tbody > tr.selected > * {
 }
 
 /* --- 4. filter and length controls -----------------------------------------
-   Shiny ships `.datatables .dataTables_wrapper .dataTables_filter input {
-   border-style: none }` at specificity (0,3,1), outranking Section 3's
-   (0,2,1). Match its specificity so source order decides, and ours is later. */
+   bslib ships `.datatables .dataTables_wrapper .dataTables_filter input {
+   border: none }` (bslib/builtin/bs5/shiny/tables/_rules.scss lines 75-79) at
+   specificity (0,3,1), outranking Section 3's (0,2,1). Match its specificity
+   so source order decides, and ours is later. */
 .datatables .dataTables_wrapper .dataTables_filter input,
 .datatables .dataTables_wrapper .dataTables_length select {
   border: 1px solid var(--dafl-rule);

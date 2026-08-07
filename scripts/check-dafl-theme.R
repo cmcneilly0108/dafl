@@ -23,7 +23,7 @@ expect <- c("--dafl-clay", "--dafl-paper", "--dafl-ink",
             "#settingsBtn", ".nav-tabs",
             ".dataTables_wrapper", ".dataTables_paginate", "tabular-nums",
             ".dafl-menu-item", ".dafl-player",
-            "--bs-table-bg-type", ".page-link")
+            "inset 3px 0 0", ".page-link")
 
 missing <- expect[!vapply(expect, grepl, logical(1), x = css, fixed = TRUE)]
 if (length(missing)) {
