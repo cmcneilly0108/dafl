@@ -191,9 +191,9 @@ pullTeam <- function(tn){
   tP <- left_join(tP,rrc)
   tP <- select(tP,-Team)
   tP <- tP %>% arrange(-hotscore) %>%
-    select(Player,Pos,Age,pDFL,pSGP,Rank,Salary,Contract,'Pitching+',pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,hotscore,twostarts,Injury,Expected.Return,Role,Tags)
+    select(Player,Pos,Age,pDFL,hotscore,pSGP,Rank,Salary,Contract,'Pitching+',pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,twostarts,Injury,Expected.Return,Role,Tags)
   tH <- tH %>% arrange(-hotscore) %>%
-    select(Player,Pos,Age,pDFL,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return)
+    select(Player,Pos,Age,pDFL,hotscore,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,Injury,Expected.Return)
   list(tH,tP)
 }
 
@@ -1397,7 +1397,10 @@ getStuffAPI <- function() {
   stuff <- stuff %>%
     select(Player = PlayerName, MLB = TeamNameAbb, `Pitching+` = sp_pitching)
 
-  write.csv(stuff, "../latestStuff.csv")
+  # row.names = FALSE is load-bearing: without it write.csv emits an unnamed
+  # row-number column that read.csv restores as `X`, which then joins into the
+  # natural-join key against AllP and silently zeroes out every Pitching+ match.
+  write.csv(stuff, "../latestStuff.csv", row.names = FALSE)
   cat("Wrote", nrow(stuff), "Pitching+ records to ../latestStuff.csv\n")
   stuff
 }
@@ -1498,7 +1501,9 @@ getStuffRS <- function() {
   #stuff$Name <- stri_enc_toascii(stuff$Name)
   stuff <- stuff %>% select(Player=Name,MLB=Team,`Pitching+`)
   
-  write.csv(stuff,"../latestStuff.csv")
+  # row.names = FALSE: see the note in getStuffAPI() — a stray `X` column here
+  # poisons the natural-join key and wipes out Pitching+.
+  write.csv(stuff,"../latestStuff.csv", row.names = FALSE)
   stuff
 }
 

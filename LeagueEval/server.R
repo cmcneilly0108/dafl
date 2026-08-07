@@ -255,13 +255,13 @@ shinyServer(function(input, output,session) {
     ifelse(input$fa == TRUE,ffp <- filter(AllP,Team=='Free Agent'),ffp <- AllP)
     ifelse(input$e3 %in% c('SP','MR','CL'),
            ff <- ffp %>% filter(Pos == input$e3) %>% arrange(-pDFL) %>%
-             select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,hotscore,twostarts,LVG,Injury,Expected.Return),
+             select(playerid,Player,Pos,Age,pDFL,hotscore,Team,Salary,Contract,pSGP,Rank,'Pitching+',pW,pSO,pSV,pHLD,pERA,`pK/9`,pFIP,W,K,S,HD,ERA,twostarts,LVG,Injury,Expected.Return),
            ifelse(input$e3 == 'Hitters',
                   ff <- ffh %>%
-                    select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    select(playerid,Player,Pos,Age,pDFL,hotscore,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,Injury,Expected.Return) %>%
                     arrange(-pDFL),
                   ff <- ffh %>% filter(str_detect(posEl,input$e3)) %>%
-                    select(playerid,Player,Pos,Age,pDFL,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,hotscore,Injury,Expected.Return) %>%
+                    select(playerid,Player,Pos,Age,pDFL,hotscore,Team,Salary,Contract,pSGP,Rank,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,Injury,Expected.Return) %>%
                     arrange(-pDFL)
            )
     )
@@ -332,7 +332,7 @@ shinyServer(function(input, output,session) {
   rosterTable <- function(roster) {
     req(roster)
     visibleCols <- intersect(
-      c('Player','Pos','pDFL','Salary','Contract','hotscore','Injury'),
+      c('Player','Pos','pDFL','hotscore','Salary','Contract','Injury'),
       colnames(roster)
     )
     display <- roster[, visibleCols, drop = FALSE]

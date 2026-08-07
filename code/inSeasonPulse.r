@@ -315,7 +315,7 @@ if (!forceRefresh && injAge < 20) {
 if (!forceRefresh && stuffAge < 20) {
   cat("Using cached Stuff+ file (", stuffAge, " hours old)\n")
   stuff <- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
-    rename(`Pitching+` = `Pitching.`)
+    rename(`Pitching+` = `Pitching.`) %>% select(-any_of("X"))
 } else {
   cat("Stuff+ file is", stuffAge, "hours old, fetching fresh data...\n")
   tryCatch({
@@ -324,7 +324,7 @@ if (!forceRefresh && stuffAge < 20) {
     cat("Error fetching Stuff+:", e$message, "\n")
     cat("Falling back to cached Stuff+ file\n")
     stuff <<- read.csv("../latestStuff.csv", stringsAsFactors = FALSE) %>%
-      rename(`Pitching+` = `Pitching.`)
+      rename(`Pitching+` = `Pitching.`) %>% select(-any_of("X"))
   })
 }
 
@@ -379,7 +379,10 @@ AllP <- left_join(AllP,twostarts,relationship = "many-to-many")
 # df <- df %>% slice(-(1:2))
 # #stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
 # stuff <- df %>% select(Player=Name,`Pitching+`)
-AllP <- left_join(AllP,stuff,relationship = "many-to-many")
+# Join key is explicit on purpose. A natural join here keys on EVERY shared
+# column name, and AllP carries an all-NA `X` left over from an earlier
+# read.csv — so any stray `X` on the stuff side silently drops every match.
+AllP <- left_join(AllP, stuff, by = c('Player', 'MLB'), relationship = "many-to-many")
 #AllP$`Pitching+` <- 100
 #AllP$twostarts <- 'no'
 
@@ -414,7 +417,7 @@ FAP <- select(FAP,-Team)
 rrc <- getRRClosers()
 rrcAvail <- inner_join(rrc,FAP,by=c('playerid'))
 rrcResults <- arrange(rrcAvail,-pDFL) %>%
-  select(Player,Pos,pDFL,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,pGS,W,K,S,HD,ERA,hotscore,LVG,MLB, Season, L10,Injury,Expected.Return,playerid)
+  select(Player,Pos,pDFL,hotscore,pSGP,Role,Tags,Rank,pSV,pHLD,pW,pSO,pERA,`pK/9`,`pBB/9`,pGS,W,K,S,HD,ERA,LVG,MLB, Season, L10,Injury,Expected.Return,playerid)
 
 
 # change filter conditions here, check if BPReport is working, see if I'm only downloading 2 weeks
@@ -777,16 +780,16 @@ needsOF <- inner_join(needsOF,st) %>% select(-Avail,-Short)
 
 # Recently injured
 newHurt <- AllH %>% mutate(idate=as_date(Injury,format="%m/%d")) %>% filter(!is.na(Injury) & idate > today()-7 & Team != "Free Agent") %>%
-  select(Player,Pos,Age,pDFL,Team,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,hotscore,Team,Injury,Expected.Return)
 newHurt2 <- AllP %>% mutate(idate=as_date(Injury,format="%m/%d")) %>% filter(!is.na(Injury) & idate > today()-7 & Team != "Free Agent") %>%
-  select(Player,Pos,Age,pDFL,Team,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,hotscore,Team,Injury,Expected.Return)
 newHurt <- bind_rows(newHurt,newHurt2) %>% arrange(Team)
 
 # Big slumpers
 newSlump <- AllH %>% filter(pDFL > 15 & hotscore < 3 & Team != "Free Agent") %>%
-  select(Player,Pos,Age,pDFL,Team,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,hotscore,Team,Injury,Expected.Return)
 newSlump2 <- AllP %>% filter(pDFL > 8 & hotscore < 3 & Team != "Free Agent") %>%
-  select(Player,Pos,Age,pDFL,Team,hotscore,Injury,Expected.Return)
+  select(Player,Pos,Age,pDFL,hotscore,Team,Injury,Expected.Return)
 newSlump <- bind_rows(newSlump,newSlump2) %>% arrange(Team)
 
 problems <- bind_rows(newHurt, newSlump) %>% arrange(Team)
@@ -953,7 +956,8 @@ buildAltLeaguePool <- function(hFile, pFile) {
   AllP <- left_join(AllP, inj, by = c('Player'), relationship = "many-to-many")
   AllP <- left_join(AllP, stand, by = c('MLB'), relationship = "many-to-many")
   AllP <- left_join(AllP, twostarts, relationship = "many-to-many")
-  AllP <- left_join(AllP, stuff, relationship = "many-to-many")
+  # Explicit key — see the note on the inline pipeline's stuff join above.
+  AllP <- left_join(AllP, stuff, by = c('Player', 'MLB'), relationship = "many-to-many")
   AllP <- AllP %>% mutate(Pos = ifelse(is.na(Pos), 'SP', Pos))
 
   # 8. Free Agents (used for rrcResults)
@@ -961,8 +965,8 @@ buildAltLeaguePool <- function(hFile, pFile) {
 
   # 9. rrcResults (Reliever Detail)
   rrcResults <- inner_join(rrc, FAP, by = c('playerid')) %>% arrange(-pDFL) %>%
-    select(Player, Pos, pDFL, pSGP, Role, Tags, Rank, pSV, pHLD, pW, pSO, pERA,
-           `pK/9`, `pBB/9`, pGS, W, K, S, HD, ERA, hotscore, LVG, MLB, Season, L10,
+    select(Player, Pos, pDFL, hotscore, pSGP, Role, Tags, Rank, pSV, pHLD, pW, pSO, pERA,
+           `pK/9`, `pBB/9`, pGS, W, K, S, HD, ERA, LVG, MLB, Season, L10,
            Injury, Expected.Return, playerid)
 
   # 10. RTot (Standings tab — Talent)
@@ -992,15 +996,15 @@ buildAltLeaguePool <- function(hFile, pFile) {
   # 13. problems (Desperate)
   newHurt  <- AllH %>% mutate(idate = as_date(Injury, format = "%m/%d")) %>%
     filter(!is.na(Injury) & idate > today() - 7 & Team != "Free Agent") %>%
-    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+    select(Player, Pos, Age, pDFL, hotscore, Team, Injury, Expected.Return)
   newHurt2 <- AllP %>% mutate(idate = as_date(Injury, format = "%m/%d")) %>%
     filter(!is.na(Injury) & idate > today() - 7 & Team != "Free Agent") %>%
-    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+    select(Player, Pos, Age, pDFL, hotscore, Team, Injury, Expected.Return)
   newHurt  <- bind_rows(newHurt, newHurt2) %>% arrange(Team)
   newSlump  <- AllH %>% filter(pDFL > 15 & hotscore < 3 & Team != "Free Agent") %>%
-    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+    select(Player, Pos, Age, pDFL, hotscore, Team, Injury, Expected.Return)
   newSlump2 <- AllP %>% filter(pDFL > 8 & hotscore < 3 & Team != "Free Agent") %>%
-    select(Player, Pos, Age, pDFL, Team, hotscore, Injury, Expected.Return)
+    select(Player, Pos, Age, pDFL, hotscore, Team, Injury, Expected.Return)
   newSlump  <- bind_rows(newSlump, newSlump2) %>% arrange(Team)
   problems  <- bind_rows(newHurt, newSlump) %>% arrange(Team)
 
