@@ -221,6 +221,9 @@ shinyUI(
                    h2("Points by Category"),
                    DT::dataTableOutput("catSummary"),
                    br(),
+                   h2("League Points In Play"),
+                   DT::dataTableOutput("pointsInPlay"),
+                   br(),
                    h2("Team Category Detail"),
                    DT::dataTableOutput("teamCatDetail")
                  )

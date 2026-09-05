@@ -33,6 +33,56 @@ researchSources <- tryCatch({
 researchSourceNames <- vapply(researchSources, function(s) s$name, character(1))
 
 
+# --- Category-status shared helpers ------------------------------------------
+# Used by output$catSummary (per-team category detail) and output$pointsInPlay
+# (league-wide roll-up). Both read the same globals from inSeasonPulse.r —
+# cstand, standings, aWeek — so these stay plain functions over those rather
+# than reactives; the renderers already invalidate on rv$refreshCount.
+
+# Per-category rank direction. ERA ranked low-to-high, the rest high-to-low
+# (lower score = the team is worse in that category).
+catRankCats <- list(
+  list(cat='W',  rev=FALSE), list(cat='K',  rev=FALSE),
+  list(cat='S',  rev=FALSE), list(cat='HD', rev=FALSE),
+  list(cat='ERA',rev=TRUE),  list(cat='HR', rev=FALSE),
+  list(cat='RBI',rev=FALSE), list(cat='R',  rev=FALSE),
+  list(cat='SB', rev=FALSE), list(cat='BA', rev=FALSE)
+)
+# Counting cats accumulate linearly, so the yardstick is weekly production.
+# BA/ERA are rate stats — handled via their typical weekly swing instead.
+catCountingCats <- c('HR','RBI','SB','R','W','HD','S','K')
+
+# Rate-stat yardstick: the league's typical week-over-week movement in BA/ERA,
+# measured from the weekly standings snapshots (the analog of a week's worth
+# of production). Ratios get stickier as AB/IP pile up, so we use only the
+# most recent ~4 week transitions — the window self-adjusts as the season
+# wears on. NA if snapshot history is missing.
+catSwing <- function(col, nWeeks = 4) {
+  if (!exists("standings") ||
+      !all(c(col, "Team", "Week") %in% names(standings))) return(NA_real_)
+  s   <- standings
+  wks <- sort(unique(s$Week))
+  keep <- if (length(wks) > nWeeks + 1) tail(wks, nWeeks + 1) else wks
+  s    <- s[s$Week %in% keep, ]
+  s    <- s[order(s$Team, s$Week), ]
+  vals <- suppressWarnings(as.numeric(s[[col]]))
+  byTeam <- tapply(vals, s$Team, function(x) mean(abs(diff(x)), na.rm = TRUE))
+  mean(byTeam, na.rm = TRUE)
+}
+
+# One week of typical movement in a category, in that category's own units.
+# `v` is the league-wide vector of current values for the category. Returns NA
+# when the inputs aren't there (no aWeek yet, too little snapshot history for
+# the rate stats) — callers treat such a category as having no measurable gap.
+catWeekly <- function(cat, v) {
+  if (cat %in% catCountingCats) {
+    if (!exists("aWeek") || !is.finite(aWeek) || aWeek <= 0) return(NA_real_)
+    mean(v, na.rm = TRUE) / aWeek
+  } else if (cat == "BA")  catSwing("BA")
+  else   if (cat == "ERA") catSwing("ERA")
+  else                     NA_real_
+}
+
 shinyServer(function(input, output,session) {
 
   # --- Reactive state ---
@@ -631,38 +681,9 @@ shinyServer(function(input, output,session) {
     } else team
     if (!shortTeam %in% cstand$Team) return(NULL)
 
-    # Per-category rank for the selected team. ERA ranked low-to-high, the rest
-    # high-to-low (lower score = the team is worse in that category).
-    rankCats <- list(
-      list(cat='W',  rev=FALSE), list(cat='K',  rev=FALSE),
-      list(cat='S',  rev=FALSE), list(cat='HD', rev=FALSE),
-      list(cat='ERA',rev=TRUE),  list(cat='HR', rev=FALSE),
-      list(cat='RBI',rev=FALSE), list(cat='R',  rev=FALSE),
-      list(cat='SB', rev=FALSE), list(cat='BA', rev=FALSE)
-    )
-    # Counting cats accumulate linearly, so the yardstick is weekly production.
-    # BA/ERA are rate stats — handled below via their typical weekly swing.
-    countingCats <- c('HR','RBI','SB','R','W','HD','S','K')
-
-    # Rate-stat yardstick: the league's typical week-over-week movement in BA/ERA,
-    # measured from the weekly standings snapshots (the analog of a week's worth
-    # of production). Ratios get stickier as AB/IP pile up, so we use only the
-    # most recent ~4 week transitions — the window self-adjusts as the season
-    # wears on. NA if snapshot history is missing — those cats fall back to "—".
-    catSwing <- function(col, nWeeks = 4) {
-      if (!exists("standings") ||
-          !all(c(col, "Team", "Week") %in% names(standings))) return(NA_real_)
-      s   <- standings
-      wks <- sort(unique(s$Week))
-      keep <- if (length(wks) > nWeeks + 1) tail(wks, nWeeks + 1) else wks
-      s    <- s[s$Week %in% keep, ]
-      s    <- s[order(s$Team, s$Week), ]
-      vals <- suppressWarnings(as.numeric(s[[col]]))
-      byTeam <- tapply(vals, s$Team, function(x) mean(abs(diff(x)), na.rm = TRUE))
-      mean(byTeam, na.rm = TRUE)
-    }
-    baSwing  <- catSwing("BA")
-    eraSwing <- catSwing("ERA")
+    # Rank direction, the counting/rate split and the weekly yardstick are
+    # shared with output$pointsInPlay — see catRankCats / catWeekly above.
+    rankCats <- catRankCats
 
     # Map a short nickname back to the full team name for display.
     fullName <- function(short) {
@@ -692,7 +713,6 @@ shinyServer(function(input, output,session) {
     # gainIn / loseIn: that gap expressed in weeks of typical category movement.
     fmtWeeks <- function(x) if (is.na(x)) "—" else sprintf("%.1f", x)
 
-    haveWeek <- exists("aWeek") && is.finite(aWeek) && aWeek > 0
     msRows <- lapply(rankCats, function(rc) {
       v <- suppressWarnings(as.numeric(cstand[[rc$cat]]))
       ord <- if (rc$rev) order(-v, na.last = TRUE) else order(v, na.last = TRUE)
@@ -708,11 +728,7 @@ shinyServer(function(input, output,session) {
       awayFromVal <- if (pos > 1)  abs(myVal - valsRanked[pos - 1]) else NA_real_
 
       # Yardstick: weekly production for counting stats, typical weekly swing for BA/ERA.
-      leagueWeekly <- if (rc$cat %in% countingCats && haveWeek)
-                        mean(v, na.rm = TRUE) / aWeek
-                      else if (rc$cat == "BA")  baSwing
-                      else if (rc$cat == "ERA") eraSwing
-                      else                       NA_real_
+      leagueWeekly <- catWeekly(rc$cat, v)
       okRate <- !is.na(leagueWeekly) && leagueWeekly > 0
       weeksGain <- if (okRate && !is.na(toNextVal))   toNextVal   / leagueWeekly else NA_real_
       weeksLose <- if (okRate && !is.na(awayFromVal)) awayFromVal / leagueWeekly else NA_real_
@@ -760,6 +776,118 @@ shinyServer(function(input, output,session) {
               options = list(pageLength = 20,
                              columnDefs = list(list(className = 'dt-center',
                                                     targets = '_all'))))
+  })
+
+# Category Status — league-wide roll-up of the points each team can gain or
+# lose in a single week. Same yardstick as catSummary above, but instead of
+# only the immediate neighbours it counts *every* rival within a week's
+# production: a team sitting in a bunched category has several points genuinely
+# in play, and the neighbour-only view flattens exactly that signal.
+  output$pointsInPlay <- DT::renderDataTable({
+    rv$refreshCount
+    if (!exists("cstand") || nrow(cstand) == 0) return(NULL)
+
+    teamsAll <- cstand$Team
+    nT       <- length(teamsAll)
+    gainN <- setNames(integer(nT), teamsAll)
+    riskN <- setNames(integer(nT), teamsAll)
+    # Per-team named integer vectors: category -> points in play there.
+    gainBy <- setNames(vector("list", nT), teamsAll)
+    riskBy <- setNames(vector("list", nT), teamsAll)
+
+    for (rc in catRankCats) {
+      v  <- suppressWarnings(as.numeric(cstand[[rc$cat]]))
+      wk <- catWeekly(rc$cat, v)
+      # No usable yardstick (no aWeek, or too little snapshot history for the
+      # rate stats) — this category contributes nothing to anyone, matching the
+      # "—" fallback in the per-team table.
+      if (is.na(wk) || wk <= 0) next
+      ord <- if (rc$rev) order(-v, na.last = TRUE) else order(v, na.last = TRUE)
+      teamsRanked <- cstand$Team[ord]   # position 1 = worst, last = best
+      valsRanked  <- v[ord]
+      for (i in seq_len(nT)) {
+        me <- valsRanked[i]
+        if (is.na(me)) next
+        tm     <- teamsRanked[i]
+        better <- if (i < nT) valsRanked[(i + 1):nT] else numeric(0)
+        worse  <- if (i > 1)  valsRanked[1:(i - 1)]  else numeric(0)
+        # Exact ties have a gap of 0 and so count as in play — which is how a
+        # tie actually behaves in the standings.
+        g <- sum(!is.na(better) & abs(better - me) <= wk)
+        r <- sum(!is.na(worse)  & abs(me - worse)  <= wk)
+        if (g > 0) {
+          gainN[[tm]] <- gainN[[tm]] + g
+          gainBy[[tm]] <- c(gainBy[[tm]], setNames(g, rc$cat))
+        }
+        if (r > 0) {
+          riskN[[tm]] <- riskN[[tm]] + r
+          riskBy[[tm]] <- c(riskBy[[tm]], setNames(r, rc$cat))
+        }
+      }
+    }
+
+    # "SB(2), HD(1)" — busiest categories first, ties keeping category order.
+    fmtBy <- function(x) {
+      if (length(x) == 0) return("")
+      x <- x[order(-x)]
+      paste(sprintf("%s(%d)", names(x), x), collapse = ", ")
+    }
+    whereCell <- vapply(teamsAll, function(tm) {
+      parts <- c(if (nzchar(fmtBy(gainBy[[tm]]))) paste0("Gain: ", fmtBy(gainBy[[tm]])),
+                 if (nzchar(fmtBy(riskBy[[tm]]))) paste0("Risk: ", fmtBy(riskBy[[tm]])))
+      if (length(parts) == 0) "—" else paste(parts, collapse = " · ")
+    }, character(1))
+
+    # The teamSelect sidebar doesn't filter this table, so bold the selected
+    # team's name to keep the control visibly related to it.
+    sel <- input$teamSelect
+    selShort <- if (!is.null(sel) && sel != '' && exists("nicks") && sel %in% nicks$Team) {
+      nicks$Short[match(sel, nicks$Team)]
+    } else sel
+    teamCell <- vapply(teamsAll, function(short) {
+      nm <- if (exists("nicks") && short %in% nicks$Short)
+              nicks$Team[match(short, nicks$Short)] else short
+      if (!is.null(selShort) && identical(short, selShort)) paste0("<b>", nm, "</b>") else nm
+    }, character(1))
+
+    gain <- as.integer(gainN[teamsAll])
+    risk <- as.integer(riskN[teamsAll])
+    df <- data.frame(
+      Rank  = suppressWarnings(as.numeric(cstand$Rank)),
+      Team  = teamCell,
+      Total = suppressWarnings(as.numeric(cstand$Total)),
+      Gain  = gain,
+      Risk  = risk,
+      Net   = gain - risk,
+      Swing = gain + risk,
+      Where = whereCell,
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+    df <- df[order(df$Rank, na.last = TRUE), ]
+
+    datatable(df,
+              rownames = FALSE,
+              escape = FALSE,   # render <b> on the selected team
+              caption = htmltools::tags$caption(
+                style = 'caption-side: bottom; font-size: 12px; color: #666;',
+                'Gain / Risk = standings points within ~1 week of typical category movement ',
+                'above / below you, counting every rival in range — not just the nearest. ',
+                'Net = Gain − Risk · Swing = total points in play.'),
+              options = list(paging = FALSE, info = FALSE, searching = FALSE,
+                             ordering = TRUE, order = list(),
+                             columnDefs = list(
+                               list(className = 'dt-center',
+                                    targets = which(!names(df) %in%
+                                                    c("Team", "Where")) - 1),
+                               list(targets = which(names(df) == "Where") - 1,
+                                    orderable = FALSE)
+                             ))) %>%
+      formatStyle('Net',
+                  backgroundColor = styleInterval(
+                    c(-0.5, 0.5),
+                    c('#F7DFD9', '#FAF0D7', '#E2EFE4')
+                  ))
   })
 
 # Positional Surplus
