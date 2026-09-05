@@ -11,6 +11,14 @@ const DATA_DIR = path.join(__dirname, '..');
 
 const cyear = process.argv[2] || new Date().getFullYear().toString();
 
+// The prospect board answers with an empty array (or a prior season's rows) when
+// the requested draft slug doesn't exist, so check the payload before accepting
+// it and let the caller fall through to the next URL.
+function isCurrentSeasonBoard(body) {
+  const data = JSON.parse(body);
+  return Array.isArray(data) && data.length > 0 && String(data[0].Season) === cyear;
+}
+
 const ENDPOINTS = [
   {
     name: 'Steamer ROS Hitters',
@@ -53,6 +61,27 @@ const ENDPOINTS = [
     file: 'Closers.json',
   },
   {
+    // FanGraphs republishes The Board mid-season under a second slug
+    // ("2026" -> "2026 Updated"), so try the updated board first and fall back
+    // to the preseason one. getFGProspects() in daflFunctions.r reads these.
+    name: 'Prospects (Hitters)',
+    urls: [
+      `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}updated&pos=bat`,
+      `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}prospect&pos=bat`,
+    ],
+    file: `prospects_bat_${cyear}.json`,
+    validate: isCurrentSeasonBoard,
+  },
+  {
+    name: 'Prospects (Pitchers)',
+    urls: [
+      `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}updated&pos=pit`,
+      `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}prospect&pos=pit`,
+    ],
+    file: `prospects_pit_${cyear}.json`,
+    validate: isCurrentSeasonBoard,
+  },
+  {
     // Season-to-date pitcher leaderboard — source of sp_pitching (Pitching+).
     // qual=0 so EVERY pitcher is included (no innings minimum). getStuffAPI()
     // reads this file and selects sp_pitching -> `Pitching+`.
@@ -86,24 +115,39 @@ async function fetchAll() {
   // Fetch each endpoint
   for (const ep of ENDPOINTS) {
     const outPath = path.join(DATA_DIR, ep.file);
-    try {
-      console.log(`Fetching ${ep.name}...`);
-      const response = await page.goto(ep.url, { waitUntil: 'load', timeout: 30000 });
-      const body = await response.text();
-      // Leaderboard endpoints wrap rows in {data: [...]}; extract the bare
-      // array so downstream readers get a plain list of records.
-      let out = body;
-      let count = null;
-      if (ep.extract) {
-        const parsed = JSON.parse(body);
-        const arr = parsed[ep.extract] ?? parsed;
-        out = JSON.stringify(arr);
-        count = Array.isArray(arr) ? arr.length : null;
+    // Most endpoints have one URL; those with `urls` try each in turn and keep
+    // the first response that passes `validate`.
+    const urls = ep.urls || [ep.url];
+    let fetched = false;
+    for (const url of urls) {
+      try {
+        console.log(`Fetching ${ep.name}${urls.length > 1 ? ` from ${url}` : ''}...`);
+        const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        const body = await response.text();
+        if (ep.validate && !ep.validate(body)) {
+          console.log(`  !! Not the expected ${cyear} data, trying next URL...`);
+          continue;
+        }
+        // Leaderboard endpoints wrap rows in {data: [...]}; extract the bare
+        // array so downstream readers get a plain list of records.
+        let out = body;
+        let count = null;
+        if (ep.extract) {
+          const parsed = JSON.parse(body);
+          const arr = parsed[ep.extract] ?? parsed;
+          out = JSON.stringify(arr);
+          count = Array.isArray(arr) ? arr.length : null;
+        }
+        fs.writeFileSync(outPath, out);
+        console.log(`  -> ${ep.file} (${(out.length / 1024).toFixed(0)} KB${count != null ? `, ${count} records` : ''})\n`);
+        fetched = true;
+        break;
+      } catch (err) {
+        console.error(`  !! Failed: ${err.message}\n`);
       }
-      fs.writeFileSync(outPath, out);
-      console.log(`  -> ${ep.file} (${(out.length / 1024).toFixed(0)} KB${count != null ? `, ${count} records` : ''})\n`);
-    } catch (err) {
-      console.error(`  !! Failed: ${err.message}\n`);
+    }
+    if (!fetched) {
+      console.error(`  !! All URLs failed for ${ep.name} — leaving ${ep.file} unchanged\n`);
     }
   }
 
