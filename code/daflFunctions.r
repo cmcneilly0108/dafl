@@ -1405,6 +1405,68 @@ getStuffAPI <- function() {
   stuff
 }
 
+# Normalize a player name into a join key.
+#
+# The three name-drift patterns between FanGraphs and CBS/master, in order of
+# how often they bite: accents (FG "Andrés Muñoz" vs master "Andres Munoz"),
+# punctuation in initials ("A.J." vs "AJ"), and suffix drift ("Lou Trivino Jr."
+# vs "Lou Trivino"). Collapsing all three is what lets a name key actually join.
+nameKey <- function(x) {
+  x <- toupper(stringi::stri_trans_general(x, "Latin-ASCII"))
+  x <- gsub("[.'`]", "", x)
+  x <- gsub("\\s+(JR|SR|II|III|IV)$", "", x)
+  trimws(gsub("\\s+", " ", x))
+}
+
+# Attach Pitching+ to a pitcher frame.
+#
+# Keyed on normalized name + MLB on purpose: name alone collides for the
+# same-name pitchers master disambiguates (Jacob Webb, Logan Allen, Tyler
+# Alexander). Two things defeat the team half of that key, though:
+#   - FanGraphs files a pitcher traded mid-season under MLB = "2 Tms" / "3 Tms"
+#     rather than a real club (Tyler Mahle).
+#   - Master's MLB goes stale when a pitcher changes teams.
+# So unmatched rows get a second pass on name alone, allowed only where the
+# name is unique on BOTH sides. That fills in the trades and the stale teams
+# while still refusing every genuinely ambiguous name.
+#
+# The explicit select() also guards the natural-join hazard noted above: a
+# stray `X` restored by read.csv would otherwise become part of the key.
+addStuff <- function(df, stuff) {
+  if (is.null(stuff) || nrow(stuff) == 0) {
+    df$`Pitching+` <- NA_real_
+    return(df)
+  }
+
+  stuff <- stuff %>%
+    select(Player, MLB, `Pitching+`) %>%
+    mutate(.key = nameKey(Player)) %>%
+    select(-Player)
+
+  df <- df %>% mutate(.key = nameKey(Player))
+
+  # Count each name once per player, not once per row — upstream many-to-many
+  # joins can repeat a pitcher, and that must not read as an ambiguous name.
+  # Without playerid there is nothing to dedupe by, so count rows instead:
+  # that errs toward calling a name ambiguous, which is the safe direction.
+  dfSolo <- if ("playerid" %in% names(df)) {
+    names(which(tapply(df$playerid, df$.key, function(i) length(unique(i))) == 1))
+  } else {
+    names(which(table(df$.key) == 1))
+  }
+  stuffSolo <- names(which(table(stuff$.key) == 1))
+
+  fallback <- stuff %>%
+    filter(.key %in% intersect(stuffSolo, dfSolo)) %>%
+    select(.key, .fallbackStuff = `Pitching+`)
+
+  df %>%
+    left_join(stuff, by = c('.key', 'MLB'), relationship = "many-to-many") %>%
+    left_join(fallback, by = c('.key'), relationship = "many-to-many") %>%
+    mutate(`Pitching+` = coalesce(`Pitching+`, .fallbackStuff)) %>%
+    select(-.key, -.fallbackStuff)
+}
+
 # Fetch hitter leaderboard from FanGraphs API (last 30 days by default)
 fetchLeaderboards <- function(startDate, endDate) {
   cat("Fetching leaderboards via Playwright...\n")

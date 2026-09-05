@@ -379,10 +379,11 @@ AllP <- left_join(AllP,twostarts,relationship = "many-to-many")
 # df <- df %>% slice(-(1:2))
 # #stuff <- df %>% select(Player=Name,MLB=Team,`Pitching+`)
 # stuff <- df %>% select(Player=Name,`Pitching+`)
-# Join key is explicit on purpose. A natural join here keys on EVERY shared
-# column name, and AllP carries an all-NA `X` left over from an earlier
-# read.csv — so any stray `X` on the stuff side silently drops every match.
-AllP <- left_join(AllP, stuff, by = c('Player', 'MLB'), relationship = "many-to-many")
+# addStuff() owns the key: normalized name + MLB (a natural join would key on
+# EVERY shared column, including the all-NA `X` AllP carries from an earlier
+# read.csv), plus a name-only fallback for pitchers FanGraphs files under
+# "2 Tms" after a mid-season trade or whose master team has gone stale.
+AllP <- addStuff(AllP, stuff)
 #AllP$`Pitching+` <- 100
 #AllP$twostarts <- 'no'
 
@@ -956,8 +957,8 @@ buildAltLeaguePool <- function(hFile, pFile) {
   AllP <- left_join(AllP, inj, by = c('Player'), relationship = "many-to-many")
   AllP <- left_join(AllP, stand, by = c('MLB'), relationship = "many-to-many")
   AllP <- left_join(AllP, twostarts, relationship = "many-to-many")
-  # Explicit key — see the note on the inline pipeline's stuff join above.
-  AllP <- left_join(AllP, stuff, by = c('Player', 'MLB'), relationship = "many-to-many")
+  # See the note on the inline pipeline's stuff join above.
+  AllP <- addStuff(AllP, stuff)
   AllP <- AllP %>% mutate(Pos = ifelse(is.na(Pos), 'SP', Pos))
 
   # 8. Free Agents (used for rrcResults)
