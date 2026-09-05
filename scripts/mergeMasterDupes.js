@@ -44,7 +44,8 @@ function parseRow(line) {
 function quote(s) { return '"' + s + '"'; }
 function buildRow(r) {
   // Match original format: rowid (quoted), playerid (quoted), Player (quoted),
-  // birth_year (raw, may be NA or year), cbs_name (quoted), Pos (quoted), MLB (quoted).
+  // birth_year (raw, may be NA or year), cbs_name (quoted), Pos (quoted),
+  // mlb_id (raw, may be NA), MLB (quoted).
   return [
     quote(r.rowid),
     quote(r.playerid),
@@ -52,6 +53,7 @@ function buildRow(r) {
     r.birth_year,
     quote(r.cbs_name),
     quote(r.Pos),
+    r.mlb_id,
     quote(r.MLB),
   ].join(',');
 }
@@ -67,7 +69,8 @@ for (let i = 1; i < lines.length; i++) {
     birth_year: cols[3],
     cbs_name: cols[4],
     Pos: cols[5],
-    MLB: cols[6],
+    mlb_id: cols[6],
+    MLB: cols[7],
   });
 }
 
@@ -208,7 +211,9 @@ function resolveName(sa, num) {
 const deletedLineIndices = new Set();
 const updates = []; // {lineIndex, newRow}
 for (const m of merges) {
-  const keep = m.sa.rowid <= m.num.rowid ? m.sa : m.num;
+  // Numeric compare: rowid is a stringified integer, so '429' <= '17315'
+  // is false under string ordering and the later row would survive.
+  const keep = Number(m.sa.rowid) <= Number(m.num.rowid) ? m.sa : m.num;
   const drop = keep === m.sa ? m.num : m.sa;
   const resolved = resolveName(m.sa, m.num);
   const Pos = (keep.Pos && keep.Pos.trim()) ? keep.Pos : drop.Pos;
@@ -219,6 +224,8 @@ for (const m of merges) {
     birth_year: m.sa.birth_year, // both are same
     cbs_name: resolved.name,
     Pos,
+    // Keep whichever row actually carries an mlb_id; both are often NA.
+    mlb_id: (keep.mlb_id && keep.mlb_id !== 'NA') ? keep.mlb_id : drop.mlb_id,
     MLB: m.sa.MLB,
   };
   updates.push({ lineIndex: keep.lineIndex, newRow, resolved, sa: m.sa, num: m.num });

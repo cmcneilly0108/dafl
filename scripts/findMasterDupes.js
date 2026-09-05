@@ -33,7 +33,8 @@ const rows = lines.map(parseRow).map(r => ({
   birth_year: r[3],
   cbs_name: r[4],
   Pos: r[5],
-  MLB: r[6],
+  mlb_id: r[6],
+  MLB: r[7],
 }));
 
 function normalize(s) {
