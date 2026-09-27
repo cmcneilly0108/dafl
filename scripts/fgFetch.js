@@ -23,11 +23,11 @@ async function fetchURL(url, outputFile) {
 
   // Wait for Cloudflare to clear — either challenge resolves or page already loaded
   try {
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 15000 });
+    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 15000 });
   } catch {
     // If still on challenge page, wait longer for manual solve
     console.log('Waiting for Cloudflare challenge (may need manual click)...');
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 120000 });
+    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 120000 });
   }
 
   // Now fetch the API URL

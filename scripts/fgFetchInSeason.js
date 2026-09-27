@@ -1,12 +1,12 @@
-// Fetch in-season FanGraphs API data in a single browser session
+// Fetch in-season FanGraphs API data
 // Usage: node fgFetchInSeason.js [year]
-// Opens a real browser, passes Cloudflare once, then fetches all endpoints.
+// Plain HTTP, no browser: Cloudflare puts an interactive Turnstile challenge in
+// front of anything presenting a browser User-Agent (including Playwright's
+// Chromium), but serves the JSON API to non-browser clients like fetch() directly.
 
-const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
-const PROFILE_DIR = path.join(__dirname, '.fg-browser-profile');
 const DATA_DIR = path.join(__dirname, '..');
 
 const cyear = process.argv[2] || new Date().getFullYear().toString();
@@ -93,26 +93,7 @@ const ENDPOINTS = [
 ];
 
 async function fetchAll() {
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
-    args: ['--disable-blink-features=AutomationControlled'],
-  });
-
-  const page = context.pages()[0] || await context.newPage();
-
-  // Pass Cloudflare challenge once
-  console.log('Loading FanGraphs to pass Cloudflare...');
-  await page.goto('https://www.fangraphs.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-  try {
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 15000 });
-  } catch {
-    console.log('Waiting for Cloudflare challenge (may need manual click)...');
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 120000 });
-  }
-  console.log('Cloudflare cleared.\n');
-
-  // Fetch each endpoint
+  let failed = 0;
   for (const ep of ENDPOINTS) {
     const outPath = path.join(DATA_DIR, ep.file);
     // Most endpoints have one URL; those with `urls` try each in turn and keep
@@ -122,8 +103,11 @@ async function fetchAll() {
     for (const url of urls) {
       try {
         console.log(`Fetching ${ep.name}${urls.length > 1 ? ` from ${url}` : ''}...`);
-        const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const body = await response.text();
+        // A Cloudflare challenge comes back as HTML; never overwrite good data with it
+        const parsed = JSON.parse(body);
         if (ep.validate && !ep.validate(body)) {
           console.log(`  !! Not the expected ${cyear} data, trying next URL...`);
           continue;
@@ -133,7 +117,6 @@ async function fetchAll() {
         let out = body;
         let count = null;
         if (ep.extract) {
-          const parsed = JSON.parse(body);
           const arr = parsed[ep.extract] ?? parsed;
           out = JSON.stringify(arr);
           count = Array.isArray(arr) ? arr.length : null;
@@ -147,12 +130,14 @@ async function fetchAll() {
       }
     }
     if (!fetched) {
+      failed++;
       console.error(`  !! All URLs failed for ${ep.name} — leaving ${ep.file} unchanged\n`);
     }
   }
 
-  await context.close();
-  console.log('Done.');
+  console.log(`Done. ${ENDPOINTS.length - failed} succeeded, ${failed} failed.`);
+  // Non-zero so run_data_loads.sh reports the partial failure
+  if (failed > 0) process.exit(1);
 }
 
 fetchAll().catch(err => {

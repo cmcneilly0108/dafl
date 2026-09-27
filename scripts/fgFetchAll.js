@@ -107,10 +107,10 @@ async function fetchAll() {
   await page.goto('https://www.fangraphs.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
   try {
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 15000 });
+    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 15000 });
   } catch {
     console.log('Waiting for Cloudflare challenge (may need manual click)...');
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 120000 });
+    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 120000 });
   }
   console.log('Cloudflare cleared.\n');
 

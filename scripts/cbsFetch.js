@@ -47,6 +47,7 @@ async function waitForLogin(context) {
     () => !window.location.href.includes('login') &&
           !window.location.href.includes('auth') &&
           document.querySelector('body')?.innerText.length > 100,
+    null,
     { timeout: 300000 }
   );
   console.log('Login detected! Continuing with fetch...\n');
@@ -111,6 +112,7 @@ async function main() {
       () => !window.location.href.includes('login') &&
             !window.location.href.includes('auth') &&
             document.querySelector('body')?.innerText.length > 100,
+      null,
       { timeout: 300000 }
     );
     console.log('Login detected! Fetching data...\n');
