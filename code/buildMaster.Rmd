@@ -37,8 +37,11 @@ getAge <- function(playerid) {
       #byear <- page %>% html_node(".player-info__bio-birthdate td") %>% html_text() %>% 
       #str_extract("[0-9/]{8,}") %>% mdy() %>% year()
       #page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/sa3018608/stats"),as_html=TRUE)
-      page <- read_xml(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"),as_html=TRUE)
-      phtml <- page %>% html_text2()
+      # Fetch into memory rather than read_xml(url): a failed read_xml(url) (e.g. HTTP 500
+      # for a player with no FG page) leaks its connection, and ~125 leaks hit R's 128 cap.
+      res <- curl::curl_fetch_memory(str_c("https://www.fangraphs.com/players/nolan-jones/",playerid,"/stats"))
+      if (res$status_code != 200) stop("HTTP ", res$status_code)
+      page <- read_xml(rawToChar(res$content),as_html=TRUE)
       pstring <- as.character(page)
       byear <- str_extract(pstring,":.([0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4})",group=1) %>% mdy() %>% year()
     },
@@ -307,19 +310,24 @@ Fangraphs has put a block in place
 #mymaster <- mymaster %>% rowwise() %>% 
 #  mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year))
 ct <- 1
+# Ids already looked up this run - don't re-sample players FG has no birth date for
+tried <- character(0)
 noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
 nrow(noby)
 
 while ((ct < 80) & (nrow(noby) > 0)) {
   ct <- ct + 1
-  noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"))
+  noby <- filter(mymaster,is.na(birth_year),!str_starts(playerid,"cbs"),!str_starts(playerid,"my"),
+                 !playerid %in% tried)
   print(nrow(noby))
+  if (nrow(noby) == 0) break
   ssize <- ifelse(nrow(noby)>10,10,nrow(noby))
   noby <- noby %>% slice_sample(n=ssize)
+  tried <- c(tried, noby$playerid)
   noby <- noby %>% rowwise() %>%
     mutate(birth_year=ifelse(is.na(birth_year),getAge(playerid),birth_year)) %>% select(playerid,nby=birth_year)
   
-  m2 <- left_join(mymaster,noby)
+  m2 <- left_join(mymaster,noby,by="playerid")
   m2 <- mutate(m2,birth_year=ifelse(!is.na(birth_year),birth_year,nby))
   mymaster <- select(m2,-nby)
   write.csv(mymaster,"../mymaster.csv")
