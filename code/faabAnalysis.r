@@ -480,11 +480,20 @@ if (file.exists(fgbFile) && file.exists(fgpFile)) {
     mutate(benchDFL = hVal(sAB,sH,sHR,sR,sRBI,sSB) - hVal(AB,H,HR,R,RBI,SB))
   benchP <- wholeSeason(p) %>% inner_join(fgp, by="playerid") %>% filter(sIP >= INN - 0.5) %>%
     mutate(benchDFL = pVal(sIP,sER,sW,sK,sS,sHD) - pVal(INN,ER,W,K,S,HD))
+  # Value-weighted versions: share of the counting-category value (HR/R/RBI/SB,
+  # W/K/S/HD) those players produced that counted - an AB by a star weighs more
+  # than an AB by a backup. Ratio categories are left out (can go negative).
+  hCount <- function(HR,R,RBI,SB) unname(HR/sdH["HR"] + R/sdH["R"] + RBI/sdH["RBI"] + SB/sdH["SB"])
+  pCount <- function(W,K,S,HD) unname(W/sdP["W"] + K/sdP["K"] + S/sdP["S"] + HD/sdP["HD"])
+  benchH <- benchH %>% mutate(accV = hCount(HR,R,RBI,SB), seaV = hCount(sHR,sR,sRBI,sSB))
+  benchP <- benchP %>% mutate(accV = pCount(W,K,S,HD), seaV = pCount(sW,sK,sS,sHD))
   lineup <- full_join(
-    benchH %>% group_by(Team) %>% summarize(hLineupEff = sum(AB)/sum(sAB), hBench = sum(benchDFL)),
-    benchP %>% group_by(Team) %>% summarize(pLineupEff = sum(INN)/sum(sIP), pBench = sum(benchDFL)),
+    benchH %>% group_by(Team) %>% summarize(hLineupEff = sum(AB)/sum(sAB), hValueEff = sum(accV)/sum(seaV),
+                                            hBench = sum(benchDFL)),
+    benchP %>% group_by(Team) %>% summarize(pLineupEff = sum(INN)/sum(sIP), pValueEff = sum(accV)/sum(seaV),
+                                            pBench = sum(benchDFL)),
     by = "Team") %>%
-    transmute(Team, hLineupEff, pLineupEff, benchDFL = coalesce(hBench,0) + coalesce(pBench,0))
+    transmute(Team, hLineupEff, hValueEff, pLineupEff, pValueEff, benchDFL = coalesce(hBench,0) + coalesce(pBench,0))
   seasonResults <- left_join(seasonResults, lineup, by = "Team")
 } else {
   warning(str_c(fgbFile, " or ", fgpFile, " missing - no lineup efficiency columns"))
@@ -595,7 +604,7 @@ addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = 14,gridE
 addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = 16,gridExpand = TRUE)
 addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 7,gridExpand = TRUE)
 addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 11,gridExpand = TRUE)
-for (nm in intersect(c('hLineupEff','pLineupEff'), names(seasonResults)))
+for (nm in intersect(c('hLineupEff','hValueEff','pLineupEff','pValueEff'), names(seasonResults)))
   addStyle(review, 'valueByAcq',style = createStyle(numFmt = "0%"),rows = 2:20, cols = which(names(seasonResults) == nm),gridExpand = TRUE)
 if ('benchDFL' %in% names(seasonResults))
   addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = which(names(seasonResults) == 'benchDFL'),gridExpand = TRUE)

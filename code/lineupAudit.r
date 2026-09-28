@@ -333,6 +333,37 @@ changeTeams <- changes %>% group_by(Team) %>% summarize(moves = n(), .groups = "
          hotChase = (inPrev - inNext) - (outPrev - outNext)) %>%
   arrange(-moves)
 
+# ---- Value-weighted lineup efficiency. lineupEff counts every AB/IP the same;
+# valueEff weights them by what they produced in the counting categories (HR, R,
+# RBI, SB for hitters; W, K, S, HD for pitchers), in season-review dollars, so
+# benching a star costs more than benching a backup. Ratio categories (AVG, ERA)
+# are left out - their value can go negative, which would distort a share.
+# Pitcher weights come from FanGraphs season totals (the accrued view has no K).
+fgp <- fromJSON(str_c("../fgPitching", year, ".json"))$data %>% filter(IP >= 20)
+sdPc <- c(W = sd(fgp$W), K = sd(fgp$SO), S = sd(fgp$SV), HD = sd(fgp$HLD))
+hCount <- function(HR, R, RBI, SB) unname((HR/sdH["HR"] + R/sdH["R"] + RBI/sdH["RBI"] + SB/sdH["SB"]) * dollarsPerZ)
+pCount <- function(W, K, S, HD) unname((W/sdPc["W"] + K/sdPc["K"] + S/sdPc["S"] + HD/sdPc["HD"]) * dollarsPerZ)
+valueSplit <- function(sa, pitcher) {
+  sa <- if (pitcher) mutate(sa, v = pCount(W, K, S, HD)) else mutate(sa, v = hCount(HR, R, RBI, SB))
+  team <- sa %>% group_by(Team, bucket) %>% summarize(v = sum(v), .groups = "drop") %>%
+    complete(Team, bucket = c("active","bench","ir"), fill = list(v = 0)) %>%
+    pivot_wider(names_from = bucket, values_from = v, names_prefix = "value_") %>%
+    mutate(valueEff = value_active / (value_active + value_bench + value_ir))
+  players <- sa %>% group_by(Team, Player) %>%
+    summarize(lostValue = sum(v[bucket != "active"]), .groups = "drop")
+  list(team = team, players = players)
+}
+hv <- valueSplit(hit$statusAt, FALSE)
+pv <- valueSplit(pit$statusAt, TRUE)
+addValue <- function(side, v) {
+  side$team <- side$team %>% left_join(v$team, by = "Team") %>%
+    relocate(valueEff, .after = lineupEff) %>% arrange(valueEff)
+  side$players <- side$players %>% left_join(v$players, by = c("Team","Player"))
+  side
+}
+hit <- addValue(hit, hv)
+pit <- addValue(pit, pv)
+
 wb <- createWorkbook()
 headerStyle <- createStyle(halign = "CENTER", textDecoration = "Bold")
 pct <- createStyle(numFmt = "0%")
@@ -343,17 +374,18 @@ addSheet <- function(name, df, pctCols = c("lineupEff","checkVsAccrued")) {
   if (length(cols)) addStyle(wb, name, pct, rows = 2:(nrow(df) + 1), cols = cols, gridExpand = TRUE)
   setColWidths(wb, name, cols = 1:ncol(df), widths = "auto")
 }
-addSheet("Hitters", hit$team)
-addSheet("Pitchers", pit$team)
+addSheet("Hitters", hit$team %>% mutate(across(starts_with("value_"), ~ round(., 1))), pctCols = c("lineupEff","valueEff","checkVsAccrued"))
+addSheet("Pitchers", pit$team %>% mutate(across(starts_with("value_"), ~ round(., 1))), pctCols = c("lineupEff","valueEff","checkVsAccrued"))
 addSheet("Lineup Regret", regretTeams %>% mutate(across(c(regretDFL, avgPerWeek), ~ round(., 1))))
 addSheet("Regret by Week", regretWeeks %>% filter(gain > 0) %>% arrange(Team, week) %>%
            mutate(gain = round(gain, 1), week = format(week, "%Y-%m-%d")) %>% rename(weekOf = week))
 addSheet("Lineup Changes", changeTeams %>% mutate(across(where(is.numeric), ~ round(., 2))), pctCols = "swapWinRate")
-addSheet("Hitter Detail", hit$players)
-addSheet("Pitcher Detail", pit$players %>% mutate(across(starts_with("IP_") | starts_with("lostIP"), ~ round(., 1))))
+addSheet("Hitter Detail", hit$players %>% mutate(lostValue = round(lostValue, 1)) %>% arrange(Team, -lostValue))
+addSheet("Pitcher Detail", pit$players %>% mutate(across(starts_with("IP_") | starts_with("lostIP"), ~ round(., 1)),
+                                                  lostValue = round(lostValue, 1)) %>% arrange(Team, -lostValue))
 saveWorkbook(wb, str_c("../", year, "lineupAudit.xlsx"), overwrite = TRUE)
 message("Draft date ", draftDate, "; wrote ../", year, "lineupAudit.xlsx")
-print(as.data.frame(hit$team %>% select(Team, lineupEff, checkVsAccrued) %>%
+print(as.data.frame(hit$team %>% select(Team, lineupEff, valueEff, checkVsAccrued) %>%
   left_join(pit$team %>% select(Team, pLineupEff = lineupEff, pCheck = checkVsAccrued), by = "Team") %>%
   left_join(regretTeams %>% select(Team, regretDFL, weeksWithRegret), by = "Team") %>%
   mutate(across(where(is.numeric), ~ round(., 2)))))
