@@ -5,6 +5,10 @@
 # Create accrued file
 #   http://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/accrued/
 #   2024Accrued.csv
+# FanGraphs season totals - fgBatting{year}.json / fgPitching{year}.json (lineup
+#   efficiency; past-season K estimate). Written by scripts/fgFetchInSeason.js, or:
+#   https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&season={year}&season1={year}&ind=0&qual=0&type=0&month=0&pageitems=3000&rost=0
+#   (stats=pit for pitching)
 # Accrued strikeouts - the accrued view's pitching "SO" column is shutouts, not K
 #   https://dafl.baseball.cbssports.com/stats/stats-main/team:all/ytd:f/standard
 #   {year}AccruedStd.csv
@@ -447,6 +451,45 @@ seasonResults <- mutate(seasonResults,overall = draft_DFL+faab_DFL+protect_DFL+t
 seasonResults <- left_join(seasonResults,numinj)
 seasonResults <- seasonResults %>% replace_na(list(injured=0)) %>%  mutate(irank = rank(injured))
 
+# Lineup efficiency. CBS only accrues stats while a player is in the active
+# lineup, so for whole-season players (protected/drafted and still on the team
+# at season's end) MLB season stats minus accrued stats = production left on the
+# bench (or on the fantasy IL after returning). hLineupEff / pLineupEff are the
+# share of those players' MLB AB / IP that counted; benchDFL values what didn't,
+# using the same scoring as seasonScores(). Upper bound: starting a benched
+# player means sitting someone else.
+fgbFile <- str_c("../fgBatting",year,".json"); fgpFile <- str_c("../fgPitching",year,".json")
+if (file.exists(fgbFile) && file.exists(fgpFile)) {
+  fgb <- fromJSON(fgbFile)$data %>%
+    transmute(playerid=as.character(playerid), sAB=AB, sH=H, sHR=HR, sR=R, sRBI=RBI, sSB=SB) %>%
+    distinct(playerid, .keep_all=TRUE)
+  fgp <- fromJSON(fgpFile)$data %>%
+    transmute(playerid=as.character(playerid), sIP=floor(IP)+round((IP %% 1)*10)/3,
+              sER=ER, sW=W, sK=SO, sS=SV, sHD=HLD) %>%
+    distinct(playerid, .keep_all=TRUE)
+  endOwner <- players %>% select(playerid, Team, Avail)
+  h <- filter(hitters, AB > 0); p <- filter(pitchers, INN > 0)
+  lgAvg <- sum(h$H)/sum(h$AB); lgEra <- 9*sum(p$ER)/sum(p$INN)
+  sdH <- c(HR=sd(h$HR), R=sd(h$R), RBI=sd(h$RBI), SB=sd(h$SB), xH=sd(h$H - h$AB*lgAvg))
+  sdP <- c(W=sd(p$W), K=sd(p$K), HD=sd(p$HD), S=sd(p$S), xER=sd(p$INN*lgEra/9 - p$ER))
+  hVal <- function(AB,H,HR,R,RBI,SB) unname((HR/sdH["HR"] + R/sdH["R"] + RBI/sdH["RBI"] + SB/sdH["SB"] + (H-AB*lgAvg)/sdH["xH"]) * tratio)
+  pVal <- function(IP,ER,W,K,S,HD) unname((W/sdP["W"] + K/sdP["K"] + HD/sdP["HD"] + S/sdP["S"] + (IP*lgEra/9-ER)/sdP["xER"]) * tratio)
+  wholeSeason <- function(df) df %>% filter(asrc %in% c("protect","draft")) %>%
+    inner_join(endOwner, by=c("playerid","Team")) %>% filter(Avail == Team)
+  benchH <- wholeSeason(h) %>% inner_join(fgb, by="playerid") %>% filter(sAB >= AB) %>%
+    mutate(benchDFL = hVal(sAB,sH,sHR,sR,sRBI,sSB) - hVal(AB,H,HR,R,RBI,SB))
+  benchP <- wholeSeason(p) %>% inner_join(fgp, by="playerid") %>% filter(sIP >= INN - 0.5) %>%
+    mutate(benchDFL = pVal(sIP,sER,sW,sK,sS,sHD) - pVal(INN,ER,W,K,S,HD))
+  lineup <- full_join(
+    benchH %>% group_by(Team) %>% summarize(hLineupEff = sum(AB)/sum(sAB), hBench = sum(benchDFL)),
+    benchP %>% group_by(Team) %>% summarize(pLineupEff = sum(INN)/sum(sIP), pBench = sum(benchDFL)),
+    by = "Team") %>%
+    transmute(Team, hLineupEff, pLineupEff, benchDFL = coalesce(hBench,0) + coalesce(pBench,0))
+  seasonResults <- left_join(seasonResults, lineup, by = "Team")
+} else {
+  warning(str_c(fgbFile, " or ", fgpFile, " missing - no lineup efficiency columns"))
+}
+
 
 # Top FAAB
 tfh <- hitters %>% filter(asrc=="faab") %>% select(Player,Pos,Team,DFL)
@@ -552,6 +595,10 @@ addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = 14,gridE
 addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = 16,gridExpand = TRUE)
 addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 7,gridExpand = TRUE)
 addStyle(review, 'valueByAcq',style = csRatioColumn,rows = 2:20, cols = 11,gridExpand = TRUE)
+for (nm in intersect(c('hLineupEff','pLineupEff'), names(seasonResults)))
+  addStyle(review, 'valueByAcq',style = createStyle(numFmt = "0%"),rows = 2:20, cols = which(names(seasonResults) == nm),gridExpand = TRUE)
+if ('benchDFL' %in% names(seasonResults))
+  addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = which(names(seasonResults) == 'benchDFL'),gridExpand = TRUE)
 
 setColWidths(review, 'valueByAcq', cols = 1:25, widths = "auto")
 

@@ -90,6 +90,24 @@ const ENDPOINTS = [
     file: 'latestStuff.json',
     extract: 'data',
   },
+  {
+    // Full-season MLB totals (all players, qual=0), kept whole ({data: [...]}).
+    // faabAnalysis.r compares these with accrued stats for lineup efficiency.
+    name: 'Season Batting Totals',
+    url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=0&type=0&month=0&pageitems=3000&rost=0`,
+    file: `fgBatting${cyear}.json`,
+  },
+  {
+    // Last 14 days (month=2) - PA per game feeds the lineup startScore
+    name: 'Batting Last 14 Days',
+    url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=bat&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=0&type=0&month=2&pageitems=3000&rost=0`,
+    file: 'fgBatting14d.json',
+  },
+  {
+    name: 'Season Pitching Totals',
+    url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=0&type=0&month=0&pageitems=3000&rost=0`,
+    file: `fgPitching${cyear}.json`,
+  },
 ];
 
 async function fetchAll() {
