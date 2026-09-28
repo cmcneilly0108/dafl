@@ -184,6 +184,50 @@ pullMLB <- function(n){
   p <- p[,2]
 }
 
+# Start score: ranks a fantasy team's hitters for discretionary lineup calls
+# (which healthy regulars to start). Backtested on 2024-26 weekly lineups: the
+# blend picked next week's better hitter more often than hotscore, season stats,
+# or projections alone; ranking by hotscore alone did worse than season-to-date.
+#   startScore = z(season value per game) + z(pDFL) + z(PA per game, last 14 days)
+# with z-scores taken within each team's hitters. Value per game uses the season
+# review's categories (HR, R, RBI, SB, hits above league AVG). A hitter with no
+# games in the last 14 days gets 0 PA/G (flags injury or lost playing time);
+# missing season stats count as average. Free agents get NA.
+# Inputs: ../fgBatting{year}.json and ../fgBatting14d.json (scripts/fgFetchInSeason.js)
+addStartScore <- function(AllH, year = cyear) {
+  sFile <- str_c("../fgBatting", year, ".json"); rFile <- "../fgBatting14d.json"
+  if (!file.exists(sFile) || !file.exists(rFile)) {
+    warning("startScore skipped - missing ", sFile, " or ", rFile)
+    AllH$startScore <- NA_real_
+    return(AllH)
+  }
+  s <- fromJSON(sFile)$data %>%
+    transmute(playerid = as.character(playerid), G, PA, AB, H, HR, R, RBI, SB) %>%
+    distinct(playerid, .keep_all = TRUE)
+  q <- filter(s, PA >= 100)
+  lgAvg <- sum(q$H) / sum(q$AB)
+  w <- c(HR = sd(q$HR), R = sd(q$R), RBI = sd(q$RBI), SB = sd(q$SB), xH = sd(q$H - q$AB * lgAvg))
+  s <- s %>% transmute(playerid,
+    ytdPerG = ifelse(G > 0, (HR/w["HR"] + R/w["R"] + RBI/w["RBI"] + SB/w["SB"] +
+                               (H - AB * lgAvg)/w["xH"]) / G, NA_real_))
+  r <- fromJSON(rFile)$data %>%
+    transmute(playerid = as.character(playerid), pa14 = ifelse(G > 0, PA / G, 0)) %>%
+    distinct(playerid, .keep_all = TRUE)
+  z0 <- function(x) {
+    sdx <- sd(x, na.rm = TRUE)
+    out <- if (is.na(sdx) || sdx == 0) 0 * x else (x - mean(x, na.rm = TRUE)) / sdx
+    ifelse(is.na(out), 0, out)
+  }
+  AllH %>% select(-any_of(c("ytdPerG", "pa14", "startScore"))) %>%
+    left_join(s, by = "playerid") %>%
+    left_join(r, by = "playerid") %>%
+    mutate(pa14 = coalesce(pa14, 0)) %>%
+    group_by(Team) %>%
+    mutate(startScore = ifelse(Team == "Free Agent", NA_real_,
+                               z0(ytdPerG) + z0(pDFL) + z0(pa14))) %>%
+    ungroup()
+}
+
 pullTeam <- function(tn){
   tH <- filter(AllH,Team == tn)
   tH <- select(tH,-Team)
@@ -192,8 +236,8 @@ pullTeam <- function(tn){
   tP <- select(tP,-Team)
   tP <- tP %>% arrange(-hotscore) %>%
     select(Player,Pos,Age,pDFL,hotscore,pSGP,Rank,Salary,Contract,'Pitching+',pW,pSO,pHLD,pSV,pERA,`pK/9`,pFIP,W,K,HD,S,ERA,twostarts,Injury,Expected.Return,Role,Tags)
-  tH <- tH %>% arrange(-hotscore) %>%
-    select(Player,Pos,Age,pDFL,hotscore,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,Injury,Expected.Return)
+  tH <- tH %>% arrange(-startScore) %>%
+    select(Player,Pos,Age,pDFL,startScore,hotscore,pSGP,Rank,Salary,Contract,pHR,pRBI,pR,pSB,pAVG,HR,RBI,R,SB,AVG,Injury,Expected.Return)
   list(tH,tP)
 }
 

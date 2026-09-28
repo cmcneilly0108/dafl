@@ -286,6 +286,7 @@ shinyServer(function(input, output,session) {
     rv$refreshCount
     datatable(pullTeam(input$e1)[[1]],options = list(pageLength = 20), escape=FALSE) %>%
       formatCurrency('pDFL') %>% formatRound(c('pSGP','hotscore','pAVG'),3) %>%
+      formatRound('startScore',2) %>%
       formatRound(c('pHR','pRBI','pSB','pR','Age'),0)
   })
   output$TeamH <- DT::renderDataTable({ dtTeamH() })

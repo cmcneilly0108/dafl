@@ -257,6 +257,9 @@ AllP <- left_join(AllP,op,by=c('playerid'),relationship = "many-to-many")
 AllH <- rename(AllH,hotscore=zScore)
 AllP <- rename(AllP,hotscore=zScore)
 
+# Lineup start score (season value/G + ROS pDFL + recent PA/G; see addStartScore)
+AllH <- addStartScore(AllH)
+
 ## I forget what I was trying to do here, commented out
 # # # Generate YTD zScores
 # r2 <- hotScores(ytdh,ytdp)
@@ -944,6 +947,7 @@ buildAltLeaguePool <- function(hFile, pFile) {
   r <- hotScores(Allhitters, Allpitchers, withZ = TRUE)
   AllH <- left_join(AllH, r[[1]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
   AllP <- left_join(AllP, r[[2]], by = c('playerid'), relationship = "many-to-many") %>% rename(hotscore = zScore)
+  AllH <- addStartScore(AllH)
 
   # 6. Positional zScores
   r <- zScores(AllH, AllP)
