@@ -51,4 +51,4 @@
   - and point a job at `run_inseason_pulse.sh`. The job currently named "inseasonpulse" runs `protectionList.r` instead.
 - **After the draft:** save `draftGuide.xlsx` as `{year}draftGuide.xlsx`.
 - **Before building a formal age and pitcher discount into protection valuation:** re-run the keeper age study with 2027 data.
-- **Uncommitted:** `benchRank`, the ranks chart, the Protection tab and the Protected Players sheet.
+- All of this session's code is committed to master (latest: `03b2e5c`).
