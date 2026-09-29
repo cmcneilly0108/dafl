@@ -669,6 +669,16 @@ addStyle(draft, 'Early Standings',style = csMoneyColumn,rows = 2:20, cols = 4:8,
 addStyle(draft, 'Early Standings',style = csRatioColumn,rows = 2:20, cols = 9:10,gridExpand = TRUE)
 setColWidths(draft, 'Early Standings', cols = 1:10, widths = "auto")
 
+# Every team's protected players with their projected value - kept so later
+# seasons can check projections against what keepers delivered (by age, type,
+# salary). faabAnalysis.r reads this from the saved {year}draftGuide.xlsx.
+addWorksheet(draft,'Protected Players')
+protOut <- protClean %>% ungroup() %>%
+  transmute(Team, Player, playerid, Pos, Age, Salary, Contract, pDFL, netValue) %>% arrange(Team, -pDFL)
+writeData(draft,'Protected Players',protOut,headerStyle = headerStyle)
+addStyle(draft, 'Protected Players',style = csMoneyColumn,rows = 2:(nrow(protOut)+1), cols = c(6, 8, 9),gridExpand = TRUE)
+setColWidths(draft, 'Protected Players', cols = 1:9, widths = "auto")
+
 addWorksheet(draft,'Crickets')
 writeData(draft,'Crickets',lc,headerStyle = headerStyle)
 addStyle(draft, 'Crickets',style = csIntegerColumn,rows = 2:20, cols = 2,gridExpand = TRUE)

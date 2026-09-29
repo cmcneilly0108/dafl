@@ -5,6 +5,7 @@
 library("openxlsx")
 library("dplyr")
 library("ggplot2")
+library("stringr")
 
 files <- list.files("..", pattern = "^[0-9]{4}seasonReview\\.xlsx$", full.names = TRUE)
 stats <- bind_rows(lapply(files, function(f) {
@@ -76,8 +77,45 @@ pDollar <- trendChart(filter(stats, Statistic %in% dollars), dollars,
   "DFL dollars per team", function(x) sprintf("$%.0f", x)) +
   labs(caption = "Trade Value counts production after the trade only; it does not subtract players traded away.")
 
+# ---- My ranks by season: one small panel per valueByAcq rank column, each with
+# the final finish as a dashed reference. 1 = best in every rank column.
+myTeam <- "Liquor Crickets"
+rankCols <- c(value = "Total value", prank = "Protection ROI", drank = "Draft ROI",
+              frank = "FAAB value", trank = "Trade value (net)", benchRank = "Bench value (least left)",
+              irank = "Injuries (fewest IR moves)")
+ranks <- bind_rows(lapply(files, function(f) {
+  v <- read.xlsx(f, 1)
+  v$value <- rank(-v$overall)
+  r <- v[v$Team == myTeam, ]
+  if (nrow(r) == 0) return(NULL)
+  data.frame(Year = as.integer(substr(basename(f), 1, 4)), teams = nrow(v), Actual = r$Actual,
+             metric = names(rankCols), rank = unlist(r[1, intersect(names(rankCols), names(r))])[names(rankCols)])
+})) %>% mutate(metric = factor(rankCols[metric], levels = rankCols))
+yearLabels <- ranks %>% distinct(Year, teams) %>% arrange(Year) %>% mutate(lab = paste0("'", substr(Year, 3, 4)))
+leagueSizes <- yearLabels %>% group_by(teams) %>%
+  summarize(yrs = paste0(min(Year), if (n() > 1) paste0("-", substr(max(Year), 3, 4)) else ""), .groups = "drop") %>%
+  arrange(yrs) %>% mutate(txt = paste0(yrs, ": ", teams)) %>% pull(txt) %>% paste(collapse = ", ")
+pRanks <- ggplot(ranks, aes(Year)) +
+  geom_line(aes(y = Actual, linetype = "Final finish"), colour = inkMuted, linewidth = 0.6) +
+  geom_line(aes(y = rank, linetype = "Rank"), colour = series[1], linewidth = 0.8, na.rm = TRUE) +
+  geom_point(aes(y = rank), colour = series[1], fill = surface, shape = 21, size = 2.4, stroke = 1.1, na.rm = TRUE) +
+  geom_text(aes(y = rank, label = rank), colour = ink, size = 2.7, vjust = -1.1, na.rm = TRUE) +
+  scale_linetype_manual(values = c("Rank" = "solid", "Final finish" = "dashed"),
+                        guide = guide_legend(override.aes = list(colour = c(inkMuted, series[1])))) +
+  scale_y_reverse(breaks = c(1, 4, 8, 12, 16), limits = c(17.5, -1)) +
+  scale_x_continuous(breaks = yearLabels$Year, labels = yearLabels$lab, expand = expansion(add = 0.4)) +
+  facet_wrap(~ metric, ncol = 4) +
+  labs(title = str_c(myTeam, ": ranks by season"),
+       subtitle = "Rank among all teams in each season review category (1 = best); dashed line = final standings finish",
+       x = NULL, y = "Rank (1 = best)",
+       caption = str_c("Trade value is net of players traded away. Bench value ranks the least production left on the bench (whole-season players).\n",
+                       "Teams per season - ", leagueSizes, ".")) +
+  theme_trend + theme(strip.text = element_text(colour = ink, face = "bold", hjust = 0),
+                      axis.text.x = element_text(size = 8), panel.spacing = unit(1, "lines"))
+
 pdf("../seasonTrends.pdf", width = 10, height = 6.5)
 print(pRatio)
 print(pDollar)
+print(pRanks)
 invisible(dev.off())
 message("Wrote ../seasonTrends.pdf (", min(years), "-", max(years), ")")

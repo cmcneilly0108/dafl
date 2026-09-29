@@ -494,7 +494,10 @@ if (file.exists(fgbFile) && file.exists(fgpFile)) {
                                             pBench = sum(benchDFL)),
     by = "Team") %>%
     transmute(Team, hLineupEff, hValueEff, pLineupEff, pValueEff, benchDFL = coalesce(hBench,0) + coalesce(pBench,0))
-  seasonResults <- left_join(seasonResults, lineup, by = "Team")
+  seasonResults <- left_join(seasonResults, lineup, by = "Team") %>%
+    # 1 = least value left on the bench (matches the other rank columns: 1 = best)
+    mutate(benchRank = rank(benchDFL, na.last = "keep")) %>%
+    relocate(benchRank, .after = benchDFL)
 } else {
   warning(str_c(fgbFile, " or ", fgpFile, " missing - no lineup efficiency columns"))
 }
@@ -548,6 +551,50 @@ if (file.exists(dgFile)) {
 } else {
   avprotect <- NA
   avdproj <- NA
+}
+
+# ---- Protection audit: each team's keepers from the protection deadline to the
+# end of the season. projected = draft guide TotalValue (guide $), scaled to
+# season-review $ by the league-wide ratio of full-season to projected value;
+# seasonFull = the keepers' whole MLB season (FanGraphs totals), wherever they
+# played; accrued = what counted for the team that protected them (protect_DFL).
+#   projMiss   = seasonFull - projScaled  (the projection was wrong)
+#   deployLoss = accrued - seasonFull     (production that didn't count for you),
+#     split into elsewhere (accrued for other teams after a trade/drop) and
+#     neverCounted (bench, fantasy IR while playing, unrostered)
+protAudit <- NULL
+if (exists("hVal") && exists("fgb") && exists("fgp")) {
+  kp <- prot %>% mutate(isP = Pos %in% pitcherPos) %>% select(Team, playerid, isP, Salary)
+  kH <- kp %>% filter(!isP) %>% left_join(fgb, by = "playerid") %>%
+    mutate(season = ifelse(is.na(sAB), 0, hVal(sAB, sH, sHR, sR, sRBI, sSB)))
+  kP <- kp %>% filter(isP) %>% left_join(fgp, by = "playerid") %>%
+    mutate(season = ifelse(is.na(sIP), 0, pVal(sIP, sER, sW, sK, sS, sHD)))
+  keepers <- bind_rows(kH, kP)
+  allRows <- bind_rows(select(hitters, playerid, Team, DFL), select(pitchers, playerid, Team, DFL)) %>%
+    filter(!is.na(DFL))
+  elsewhere <- keepers %>% select(protTeam = Team, playerid) %>% inner_join(allRows, by = "playerid") %>%
+    filter(Team != protTeam) %>% group_by(Team = protTeam) %>% summarize(elsewhere = sum(DFL), .groups = "drop")
+  protAudit <- keepers %>% group_by(Team) %>% arrange(-Salary, .by_group = TRUE) %>%
+    summarize(keepers = n(), keeperSal = sum(Salary), keepTop3Sal = sum(head(Salary, 3)) / sum(Salary),
+              keepMaxSal = max(Salary), seasonFull = sum(season), .groups = "drop") %>%
+    left_join(seasonResults %>% select(Team, Actual, accrued = protect_DFL), by = "Team") %>%
+    left_join(elsewhere, by = "Team") %>%
+    mutate(accrued = coalesce(accrued, 0), elsewhere = coalesce(elsewhere, 0),
+           deployLoss = accrued - seasonFull, neverCounted = seasonFull - accrued - elsewhere,
+           fullRank = rank(-seasonFull), accRank = rank(-accrued))
+  if (exists("fcast")) {
+    protAudit <- protAudit %>% left_join(fcast %>% rename(projected = projectedValue), by = "Team")
+    k <- sum(protAudit$seasonFull[!is.na(protAudit$projected)]) / sum(protAudit$projected, na.rm = TRUE)
+    protAudit <- protAudit %>% mutate(projScaled = projected * k, projRank = rank(-projected, na.last = "keep"),
+                                      projMiss = seasonFull - projScaled, delivered = accrued / projScaled)
+  } else {
+    protAudit <- protAudit %>% mutate(projected = NA_real_, projScaled = NA_real_, projRank = NA_real_,
+                                      projMiss = NA_real_, delivered = NA_real_)
+  }
+  protAudit <- protAudit %>%
+    select(Team, Actual, projRank, projected, projScaled, fullRank, seasonFull, accRank, accrued,
+           delivered, projMiss, deployLoss, elsewhere, neverCounted, keepers, keeperSal, keepTop3Sal, keepMaxSal) %>%
+    arrange(-projScaled, -seasonFull)
 }
 
 # Function to rank drafted players by DFL value for any team
@@ -610,6 +657,32 @@ if ('benchDFL' %in% names(seasonResults))
   addStyle(review, 'valueByAcq',style = csMoneyColumn,rows = 2:20, cols = which(names(seasonResults) == 'benchDFL'),gridExpand = TRUE)
 
 setColWidths(review, 'valueByAcq', cols = 1:25, widths = "auto")
+
+if (!is.null(protAudit)) {
+  addWorksheet(review,'Protection')
+  writeData(review,'Protection',protAudit,headerStyle = headerStyle)
+  n <- nrow(protAudit) + 1
+  money <- which(names(protAudit) %in% c('projected','projScaled','seasonFull','accrued','projMiss','deployLoss','elsewhere','neverCounted','keeperSal','keepMaxSal'))
+  addStyle(review, 'Protection', style = csMoneyColumn, rows = 2:n, cols = money, gridExpand = TRUE)
+  addStyle(review, 'Protection', style = createStyle(numFmt = "0%"), rows = 2:n,
+           cols = which(names(protAudit) %in% c('delivered','keepTop3Sal')), gridExpand = TRUE)
+  setColWidths(review, 'Protection', cols = 2:ncol(protAudit), widths = "auto")
+  notes <- data.frame(Column = c("projRank / projected", "projScaled", "fullRank / seasonFull", "accRank / accrued", "delivered",
+                                 "projMiss", "deployLoss", "elsewhere", "neverCounted", "keepTop3Sal / keepMaxSal"),
+    Meaning = c("Rank and value of the protection list in the preseason draft guide (TotalValue, guide dollars). Blank when no guide was saved.",
+                "projected converted to season-review dollars (league-wide ratio of full-season to projected value).",
+                "The keepers' whole MLB season, wherever they played (FanGraphs totals, season-review scoring). No MLB stats = $0.",
+                "What the keepers produced while counting for this team (protect_DFL on valueByAcq).",
+                "accrued / projScaled - share of the deadline projection that counted for the team.",
+                "seasonFull - projScaled: how far the keepers' real seasons missed the projection.",
+                "accrued - seasonFull: keeper production that did not count for this team (= -(elsewhere + neverCounted)).",
+                "Keeper value accrued for other teams after a trade or drop (trades bring value back - see tradeValue).",
+                "Keeper production that counted nowhere: bench, fantasy IR while playing, unrostered.",
+                "Share of keeper salary on the top 3 keepers, and the largest single keeper salary (top-heavy lists deliver less)."))
+  writeData(review, 'Protection', data.frame(`Column notes` = paste0(notes$Column, ": ", notes$Meaning), check.names = FALSE),
+            startRow = n + 3, headerStyle = headerStyle)
+  setColWidths(review, 'Protection', cols = 1, widths = 26)
+}
 
 addWorksheet(review,'topFAABers')
 writeData(review,'topFAABers',topfaab,headerStyle = headerStyle)
