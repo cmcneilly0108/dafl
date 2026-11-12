@@ -7,7 +7,7 @@
 #    - update loadPast with latest year
 # fs2019.csv
 #    - update predictHolds with latest bullpen report URL
-# edit pullSteamer and pullATC shell files
+#    - projections come from scripts/fgFetchAll.js (pre/ros mode by month)
 
 
 # Switch to ATC when available
@@ -36,22 +36,23 @@ source("./daflFunctions.r")
 
 
 fd <- file.info(str_c("../steamerH",cyear,".json"))$mtime
-cd <- Sys.time()
-dt <- difftime(cd, fd, units = "hours")
+dt <- if (is.na(fd)) Inf else difftime(Sys.time(), fd, units = "hours")
 if (dt > 10) {
-  # Use Playwright-based fetch (bypasses Cloudflare)
+  # Plain-HTTP fetch; full-season projections Oct-Mar, rest-of-season Apr-Sep
   system(str_c("node ../scripts/fgFetchAll.js ", cyear))
   }
 
-#Load steamer data
-#hitters <- read.fg(str_c("../steamerH",cyear,".json"))
-hitters <- read.fg(str_c("../atcH",cyear,".json"))
-#hitters <- read.fg("atcH2020.csv")
+# Projections: ATC when it's published for cyear, otherwise Steamer (in the
+# offseason only Steamer is out; fgFetchAll.js never writes an empty file)
+projFile <- function(kind) {
+  atc <- str_c("../atc",kind,cyear,".json")
+  if (file.exists(atc) && file.size(atc) > 1000) atc else str_c("../steamer",kind,cyear,".json")
+}
+message("Projections: ", projFile("H"), ", ", projFile("P"))
+hitters <- read.fg(projFile("H"))
 hitters$pSGP <- hitSGP(hitters)
 
-pitchers <- read.fg(str_c("../atcP",cyear,".json"))
-#pitchers <- read.fg(str_c("../steamerP",cyear,".json"))
-#pitchers <- read.fg("atcP2020.csv")
+pitchers <- read.fg(projFile("P"))
 #pitchers <- predictHolds(pitchers)
 pitchers$pSGP <- pitSGP(pitchers)
 
@@ -111,7 +112,14 @@ rpitchers$Pos <- with(rpitchers,ifelse(pSV>pHLD,'CL',ifelse(pHLD>pW,'MR','SP')))
 
 
 # Add in position eligibility based on 20 games
-pedf <- read.cbs(str_c("../",cyear,"PosElig.csv"))
+# CBS can't produce next season's eligibility until the league resets - until
+# then use last season's file
+peFile <- str_c("../",cyear,"PosElig.csv")
+if (!file.exists(peFile)) {
+  peFile <- str_c("../",lastyear,"PosElig.csv")
+  message("No ",cyear,"PosElig.csv yet - using ",peFile)
+}
+pedf <- read.cbs(peFile)
 pedf <- dplyr::rename(pedf,posEl=Eligible) %>% select(playerid,posEl)
 AllH <- left_join(AllH,pedf,by=c('playerid'))
 
@@ -313,6 +321,8 @@ fairpriced <- bind_rows(t1,t2) %>% arrange(orank)
 
 # Create Trends tab
 targets <- data.frame()
+targets <- rbind(targets,c(2026,pgoals('../data/fs2026.csv')))
+targets <- rbind(targets,c(2025,pgoals('../data/fs2025.csv')))
 targets <- rbind(targets,c(2023,pgoals('../data/fs2023.csv')))
 targets <- rbind(targets,c(2022,pgoals('../data/fs2022.csv')))
 targets <- rbind(targets,c(2021,pgoals('../data/fs2021.csv')))

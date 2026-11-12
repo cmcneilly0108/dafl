@@ -1,70 +1,63 @@
-// Fetch all FanGraphs API data in a single browser session
-// Usage: node fgFetchAll.js
-// Opens a real browser, passes Cloudflare once, then fetches all endpoints.
+// Fetch FanGraphs projections + supporting data for protectionList.r / draftGuide.r
+// Usage: node fgFetchAll.js [year] [pre|ros]
+//
+// Plain HTTP, no browser: Cloudflare puts an interactive Turnstile challenge in
+// front of anything presenting a browser User-Agent (including Playwright's
+// Chromium), but serves the JSON API to non-browser clients like fetch().
+//
+// Mode:
+//   pre - full-season projections for `year` (offseason / preseason)
+//   ros - rest-of-season projections (once the season has started)
+// Defaults to `pre` October-March and `ros` April-September.
+//
+// A projection system that isn't published yet answers with an empty array
+// (e.g. ATC in November). Empty payloads are never written, so an existing
+// file is left alone and protectionList.r falls back to the next system.
 
-const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
-const PROFILE_DIR = path.join(__dirname, '.fg-browser-profile');
 const DATA_DIR = path.join(__dirname, '..');
 
-// Get current year from command line or default to current year
 const cyear = process.argv[2] || new Date().getFullYear().toString();
+const month = new Date().getMonth() + 1;
+const mode = process.argv[3] || (month >= 10 || month <= 3 ? 'pre' : 'ros');
+if (!['pre', 'ros'].includes(mode)) {
+  console.error(`Unknown mode "${mode}" - use pre or ros`);
+  process.exit(1);
+}
+
+const proj = (name, type, stats, file) => ({
+  name,
+  url: `https://www.fangraphs.com/api/projections?type=${type}&stats=${stats}&pos=all&team=0&lg=all&download=1`,
+  file,
+});
+
+const PROJECTIONS = mode === 'pre'
+  ? [
+      proj('Steamer Hitters', 'steamer', 'bat', `steamerH${cyear}.json`),
+      proj('Steamer Pitchers', 'steamer', 'pit', `steamerP${cyear}.json`),
+      proj('ATC Hitters', 'atc', 'bat', `atcH${cyear}.json`),
+      proj('ATC Pitchers', 'atc', 'pit', `atcP${cyear}.json`),
+      proj('THE BAT X Hitters', 'thebatx', 'bat', `batxH${cyear}.json`),
+      proj('THE BAT X Pitchers', 'thebatx', 'pit', `batxP${cyear}.json`),
+    ]
+  : [
+      proj('ATC Hitters (ROS)', 'ratcdc', 'bat', `atcH${cyear}.json`),
+      proj('ATC Pitchers (ROS)', 'ratcdc', 'pit', `atcP${cyear}.json`),
+      proj('Steamer Hitters (ROS)', 'steamerr', 'bat', `steamerH${cyear}.json`),
+      proj('Steamer Pitchers (ROS)', 'steamerr', 'pit', `steamerP${cyear}.json`),
+      proj('THE BAT X Hitters (ROS)', 'rthebatx', 'bat', `batxH${cyear}.json`),
+      proj('THE BAT X Pitchers (ROS)', 'rthebatx', 'pit', `batxP${cyear}.json`),
+    ];
+
+// The prospect board answers with an empty array (or a prior season's rows) when
+// the requested draft slug doesn't exist, so check the season before accepting.
+const isCurrentSeasonBoard = (data) =>
+  Array.isArray(data) && data.length > 0 && String(data[0].Season) === cyear;
 
 const ENDPOINTS = [
-  // Full-season projections (use before season starts)
-  // {
-  //   name: 'ATC Hitters',
-  //   url: `https://www.fangraphs.com/api/projections?type=atc&stats=bat&pos=all&team=0&lg=all&download=1`,
-  //   file: `atcH${cyear}.json`,
-  // },
-  // {
-  //   name: 'ATC Pitchers',
-  //   url: `https://www.fangraphs.com/api/projections?type=atc&stats=pit&pos=all&team=0&lg=all&download=1`,
-  //   file: `atcP${cyear}.json`,
-  // },
-  // {
-  //   name: 'Steamer Hitters',
-  //   url: `https://www.fangraphs.com/api/projections?type=steamer&stats=bat&pos=all&team=0&lg=all&download=1`,
-  //   file: `steamerH${cyear}.json`,
-  // },
-  // {
-  //   name: 'Steamer Pitchers',
-  //   url: `https://www.fangraphs.com/api/projections?type=steamer&stats=pit&pos=all&team=0&lg=all&download=1`,
-  //   file: `steamerP${cyear}.json`,
-  // },
-  // Rest of Season projections (use once season has started)
-  {
-    name: 'ATC Hitters (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=ratcdc&stats=bat&pos=all&team=0&lg=all&download=1`,
-    file: `atcH${cyear}.json`,
-  },
-  {
-    name: 'ATC Pitchers (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=ratcdc&stats=pit&pos=all&team=0&lg=all&download=1`,
-    file: `atcP${cyear}.json`,
-  },
-  {
-    name: 'Steamer Hitters (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=steamerr&stats=bat&pos=all&team=0&lg=all&download=1`,
-    file: `steamerH${cyear}.json`,
-  },
-  {
-    name: 'Steamer Pitchers (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=steamerr&stats=pit&pos=all&team=0&lg=all&download=1`,
-    file: `steamerP${cyear}.json`,
-  },
-  {
-    name: 'THE BAT X Hitters (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=rthebatx&stats=bat&pos=all&team=0&lg=all&download=1`,
-    file: `batxH${cyear}.json`,
-  },
-  {
-    name: 'THE BAT X Pitchers (ROS)',
-    url: `https://www.fangraphs.com/api/projections?type=rthebatx&stats=pit&pos=all&team=0&lg=all&download=1`,
-    file: `batxP${cyear}.json`,
-  },
+  ...PROJECTIONS,
   {
     name: 'Injuries',
     url: `https://www.fangraphs.com/api/roster-resource/injury-report/data?season=${cyear}`,
@@ -77,6 +70,7 @@ const ENDPOINTS = [
       `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}prospect&pos=bat`,
     ],
     file: `prospects_bat_${cyear}.json`,
+    validate: isCurrentSeasonBoard,
   },
   {
     name: 'Prospects (Pitchers)',
@@ -85,73 +79,56 @@ const ENDPOINTS = [
       `https://www.fangraphs.com/api/prospects/board/data?draft=${cyear}prospect&pos=pit`,
     ],
     file: `prospects_pit_${cyear}.json`,
+    validate: isCurrentSeasonBoard,
   },
   {
     name: 'Pitching+ (Stuff)',
     url: `https://www.fangraphs.com/api/leaders/major-league/data?pos=all&stats=pit&lg=all&season=${cyear}&season1=${cyear}&ind=0&qual=10&type=36&month=0&pageitems=2000`,
     file: 'latestStuff.json',
-    extractData: true,
+    extract: 'data',
   },
 ];
 
 async function fetchAll() {
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
-    args: ['--disable-blink-features=AutomationControlled'],
-  });
-
-  const page = context.pages()[0] || await context.newPage();
-
-  // Pass Cloudflare challenge once
-  console.log('Loading FanGraphs to pass Cloudflare...');
-  await page.goto('https://www.fangraphs.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-  try {
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 15000 });
-  } catch {
-    console.log('Waiting for Cloudflare challenge (may need manual click)...');
-    await page.waitForFunction(() => !document.title.includes('Just a moment'), null, { timeout: 120000 });
-  }
-  console.log('Cloudflare cleared.\n');
-
-  // Fetch each endpoint
+  console.log(`FanGraphs fetch: year ${cyear}, ${mode === 'pre' ? 'full-season' : 'rest-of-season'} projections\n`);
+  let skipped = 0;
   for (const ep of ENDPOINTS) {
     const outPath = path.join(DATA_DIR, ep.file);
     const urls = ep.urls || [ep.url];
     let fetched = false;
     for (const url of urls) {
       try {
-        console.log(`Fetching ${ep.name} from ${url}...`);
-        const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+        console.log(`Fetching ${ep.name}${urls.length > 1 ? ` from ${url}` : ''}...`);
+        const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const body = await response.text();
-        // Validate prospect data has current year
-        if (ep.urls) {
-          const data = JSON.parse(body);
-          if (Array.isArray(data) && data.length > 0 && data[0].Season != cyear) {
-            console.log(`  !! Season mismatch (got ${data[0].Season}), trying next URL...`);
-            continue;
-          }
+        // A Cloudflare challenge comes back as HTML; JSON.parse throws on it
+        const parsed = JSON.parse(body);
+        if (ep.validate && !ep.validate(parsed)) {
+          console.log(`  !! Not ${cyear} data, trying next URL...`);
+          continue;
         }
-        let output = body;
-        if (ep.extractData) {
-          const parsed = JSON.parse(body);
-          output = JSON.stringify(parsed.data || parsed);
+        const data = ep.extract ? (parsed[ep.extract] ?? parsed) : parsed;
+        if (Array.isArray(data) && data.length === 0) {
+          console.log('  !! Empty (not published yet?)');
+          continue;
         }
-        fs.writeFileSync(outPath, output);
-        console.log(`  -> ${ep.file} (${(output.length / 1024).toFixed(0)} KB)\n`);
+        const out = ep.extract ? JSON.stringify(data) : body;
+        fs.writeFileSync(outPath, out);
+        const count = Array.isArray(data) ? `, ${data.length} records` : '';
+        console.log(`  -> ${ep.file} (${(out.length / 1024).toFixed(0)} KB${count})\n`);
         fetched = true;
         break;
       } catch (err) {
-        console.log(`  !! Failed: ${err.message}, trying next URL...`);
+        console.log(`  !! Failed: ${err.message}`);
       }
     }
     if (!fetched) {
-      console.error(`  !! All URLs failed for ${ep.name}\n`);
+      skipped++;
+      console.log(`  -- ${ep.file} left unchanged\n`);
     }
   }
-
-  await context.close();
-  console.log('Done.');
+  console.log(`Done. ${ENDPOINTS.length - skipped} written, ${skipped} skipped.`);
 }
 
 fetchAll().catch(err => {

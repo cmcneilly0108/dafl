@@ -14,8 +14,8 @@ library("RSQLite")
 
 # When bumping cyear/lastyear each season, also update YEAR in
 # code/run_data_loads.sh (the daily launchd data-load job hardcodes the year).
-cyear <- "2026"
-lastyear <- "2025"
+cyear <- "2027"
+lastyear <- "2026"
 # it's been .75 for 2024 and 2025, but .89 in 2023
 auctionROI <- 0.80
 hpratio <- .38
@@ -30,23 +30,16 @@ getd <- function(c) {
 }
 
 # Skipping 2020 data since it would through off the averages
-loadPast <- function() {
-  f1 <- read.csv("../data/fs2025.csv")
-  res <- genDenoms(f1)
-  eras <- f1$ERA
-  avgs <- f1$AVG
-  f1 <- read.csv("../data/fs2023.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2022.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
-  f1 <- read.csv("../data/fs2021.csv")
-  res <- rbind(res,genDenoms(f1))
-  eras <- append(eras,f1$ERA)
-  avgs <- append(avgs,f1$AVG)
+# Uses the 4 most recent final standings (data/fs{year}.csv; there is no fs2024).
+# Each offseason, add the season just finished and drop the oldest.
+loadPast <- function(years = c(2026, 2025, 2023, 2022)) {
+  res <- data.frame(); eras <- c(); avgs <- c()
+  for (y in years) {
+    f1 <- read.csv(str_c("../data/fs", y, ".csv"))
+    res <- rbind(res,genDenoms(f1))
+    eras <- append(eras,f1$ERA)
+    avgs <- append(avgs,f1$AVG)
+  }
 
   final <- group_by(res,Category) %>% dplyr::summarize(ad = mean(denom))
   list(eras,avgs,final)
@@ -723,6 +716,8 @@ read.fg <- function(fn) {
   }
 
   colnames(df) <- str_c('p',colnames(df))
+  # Skew only comes with preseason ATC pitchers; Steamer/ROS feeds lack it
+  if (!"pSkew" %in% colnames(df)) df$pSkew <- NA_real_
   df <- dplyr::rename(df,playerid=pplayerid)
   df <- dplyr::rename(df,Player=pPlayerName)
   df <- df %>% mutate(playerid = as.character(playerid))

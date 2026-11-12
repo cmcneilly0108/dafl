@@ -3,7 +3,7 @@
 # Daily FanGraphs + CBS data loads (mirrors the system() calls in inSeasonPulse.r).
 # Year matches cyear in daflFunctions.r — bump each season.
 
-YEAR="2026"
+YEAR="2027"
 
 cd "/Users/cmcneilly/Dropbox/Personal/DAFL/code"
 
