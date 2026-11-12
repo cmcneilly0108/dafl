@@ -1295,17 +1295,34 @@ createProtection <- function(fn) {
     filter(!(Player %in% c('TOTALS')))
   sal <- mutate(sal,Team = ifelse(str_length(lag(Pos))==0,lag(Avail),NA)) %>% filter(str_length(Pos)>0)
   sal$Team <- na.locf(sal$Team)
-  sal <- mutate(sal, MLB = pullMLB(Pos))
+  # CBS player cell looks like "Luis Garcia 1B,2B | NYY" - keep the MLB team and
+  # eligible positions so ids can be matched on name + team, not name alone
+  sal <- mutate(sal,
+                cbsMLB = str_trim(str_match(Player,"\\|\\s*([A-Z]+)")[,2]),
+                cbsPos = str_match(Player," ([A-Z0-9,]+)\\s*\\|")[,2])
   sal$Player <- unlist(lapply(sal$Player,stripName))
   sal$Salary <- as.integer(sal$Salary)
   sal$Contract <- as.integer(sal$Contract)
-  sal <- sal %>% select(-MLB,-Avail)
-  #sal$Contract <- sal$Contract + 1
-  #sal <- filter(sal,Contract < 5)
-  #sal <- mutate(sal,Salary=ifelse(Contract==3,Salary+5,ifelse(Contract==4,Salary+10,Salary)))
-  #BUG - minor league players get deleted from here.
-  #sal <- addPlayeridOnly(sal) %>% select(-Team,-Pos)
-  sal <- addPlayeridOnly(sal)
+  sal <- sal %>% select(-Avail)
+
+  # Name-only join fans out to every namesake in master (and two-way players
+  # appear in both the batter and pitcher sections). Score each candidate and
+  # keep the best one per Team + Player.
+  m2 <- select(master,Player=cbs_name,mPos=Pos,MLB,playerid)
+  sal <- left_join(sal,m2,by='Player',relationship="many-to-many") %>%
+    mutate(playerid = ifelse(is.na(playerid) | str_length(playerid)==0, Player, playerid),
+           mPos = ifelse(is.na(mPos) | str_length(mPos)==0, "#", mPos),
+           posMatch = !is.na(cbsPos) &
+             (str_detect(cbsPos,fixed(mPos)) |
+                (mPos %in% c("SP","RP","P") & str_detect(cbsPos,"(^|,)P(,|$)"))),
+           score = 4*(!is.na(MLB) & MLB == cbsMLB) +
+             2*(!str_detect(playerid,"^(sa|cbs)")) + posMatch) %>%
+    group_by(Team,Player) %>%
+    arrange(desc(score), .by_group=TRUE) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(-cbsMLB,-cbsPos,-mPos,-posMatch,-score)
+  sal
 }
 
 addSalary <- function(df) {
